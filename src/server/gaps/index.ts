@@ -10,7 +10,8 @@ import { LANGUAGES, type Language } from "../types";
  * opts in (ADR 0005). This is NOT anonymous: free text can identify someone. So before saving,
  * the parent sees an editable, minimal preview of the question and a plain disclosure that
  * Lumi staff can read it. We store that edited text, its language, a router-assigned topic
- * and a timestamp. No names, no conversation, no IP or user agent.
+ * and a timestamp. No separate name field, conversation history, IP or user agent is stored;
+ * the question text may contain identifying details.
  *
  * Retention: rows older than config.gaps.retentionDays are deleted (purged on every save/list).
  * Delete path: staff can delete any row; the parent gets a one-time delete token on save
