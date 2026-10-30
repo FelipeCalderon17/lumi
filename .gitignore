@@ -1,0 +1,30 @@
+# dependencies
+node_modules/
+
+# next.js
+.next/
+out/
+next-env.d.ts
+
+# build / tooling
+*.tsbuildinfo
+coverage/
+.vercel/
+
+# env — secrets never leave the machine; only the example is tracked
+.env*
+!.env.example
+
+# eval run artefacts (raw outputs); the summary lives in docs/EVALS.md
+evals/runs/
+
+# os / editors
+.DS_Store
+*.pem
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# logs
+npm-debug.log*
+pnpm-debug.log*
