@@ -20,6 +20,63 @@ export const en = {
   emergency: {
     banner:
       "If your child needs urgent medical help, call 911 or your hospital's emergency line now.",
+    crisisBanner:
+      "If you're in emotional crisis, call or text 988 (988 Suicide & Crisis Lifeline). Spanish is available.",
+  },
+  /**
+   * Fixed, human-reviewed safety copy (ADR 0003, 0010). Never model-generated.
+   * Lumi serves families in the US: 911 for emergencies, 988 for emotional crisis.
+   * These are the ONLY places 988 may appear, plus the identical line in the self-care article.
+   */
+  safety: {
+    outsideUs: "Outside the US, contact your local emergency services.",
+    emergency: {
+      title: "This sounds like an emergency.",
+      steps: [
+        "Call 911 now.",
+        "If you're at the hospital, tell a nurse or press the call button right away.",
+        "Outside the US, contact your local emergency services.",
+      ],
+    },
+    selfHarm: {
+      title: "Please reach out for help right now.",
+      steps: [
+        "If you or someone else is in immediate danger, call 911.",
+        "Call or text 988 to reach the 988 Suicide & Crisis Lifeline, any time, day or night. Spanish is available.",
+        "Outside the US, contact your local emergency services.",
+      ],
+    },
+    crisis: {
+      title: "It sounds like things are very heavy right now.",
+      body: "You don't have to carry this alone. You can talk to someone tonight.",
+      steps: [
+        "Call or text 988 to reach the 988 Suicide & Crisis Lifeline, any time, day or night. Spanish is available.",
+        "If anyone is in immediate danger, call 911.",
+        "During the day, your hospital's social worker can help you find ongoing support.",
+        "Outside the US, contact your local emergency services.",
+      ],
+    },
+    /** 988 line reused verbatim in the KB self-care article (checked by the KB tests). */
+    crisisLine:
+      "If you're in emotional crisis, call or text 988 to reach the 988 Suicide & Crisis Lifeline, any time, day or night. Spanish is available.",
+    medical: {
+      title: "That's a question for your child's care team.",
+      body: "Lumi doesn't give medical advice, because your care team knows your child. If it can't wait, call the number your care team gave you for questions after hours. If it's an emergency, call 911.",
+      articleLead: "This guide can help you prepare what to ask:",
+    },
+    offTopic: {
+      title: "Lumi can only help with the practical side of treatment.",
+      body: "Try asking about hospital days, money and work, school and family, or looking after yourself.",
+    },
+    fallback: {
+      title: "Lumi can't answer right now.",
+      body: "Something went wrong on our side. Your hospital's social worker or the Lumi family team can help. If it's an emergency, call 911.",
+      rateLimited: "Let's take a short pause. You can ask again in a minute.",
+    },
+    abstained: {
+      title: "I don't have a guide on that yet.",
+      body: "Your hospital's social worker or the Lumi family team can help with this.",
+    },
   },
   home: {
     eyebrow: "For families in treatment",
@@ -47,6 +104,21 @@ export const en = {
     boundaries:
       "Lumi doesn't give medical advice. For anything about your child's health, your care team is the right place, and Lumi can help you prepare your questions for them.",
     placeholder: "The assistant isn't connected yet.",
+    processingNotice:
+      "Before you ask: your question is sent to OpenAI to find an answer in our guides. Lumi doesn't save your conversation. Please don't include names or other details that identify your family.",
+    progress: "Looking through our family guides…",
+  },
+  gaps: {
+    offer: "Would you like to send this question to the Lumi team so they can write a guide?",
+    previewLabel: "This is what we'd save. You can edit it, and remove anything personal:",
+    disclosure:
+      "Lumi staff can read what you save. It's kept for 30 days and then deleted. We don't save your name, your conversation or your device details.",
+    save: "Save this question",
+    cancel: "No, thanks",
+    saved: "Thank you. The team will see your question.",
+    delete: "Delete it",
+    deleted: "Deleted.",
+    failed: "We couldn't save it right now. Please try again later.",
   },
   staff: {
     gapsTitle: "Unanswered questions",
