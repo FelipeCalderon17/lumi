@@ -1,6 +1,6 @@
 # Knowledge base
 
-The assistant answers **only** from these articles. Rules for writing them: [docs/CONTENT-GUIDELINES.md](../../docs/CONTENT-GUIDELINES.md).
+The assistant is instructed to answer only from these articles. Citation checks verify that cited articles exist, but cannot guarantee that every statement is supported. Rules for writing them: [docs/CONTENT-GUIDELINES.md](../../docs/CONTENT-GUIDELINES.md).
 
 ```
 content/kb/

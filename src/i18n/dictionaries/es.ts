@@ -94,7 +94,7 @@ export const es: Dictionary = {
   },
   help: {
     title: "Pregúntale a Lumi",
-    lede: "Pregunta sobre el lado práctico del tratamiento. Lumi responde a partir de guías escritas para familias y siempre te muestra de dónde sale cada respuesta.",
+    lede: "Pregunta sobre el lado práctico del tratamiento. Lumi usa guías escritas para familias e incluye enlaces a ellas. Las respuestas de la IA pueden contener errores.",
     boundaries:
       "Lumi no da consejos médicos. Para todo lo relacionado con la salud de tu hijo o hija, tu equipo médico es el lugar indicado, y Lumi puede ayudarte a preparar tus preguntas para ellos.",
     placeholder: "El asistente todavía no está conectado.",

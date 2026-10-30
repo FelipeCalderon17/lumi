@@ -10,9 +10,9 @@ A prototype website for **Lumi**, a fictional foundation supporting families of 
 
 ## What it is
 
-A bilingual (English/Spanish) site for families in the US, where the one deep part is a **Family Support Assistant**: a parent can ask a practical question at any hour ("How do I talk with my other kids about this?", "¿Qué llevo para la primera noche en el hospital?") and get a short, warm answer **drawn only from a small library of guides written for families**, with every answer showing which guide it came from. Answers are checked before they're shown. When Lumi doesn't know, it says so and points to a person. Medical questions always go to the care team, with a fixed, reviewed message.
+A bilingual (English/Spanish) site for families in the US, where the one deep part is a **Family Support Assistant**: a parent can ask a practical question at any hour ("How do I talk with my other kids about this?", "¿Qué llevo para la primera noche en el hospital?") and get a short, warm answer written using a small library of guides for families, with links to those guides. Citation checks verify that the linked guides exist; they do not guarantee that every statement is supported. Answers are checked before they're shown. When Lumi doesn't know, it says so and points to a person. Medical questions always go to the care team, with a fixed, reviewed message.
 
-Behind it, a small **staff view** lists questions Lumi couldn't answer, saved only when a parent chooses to share them after seeing and editing exactly what will be stored. They're kept for 30 days, so the team knows which guide to write next.
+Behind it, a small **staff view** lists questions Lumi couldn't answer, saved only when a parent chooses to share them after seeing and editing exactly what will be stored. Questions older than 30 days are deleted when someone saves a question or staff opens the list. The team uses shared questions to decide which guides to write next.
 
 Landing, donate and volunteer are placeholders.
 

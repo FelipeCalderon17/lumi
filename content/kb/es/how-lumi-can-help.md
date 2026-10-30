@@ -15,7 +15,7 @@ Nota: Lumi es una fundación ficticia dentro de un sitio web de prototipo. Los s
 
 La página "Pregúntale a Lumi" responde preguntas prácticas en español o en inglés, a cualquier hora.
 
-- Las respuestas salen solo de las guías de esta biblioteca, y cada respuesta muestra de qué guía viene.
+- Lumi usa las guías de esta biblioteca para escribir respuestas e incluye enlaces a ellas. Las respuestas de la IA pueden contener errores; una guía enlazada puede no respaldar todas las afirmaciones.
 - Si Lumi no tiene una guía sobre algo, te lo dice y te sugiere a quién preguntar.
 - Para todo lo relacionado con la salud de tu hijo o hija, Lumi te va a indicar que hables con el equipo médico.
 - Lumi no guarda tu conversación. Para buscar una respuesta, tu pregunta se envía a OpenAI, la empresa que opera el modelo de inteligencia artificial. Por favor, no incluyas nombres ni datos que identifiquen a tu familia.
@@ -23,7 +23,7 @@ La página "Pregúntale a Lumi" responde preguntas prácticas en español o en i
 
 ## El equipo de familias de Lumi
 
-*(Espacio reservado.)* En una versión completa, un pequeño equipo ayudaría a las familias a encontrar guías, a prepararse para las conversaciones con el hospital y a ponerse en contacto con el trabajador social del hospital. Aquí irían los datos de contacto.
+*(Espacio reservado.)* En una versión completa, un pequeño equipo ayudaría a las familias a encontrar guías, a preparar las conversaciones con el hospital y a contactar al trabajador social. Aquí irían los datos de contacto.
 
 ## Voluntariado
 

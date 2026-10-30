@@ -100,7 +100,7 @@ export const en = {
   },
   help: {
     title: "Ask Lumi",
-    lede: "Ask about the practical side of treatment. Lumi answers from guides written for families and always shows where an answer comes from.",
+    lede: "Ask about the practical side of treatment. Lumi uses guides written for families and includes links to them. AI answers can contain mistakes.",
     boundaries:
       "Lumi doesn't give medical advice. For anything about your child's health, your care team is the right place, and Lumi can help you prepare your questions for them.",
     placeholder: "The assistant isn't connected yet.",

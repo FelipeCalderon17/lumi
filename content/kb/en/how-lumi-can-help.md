@@ -15,7 +15,7 @@ Note: Lumi is a fictional foundation in a prototype website. The services below 
 
 The "Ask Lumi" page answers practical questions in English or Spanish, any time of day.
 
-- Answers come only from the guides in this library, and each answer shows which guide it came from.
+- Lumi uses the guides in this library to write answers and includes links to them. AI answers can contain mistakes; a linked guide may not support every statement.
 - If Lumi doesn't have a guide on something, it says so and suggests who to ask.
 - For anything about your child's health, Lumi will point you to your care team.
 - Lumi doesn't save your conversation. To find an answer, your question is sent to OpenAI, the company that runs the AI model. Please don't include names or details that identify your family.
