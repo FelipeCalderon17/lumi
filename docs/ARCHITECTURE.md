@@ -71,11 +71,11 @@ All thin adapters over `src/server`, with the same rules: bounded body read, Zod
 | Endpoint | Server module | What it does |
 |---|---|---|
 | `POST /api/transcribe` | `transcribe/` | Voice → text with `gpt-transcribe` ([ADR 0014](decisions/0014-voice-transcription.md)). webm/mp4/m4a, max 2 minutes (bytes, declared duration and provider-measured duration), container signature check. Returns text only; audio stays in memory for the request. |
-| `POST /api/notebook/prepare` | `notebook/` | The parent's on-device notes → a structured page: observations by topic + questions for the care team, each citing its source notes. Safety check on every note first. Code checks the source indexes and that no number is invented; dates come from the notes. Any failure → the raw notes grouped by date. Stateless. |
-| `POST /api/gaps`, `DELETE /api/gaps/[id]` | `gaps/` | Consented gap save (redacted, 30-day retention, one-time delete token) and parent delete. `unavailable` without a database. |
+| `POST /api/notebook/prepare` | `notebook/` | The parent's on-device notes → a structured page: observations by topic + questions for the care team, each citing its source notes. Response: `{ safetyNotices, result }`. Safety check on every note first; a match adds a notice (fixed emergency steps shown first) but never blocks the page ([ADR 0003](decisions/0003-deterministic-safety-precheck.md)). Code checks the source indexes and that every number+unit in an item appears, same value and unit, in a cited note's text (timestamps aren't a source); dates come from the notes. Any failure → the raw notes grouped by date (`result.type: "notebook_fallback"`). Stateless. |
+| `POST /api/gaps`, `DELETE /api/gaps/[id]` | `gaps/` | Consented gap save (redacted, 30-day retention, one-time delete token) and parent delete. Save statuses: `saved` / `uncertain` (both with `id` + `deleteToken`; the id and token are created before the insert, and an `uncertain` save can be deleted or retried idempotently with `retry: { id, deleteToken }`) / `failed` (nothing written) / `unavailable` (no database). |
 | `POST /api/staff/login`, `/logout`; `GET /api/staff/gaps`; `DELETE /api/staff/gaps/[id]` | `staff-auth/`, `staff.ts` | Passcode → HMAC session cookie; every request verified; fails closed. The list shows gaps and usage with **derived** cost. |
 
-Event names on the chat stream are the Phase 0 contract: `abstained` is the "no answer" outcome and `fallback` (with a `reason`) covers every error, so there's no separate `error` event.
+Event names on the chat stream are the Phase 0 contract, confirmed as final by Felipe after Codex review 3: `abstained` is the "no answer" outcome and `fallback` (with a `reason`) covers every error, so there's no `no_answer` or `error` event.
 
 ### Why this order
 
@@ -175,10 +175,9 @@ Two tables ([`src/db/schema.ts`](../src/db/schema.ts), migration in [`drizzle/`]
 
 ## Open questions
 
-Decided in review round 1: buffering (ADR 0010), deterministic self-harm check (ADR 0003), country and crisis contacts (ADR 0012), transport (NDJSON, above).
+Decided in review round 1: buffering (ADR 0010), deterministic self-harm check (ADR 0003), country and crisis contacts (ADR 0012), transport (NDJSON, above). Decided after Codex review 3: notebook safety on past events: a safety notice comes **with** the page, never instead of it (ADR 0003).
 
 Still open:
 
 1. **Spanish name for 988.** The fixed copy uses the English service name "988 Suicide & Crisis Lifeline" in both languages. Should the Spanish copy use the service's official Spanish name? Needs checking against the official source before launch.
 2. **Prices for `gpt-6.1-terra`, `gpt-6.1-sol` and `gpt-transcribe`** are unknown (`null`). Costs that depend on them show as "unknown" until they're filled in. The Luna and 6 Sol placeholders predate the September 2026 price cut and should be re-verified.
-3. **Notebook safety on past events.** A note like "last night he stopped breathing for a few seconds" triggers the emergency steps and blocks the notebook, which is the brief's rule but may hurt the parents who most need the page. Option: show the emergency steps *and* still prepare the page. Felipe to decide.

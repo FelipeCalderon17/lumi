@@ -92,17 +92,29 @@ export type Notebook = {
 
 export type NotesByDate = { date: string; notes: { index: number; text: string }[] }[];
 
-export type NotebookResponse =
+/**
+ * A note that matched the safety check (ADR 0003). The note may describe a PAST event ("last
+ * night he stopped breathing for a few seconds"), so it doesn't block the page: the UI shows the
+ * fixed emergency steps FIRST ("If this is happening now, call 911…"), then the page.
+ */
+export type NotebookSafetyNotice = {
+  kind: EmergencyKind;
+  detectedBy: "safety";
+  /** Language of the matched rule, to pick the fixed copy. */
+  language: Language;
+  /** Which note matched, so the UI can point at it. Never the text. */
+  noteIndex: number;
+};
+
+export type NotebookResult =
   | { type: "notebook"; notebook: Notebook }
-  | { type: "notebook_fallback"; reason: FailureReason; language: Language; groups: NotesByDate }
-  | {
-      type: "emergency";
-      kind: EmergencyKind;
-      detectedBy: "safety";
-      language: Language;
-      /** Which note triggered it, so the UI can point at it. Never the text. */
-      noteIndex: number;
-    };
+  | { type: "notebook_fallback"; reason: FailureReason; language: Language; groups: NotesByDate };
+
+/**
+ * Safety notices (possibly empty) always come WITH a result, prepared or fallback. Flagged
+ * notes are kept and treated like any other note.
+ */
+export type NotebookResponse = { safetyNotices: NotebookSafetyNotice[]; result: NotebookResult };
 
 /** Bump when the prompt changes, so eval reports show which prompt produced them. */
 export const NOTEBOOK_PROMPT_VERSION = 2;
@@ -334,12 +346,14 @@ export type NotebookServiceDeps = NotebookDeps & {
 };
 
 export type NotebookStart =
-  | { kind: "rejected"; error: "invalid_notes" }
+  /** Invalid notes (HTTP 400). Safety notices found before validation are still returned. */
+  | { kind: "rejected"; error: "invalid_notes"; safetyNotices: NotebookSafetyNotice[] }
   | { kind: "done"; response: NotebookResponse; recorded: Promise<unknown> };
 
 /**
  * Safety on every note first (any length, before limits), then validation, limits, the model
- * and the checks. Every failure after validation returns the notes grouped by date.
+ * and the checks. A safety match never blocks the page: its notice comes back with the result.
+ * Every failure after validation returns the notes grouped by date.
  */
 export async function prepareNotebook(
   shape: NotebookRequestShape,
@@ -347,41 +361,32 @@ export async function prepareNotebook(
   deps: NotebookServiceDeps,
 ): Promise<NotebookStart> {
   const log = deps.log ?? silentLogger;
+  // Safety on EVERY note, any length, before validation, any limit or model call.
+  const safetyNotices: NotebookSafetyNotice[] = [];
   for (const [noteIndex, note] of shape.notes.entries()) {
     const safety = checkEmergency(note.text);
-    if (safety.triggered) {
-      log({
-        requestId: ctx.requestId,
-        event: "safety",
-        outcome: safety.kind,
-        ruleId: safety.ruleId,
-      });
-      return {
-        kind: "done",
-        response: {
-          type: "emergency",
-          kind: safety.kind,
-          detectedBy: "safety",
-          language: safety.language,
-          noteIndex,
-        },
-        recorded: Promise.resolve(),
-      };
-    }
+    if (!safety.triggered) continue;
+    log({ requestId: ctx.requestId, event: "safety", outcome: safety.kind, ruleId: safety.ruleId });
+    safetyNotices.push({
+      kind: safety.kind,
+      detectedBy: "safety",
+      language: safety.language,
+      noteIndex,
+    });
   }
 
   const parsed = NotebookRequestSchema.safeParse(shape);
-  if (!parsed.success) return { kind: "rejected", error: "invalid_notes" };
+  if (!parsed.success) return { kind: "rejected", error: "invalid_notes", safetyNotices };
   const request = parsed.data;
-  const fallback = (reason: FailureReason): NotebookResponse => ({
+  const fallback = (reason: FailureReason): NotebookResult => ({
     type: "notebook_fallback",
     reason,
     language: request.locale,
     groups: groupNotesByDate(request.notes),
   });
-  const done = (response: NotebookResponse, recorded: Promise<unknown> = Promise.resolve()) => ({
+  const done = (result: NotebookResult, recorded: Promise<unknown> = Promise.resolve()) => ({
     kind: "done" as const,
-    response,
+    response: { safetyNotices, result },
     recorded,
   });
 
@@ -395,8 +400,8 @@ export async function prepareNotebook(
     : result.problem === "unknown_index" || result.problem === "invented_number"
       ? "invalid_output"
       : result.problem;
-  const response = result.ok
-    ? { type: "notebook" as const, notebook: result.notebook }
+  const page: NotebookResult = result.ok
+    ? { type: "notebook", notebook: result.notebook }
     : fallback(failure ?? "internal");
   const outcome: LedgerOutcome = ctx.signal.aborted
     ? "cancelled"
@@ -417,5 +422,5 @@ export async function prepareNotebook(
         deps.ledgerWriteMs ?? config.timeouts.ledgerWriteMs,
       )
     : Promise.resolve();
-  return done(response, recorded);
+  return done(page, recorded);
 }

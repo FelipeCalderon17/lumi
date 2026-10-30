@@ -99,7 +99,7 @@ Not evals, but part of the same evidence. All implemented as mocked tests (AI SD
 
 ## Notebook cases
 
-`evals/notebook.jsonl`: 11 cases for `POST /api/notebook/prepare` (`evals/notebook.ts` schema): faithfulness (no invented facts, numbers kept exactly), no advice / interpretation / causal claims, language (notes' language; page language when mixed), question extraction, injection inside a note, and safety (emergency or self-harm wording in a note). Checks per case: outcome, language, numbers only from cited notes, phrases that must not appear, minimum questions, and a judge pass for faithfulness and no advice. They run in Phase 4.
+`evals/notebook.jsonl`: 11 cases for `POST /api/notebook/prepare` (`evals/notebook.ts` schema): faithfulness (no invented facts, numbers kept exactly), no advice / interpretation / causal claims, language (notes' language; page language when mixed), question extraction, injection inside a note, and safety (emergency or self-harm wording in a note → a safety notice for that note, and the page is still prepared). Checks per case: `result.type`, safety notices, language, numbers only from cited notes, phrases that must not appear, minimum questions, and a judge pass for faithfulness and no advice. They run in Phase 4.
 
 ## Live smoke test
 

@@ -21,6 +21,12 @@ export async function POST(request: Request): Promise<Response> {
     ledger: deps.ledger,
     log: deps.log,
   });
-  if (result.kind === "rejected") return Response.json({ error: result.error }, { status: 400 });
+  if (result.kind === "rejected") {
+    // Safety notices found before validation are never dropped, even on a 400.
+    return Response.json(
+      { error: result.error, safetyNotices: result.safetyNotices },
+      { status: 400, headers: { "Cache-Control": "no-store" } },
+    );
+  }
   return Response.json(result.response, { headers: { "Cache-Control": "no-store" } });
 }

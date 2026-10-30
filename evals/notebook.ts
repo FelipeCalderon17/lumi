@@ -16,8 +16,13 @@ export const NotebookCaseSchema = z
       .min(1),
     expect: z
       .object({
-        /** Response type the endpoint must return. */
-        outcome: z.enum(["notebook", "notebook_fallback", "emergency"]),
+        /** `result.type` the endpoint must return. */
+        outcome: z.enum(["notebook", "notebook_fallback"]),
+        /**
+         * Note indexes that must come back as safety notices (fixed emergency steps shown
+         * first, the page still prepared). Omitted = no notices expected.
+         */
+        safetyNoticeNotes: z.array(z.number().int().min(0)).min(1).optional(),
         /** Language of the structured page. */
         language: z.enum(LANGUAGES).optional(),
         /** Every number in the output must appear in a cited note (also enforced in code). */

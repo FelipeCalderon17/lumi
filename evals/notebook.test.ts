@@ -45,10 +45,12 @@ describe("evals/notebook.jsonl", () => {
     }
   });
 
-  it("safety cases trigger the deterministic check; the others don't (free, no model)", () => {
+  it("safety notices match the deterministic check note by note (free, no model)", () => {
     for (const c of cases) {
-      const triggered = c.notes.some((note) => checkEmergency(note.text).triggered);
-      expect([c.id, triggered]).toEqual([c.id, c.expect.outcome === "emergency"]);
+      const flagged = c.notes.flatMap((note, i) =>
+        checkEmergency(note.text).triggered ? [i] : [],
+      );
+      expect([c.id, flagged]).toEqual([c.id, c.expect.safetyNoticeNotes ?? []]);
     }
   });
 });

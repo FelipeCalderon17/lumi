@@ -220,36 +220,109 @@ describe("notebook.prepareNotebook", () => {
       deps(undefined, { rows }),
     );
     if (out.kind !== "done") throw new Error("rejected");
-    expect(out.response.type).toBe("notebook");
+    expect(out.response.safetyNotices).toEqual([]);
+    expect(out.response.result.type).toBe("notebook");
     await out.recorded;
     expect(rows).toEqual([
       expect.objectContaining({ step: "notebook", outcome: "notebook", failureReason: null }),
     ]);
   });
 
-  it("emergency or self-harm language in any note → the safety event, no model call", async () => {
+  const pastEvent: Note = {
+    text: "Last night he stopped breathing for a few seconds while asleep",
+    createdAt: "2026-10-29T01:00:00-05:00",
+  };
+
+  it("a past scary event in a note → safety notice FIRST, and the page is still prepared", async () => {
     const model = jsonModel(good);
     const out = await prepareNotebook(
-      {
-        notes: [
-          ...notes,
-          { text: "he stopped breathing for a moment", createdAt: "2026-10-29T01:00:00Z" },
-        ],
-        locale: "en",
-      },
+      { notes: [...notes, pastEvent], locale: "en" },
       testCtx(),
-      deps(model, { max: 0 }),
+      deps(model),
     );
     expect(out).toMatchObject({
       kind: "done",
       response: {
-        type: "emergency",
-        kind: "medical_emergency",
-        detectedBy: "safety",
-        noteIndex: 3,
+        safetyNotices: [
+          { kind: "medical_emergency", detectedBy: "safety", language: "en", noteIndex: 3 },
+        ],
+        result: { type: "notebook" },
       },
     });
-    expect(model.doGenerateCalls).toHaveLength(0);
+    expect(Object.keys(out.kind === "done" ? out.response : {})).toEqual([
+      "safetyNotices",
+      "result",
+    ]);
+    // The flagged note is sent faithfully, like any other note…
+    expect(JSON.stringify(model.doGenerateCalls[0]?.prompt)).toContain(
+      "stopped breathing for a few seconds",
+    );
+    // …and isn't lost if no item cites it.
+    if (out.kind === "done" && out.response.result.type === "notebook") {
+      expect(out.response.result.notebook.unusedNoteIndexes).toEqual([3]);
+    }
+  });
+
+  it("safety notice + fallback: the warning comes with the raw notes, flagged note included", async () => {
+    for (const [model, max, reason] of [
+      [failingModel(), 5, "provider_error"],
+      [jsonModel(good), 0, "rate_limited"], // emergencies are never rate-limited away
+    ] as const) {
+      const all = [...notes, pastEvent];
+      const out = await prepareNotebook(
+        { notes: all, locale: "en" },
+        testCtx(),
+        deps(model, { max }),
+      );
+      expect(out).toMatchObject({
+        kind: "done",
+        response: {
+          safetyNotices: [{ kind: "medical_emergency", noteIndex: 3 }],
+          result: { type: "notebook_fallback", reason, groups: groupNotesByDate(all) },
+        },
+      });
+      expect(JSON.stringify(out)).toContain("stopped breathing for a few seconds");
+    }
+  });
+
+  it("several flagged notes → one notice each, in note order, with their own kind and language", async () => {
+    const out = await prepareNotebook(
+      {
+        notes: [
+          pastEvent,
+          notes[0] as Note,
+          { text: "Ya no puedo con esto, quiero morirme.", createdAt: "2026-10-29T02:00:00-05:00" },
+          { text: "She had a seizure at school today", createdAt: "2026-10-29T15:00:00-05:00" },
+        ],
+        locale: "en",
+      },
+      testCtx(),
+      deps(
+        jsonModel({
+          language: "en",
+          observations: [{ topic: "Sleep", text: "Woke up 3 times.", sourceNoteIndexes: [1] }],
+          questions: [],
+        }),
+      ),
+    );
+    if (out.kind !== "done") throw new Error("rejected");
+    expect(out.response.safetyNotices).toEqual([
+      { kind: "medical_emergency", detectedBy: "safety", language: "en", noteIndex: 0 },
+      { kind: "self_harm", detectedBy: "safety", language: "es", noteIndex: 2 },
+      { kind: "medical_emergency", detectedBy: "safety", language: "en", noteIndex: 3 },
+    ]);
+    expect(out.response.result.type).toBe("notebook");
+  });
+
+  it("invalid notes are rejected, but notices found first are still returned", async () => {
+    const longScary = { text: `${"a".repeat(900)} he is not breathing`, createdAt: "x" };
+    expect(await prepareNotebook({ notes: [longScary], locale: "en" }, testCtx(), deps())).toEqual({
+      kind: "rejected",
+      error: "invalid_notes",
+      safetyNotices: [
+        { kind: "medical_emergency", detectedBy: "safety", language: "en", noteIndex: 0 },
+      ],
+    });
   });
 
   it("invalid source indexes or invented numbers → fallback with the notes grouped by date", async () => {
@@ -259,9 +332,12 @@ describe("notebook.prepareNotebook", () => {
     expect(out).toMatchObject({
       kind: "done",
       response: {
-        type: "notebook_fallback",
-        reason: "invalid_output",
-        groups: groupNotesByDate(notes),
+        safetyNotices: [],
+        result: {
+          type: "notebook_fallback",
+          reason: "invalid_output",
+          groups: groupNotesByDate(notes),
+        },
       },
     });
     if (out.kind === "done") await out.recorded;
@@ -276,7 +352,7 @@ describe("notebook.prepareNotebook", () => {
     ] as const) {
       const out = await prepareNotebook({ notes, locale: "es" }, testCtx(), deps(model, { max }));
       expect(out).toMatchObject({
-        response: { type: "notebook_fallback", reason, language: "es" },
+        response: { result: { type: "notebook_fallback", reason, language: "es" } },
       });
     }
   });
@@ -296,7 +372,7 @@ describe("notebook.prepareNotebook", () => {
       );
       expect([finish, out]).toMatchObject([
         finish,
-        { kind: "done", response: { type: "notebook_fallback", reason } },
+        { kind: "done", response: { result: { type: "notebook_fallback", reason } } },
       ]);
       if (out.kind === "done") await out.recorded;
       expect(rows[0]).toMatchObject({
@@ -314,6 +390,7 @@ describe("notebook.prepareNotebook", () => {
     expect(await prepareNotebook({ notes: many, locale: "en" }, testCtx(), deps())).toEqual({
       kind: "rejected",
       error: "invalid_notes",
+      safetyNotices: [],
     });
     const long = [{ text: "a".repeat(801), createdAt: "2026-10-28T19:00:00Z" }];
     expect((await prepareNotebook({ notes: long, locale: "en" }, testCtx(), deps())).kind).toBe(
