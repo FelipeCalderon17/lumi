@@ -6,7 +6,7 @@
 A parent may type something that is a medical emergency ("she's not breathing", "convulsiona"), or say they're about to hurt themselves. The response has to be immediate and correct even if the model provider is slow, down or misclassifies the message, and even if the parent has hit a rate limit or written a very long message.
 
 ## Decision
-- `src/server/safety` runs **first**: before the length check, **before rate limiting** and before any model call. It works on the raw text, normalised (lowercase, accents stripped), with keyword/regex rules in EN and ES. **Emergencies are never rate-limited.**
+- `src/server/safety` runs **first**: before the length check, **before rate limiting** and before any model call. It works on the raw text, normalised (lowercase, accents stripped, punctuation tolerated, whitespace collapsed), with keyword/regex rules in EN and ES that cover ordinary grammar (first and third person, present continuous, clitics, EN contractions and slang). Medicines count as poisoning only with overdose or accidental-ingestion context; hazardous substances (bleach, batteries…) trigger on their own. **Emergencies are never rate-limited.**
 - Two kinds:
   - `medical_emergency` → fixed steps: call 911, tell a nurse / press the call button, outside the US contact local emergency services.
   - `self_harm` (explicit, imminent language only, EN + ES) → fixed steps: 911 if anyone is in immediate danger, call or text 988 (Spanish available), outside-US line. This is a **backstop**: the router's `emotional_crisis` intent stays the main layer for everything less explicit.

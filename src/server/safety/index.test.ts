@@ -14,6 +14,7 @@ describe("safety.normalizeForSafety", () => {
       "mi hijo esta convulsionando",
     );
     expect(normalizeForSafety("He isn’t breathing")).toBe("he isn't breathing");
+    expect(normalizeForSafety("¡¡No... está respirando!!")).toBe("no esta respirando");
   });
 });
 
@@ -100,9 +101,127 @@ describe("safety.checkEmergency", () => {
     }
   });
 
+  it("catches the misses reproduced in Codex review 3", () => {
+    expect(kindOf("No está respirando")).toBe("medical_emergency");
+    expect(kindOf("No puedo despertarlo")).toBe("medical_emergency");
+    expect(kindOf("Me voy a hacer daño")).toBe("self_harm");
+    expect(kindOf("I wanna die")).toBe("self_harm");
+  });
+
+  it("covers ordinary ES grammar: 1st/3rd person, present continuous, clitics", () => {
+    for (const [text, kind] of [
+      ["no está respirando", "medical_emergency"],
+      ["no estoy respirando bien", "medical_emergency"],
+      ["no puedo respirar", "medical_emergency"],
+      ["no respiro", "medical_emergency"],
+      ["ha dejado de respirar", "medical_emergency"],
+      ["no puedo despertarla", "medical_emergency"],
+      ["no logramos despertarlo", "medical_emergency"],
+      ["se está desmayando", "medical_emergency"],
+      ["se está atragantando", "medical_emergency"],
+      ["está sangrando mucho", "medical_emergency"],
+      ["me quiero morir", "self_harm"],
+      ["quiero morirme", "self_harm"],
+      ["se quiere morir", "self_harm"],
+      ["me quiero hacer daño", "self_harm"],
+      ["se va a hacer daño", "self_harm"],
+      ["me quiero matar", "self_harm"],
+      ["ya no quiero vivir", "self_harm"],
+    ] as const) {
+      expect([text, kindOf(text)]).toEqual([text, kind]);
+    }
+  });
+
+  it("covers EN contractions and slang", () => {
+    for (const [text, kind] of [
+      ["he isn't breathing", "medical_emergency"],
+      ["he isnt breathing", "medical_emergency"],
+      ["she stopped breathing", "medical_emergency"],
+      ["I can't wake him up", "medical_emergency"],
+      ["cant wake her up!!", "medical_emergency"],
+      ["he doesn't wake up", "medical_emergency"],
+      ["I'm gonna hurt myself", "self_harm"],
+      ["i wanna hurt myself", "self_harm"],
+      ["I just want to die", "self_harm"],
+      ["i dont wanna live anymore", "self_harm"],
+    ] as const) {
+      expect([text, kindOf(text)]).toEqual([text, kind]);
+    }
+  });
+
+  it("accented and unaccented, any case and punctuation, give the same result", () => {
+    for (const text of [
+      "NO ESTÁ RESPIRANDO",
+      "no esta respirando",
+      "¡¡No... está respirando!!",
+      "No-está-respirando",
+    ]) {
+      expect([text, kindOf(text)]).toEqual([text, "medical_emergency"]);
+    }
+    expect(kindOf("ME QUIERO HACER DAÑO")).toBe("self_harm");
+    expect(kindOf("me quiero hacer dano")).toBe("self_harm");
+  });
+
+  it("poisoning: overdose, accidental ingestion and hazardous substances trigger", () => {
+    for (const text of [
+      "he took too many pills",
+      "she swallowed too much of the syrup",
+      "my son took an overdose",
+      "he accidentally swallowed my pills",
+      "she took her pills by accident, twice",
+      "he got into the medicine cabinet",
+      "she swallowed the whole bottle",
+      "he drank bleach",
+      "my toddler swallowed a battery",
+      "she ate some laundry pods",
+      "sobredosis",
+      "se tomó todas las pastillas",
+      "se tomó todas",
+      "se tomó el frasco entero",
+      "se tomó las pastillas por accidente",
+      "le di demasiadas pastillas",
+      "se tragó una pila",
+      "se tomó cloro",
+      "se tomó mis pastillas",
+    ]) {
+      expect([text, kindOf(text)]).toEqual([text, "medical_emergency"]);
+    }
+  });
+
+  it("poisoning: routine medication administration does NOT trigger", () => {
+    for (const text of [
+      "He swallowed his medicine as prescribed",
+      "Le di su medicina como indicó el médico",
+      "tomó sus pastillas",
+      "she took her pills after dinner",
+      "he swallowed the tablet with water, no problem",
+      "se tomó el jarabe sin quejarse",
+      "He takes too many medications, I can't keep track of them",
+      "she drank the whole bottle of water",
+      "tomó las pastillas de su tratamiento",
+    ]) {
+      expect([text, kindOf(text)]).toEqual([text, null]);
+    }
+  });
+
+  it("ES 'me voy a cortar el pelo' and similar are not self-harm", () => {
+    for (const text of [
+      "me voy a cortar el pelo antes de la quimio",
+      "quiero cortarme el pelo corto",
+      "me voy a lastimar la espalda si lo sigo cargando",
+    ]) {
+      expect([text, kindOf(text)]).toEqual([text, null]);
+    }
+  });
+
   it("catches mixed intent, whatever comes first", () => {
     expect(kindOf("what should I pack, also he's not breathing well")).toBe("medical_emergency");
     expect(kindOf("¿Dónde nos quedamos? Ah, y no respira bien")).toBe("medical_emergency");
+    expect(kindOf("Where do I park? Also I wanna die")).toBe("self_harm");
+    expect(kindOf("¿Cuánto cuesta el parqueo? No puedo despertarlo")).toBe("medical_emergency");
+    expect(kindOf("Le di su medicina como indicó el médico, pero ahora no respira")).toBe(
+      "medical_emergency",
+    );
   });
 
   it("prefers the medical emergency when both kinds match (both copies lead with 911)", () => {

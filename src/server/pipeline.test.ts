@@ -130,6 +130,38 @@ describe("pipeline.startChat (safety and limits)", () => {
     ]);
   });
 
+  it("regression (Codex review 3): an exhausted limiter never turns an emergency into fallback(rate_limited)", async () => {
+    for (const [message, kind, language] of [
+      ["No puedo despertarlo", "medical_emergency", "es"],
+      ["No está respirando", "medical_emergency", "es"],
+      ["I wanna die", "self_harm", "en"],
+      ["Me voy a hacer daño", "self_harm", "es"],
+      ["he took too many pills", "medical_emergency", "en"],
+    ] as const) {
+      const { deps, router } = setup({ chatMax: 0, modelCallsMax: 0 });
+      const events = await collect(startChat(ask(message), testCtx(), deps));
+      expect(events).toEqual([{ type: "emergency", kind, detectedBy: "safety", language }]);
+      expect(calls(router)).toBe(0);
+    }
+  });
+
+  it("regression (Codex review 3): an over-long message with an emergency is not rejected as too_long", async () => {
+    const { deps, router } = setup({ chatMax: 0 });
+    for (const [tail, kind, language] of [
+      ["No está respirando", "medical_emergency", "es"],
+      ["I can't wake him up", "medical_emergency", "en"],
+      ["I wanna die", "self_harm", "en"],
+    ] as const) {
+      const long = `${"Where do I park? ".repeat(config.limits.maxInputChars)} ${tail}`;
+      const start = startChat(ask(long), testCtx(), deps);
+      expect(start.kind).toBe("stream");
+      expect(await collect(start)).toEqual([
+        { type: "emergency", kind, detectedBy: "safety", language },
+      ]);
+    }
+    expect(calls(router)).toBe(0);
+  });
+
   it("an over-length or empty message is rejected (HTTP 400) without a model call", () => {
     const { deps, router } = setup();
     const long = "a".repeat(config.limits.maxInputChars + 1);
