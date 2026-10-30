@@ -1,5 +1,6 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { parseArticleFile } from "../src/server/knowledge";
 import { type GoldenCase, GoldenCaseSchema } from "./golden";
 
 /** Every category in docs/EVALS.md § Golden set must have at least one case. */
@@ -65,6 +66,21 @@ describe("evals/golden.jsonl", () => {
       cases.filter((c) => c.tags.includes("practical")).flatMap((c) => c.expect.articles ?? []),
     );
     expect([...kbIds("en")].filter((id) => !covered.has(id))).toEqual([]);
+  });
+
+  it("every high-risk article has a practical case in each language", () => {
+    for (const lang of ["en", "es"] as const) {
+      const dir = new URL(`../content/kb/${lang}/`, import.meta.url);
+      const highRisk = [...kbIds(lang)].filter(
+        (id) => parseArticleFile(readFileSync(new URL(`${id}.md`, dir), "utf8")).risk === "high",
+      );
+      const covered = new Set(
+        cases
+          .filter((c) => c.tags.includes("practical") && (c.expect.language ?? c.locale) === lang)
+          .flatMap((c) => c.expect.articles ?? []),
+      );
+      expect([lang, highRisk.filter((id) => !covered.has(id))]).toEqual([lang, []]);
+    }
   });
 
   it("borderline cases (several acceptable outcomes) explain why", () => {

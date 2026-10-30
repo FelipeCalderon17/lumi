@@ -47,6 +47,12 @@ describe.each([
     expect(violations).toEqual([]);
   });
 
+  it("fallback and abstained copy point only to real roles, not the placeholder family team", () => {
+    for (const body of [dict.safety.fallback.body, dict.safety.abstained.body]) {
+      expect(body).not.toMatch(/family team|equipo de familias/i);
+    }
+  });
+
   it("names the AI data processor only in the privacy disclosure (ADR 0005)", () => {
     const naming = strings(dict)
       .filter(([, s]) => AI_PROCESSOR_NAME.test(s))
