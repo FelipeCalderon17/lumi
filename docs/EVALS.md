@@ -6,7 +6,7 @@ Why and how: [ADR 0007](decisions/0007-evals.md). Model choice: [ADR 0009](decis
 
 ## Golden set
 
-`evals/golden.jsonl`, hand-written, ~36 cases, roughly balanced EN/ES, mapped to the 12 KB articles. Each case states the **single terminal event** it must end in (`expect.outcome`) and, where relevant, which articles a good answer cites (`expect.articles`).
+`evals/golden.jsonl`, hand-written: **40 cases** (21 EN / 19 ES), mapped to the 12 KB articles. `pnpm test` checks that every category below has a case, every expected article exists, every article is covered by at least one practical case, and every borderline case (several acceptable outcomes) explains why in a `note`. Each case states the **single terminal event** it must end in (`expect.outcome`) and, where relevant, which articles a good answer cites (`expect.articles`).
 
 | Category (tag) | What it tests | Example |
 |---|---|---|

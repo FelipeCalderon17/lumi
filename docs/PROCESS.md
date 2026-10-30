@@ -85,3 +85,29 @@ Nothing was rejected outright.
 - **`STAFF_SESSION_SECRET`** is a new env var. The builder didn't touch `.env.example` (rule: never open `.env*` files). Felipe needs to add the empty key.
 
 **Checks.** `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm build`, all passing (results in the commit).
+
+---
+
+## Entry 3 — Phase 1: the knowledge base (2026-10-30)
+
+**Human decisions.** Felipe chose 12 complete article pairs over the ~25 first planned ("fewer, complete, high-quality; expand only if golden-set coverage shows gaps"), the suggested topic list, and that every high-risk article gets his personal review.
+
+**What the builder agent did.**
+
+- Wrote 12 EN and 12 ES articles in `content/kb/`. Spanish was written as Spanish, not translated line by line: same facts, steps and boundaries, but its own phrasing. One example: "a long stretch, not a sprint" became "una carrera de fondo, no de velocidad". Neutral Latin American vocabulary, "tú", "tu hijo o hija".
+- Kept the suggested 12 topics. The only change is the ids and categories: `money-and-work`, `family-and-school` and `about-lumi` replace categories that no article used.
+- Marked 5 articles `risk: high`: the 3 required (`questions-for-your-care-team`, `when-to-call-your-care-team`, `taking-care-of-yourself`) plus `talking-with-your-child` (what to tell a child about their illness is close to the clinical line) and `family-notebook` (it mentions the medicines list).
+- Added `parseArticleFile` and `countWords` (no YAML dependency) and a KB content gate (`kb-content.test.ts`): schema, folder/filename match, unique ids, EN↔ES parity including category and risk, 250–450 words, shared banned patterns, 988 only inside the exact approved crisis line, no citation-like `[n]` or abstain marker in bodies, the medical-template article exists in both languages, required articles stay high-risk. It runs in `pnpm test` and in its own CI job (`pnpm test:kb`) so it can be a required check.
+- Expanded `evals/golden.jsonl` to 40 cases across all 12 categories in EVALS.md. Tests check category coverage, that expected articles exist, that practical cases cover every article, and that borderline cases explain themselves.
+
+**What the tests caught.** The first draft of the self-care article said "In a crisis, 988." in its "Who to ask" section. The 988 rule flagged it, because only the exact approved line may contain 988. It now refers to "the crisis line above".
+
+**Content calls flagged for Felipe (please review).**
+
+- The siblings article first said siblings "can't catch it". That's a medical claim, even if widely known, so it was replaced with "ask the care team how to answer that".
+- `when-to-call-your-care-team` has **no symptom list**. It tells parents to get the list from their care team, keep it visible, call when in doubt, and call 911 in an emergency.
+- `how-lumi-can-help` says plainly that Lumi is fictional and that the family team, volunteering and donations are placeholders. It repeats the processing disclosure (questions go to OpenAI) and the 30-day gap retention, so those two facts now live in content as well as config.
+- Generic roles used: hospital social worker, financial counselor, child life specialist, school counselor, school nurse, employer HR, insurance plan member services. No organisations, names, numbers (except 911/988), laws or benefit amounts.
+- Hedged claims that remain: "most hospitals can arrange an interpreter", "many hospitals have financial assistance programs", "some insurance plans cover rides", "some workers have legal protections". Felipe should confirm he's comfortable with these.
+
+**Checks.** `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm build`, all passing (results in the commit).
