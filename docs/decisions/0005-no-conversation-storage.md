@@ -1,6 +1,6 @@
 # 0005 — No conversation storage; consented, previewed gaps with retention
 
-**Status:** Accepted · 2026-10-30 · *Revised 2026-10-30 after Codex review 1: stopped claiming anonymity; added an editable preview, a staff-access disclosure, a topic label, 30-day retention and a delete path.*
+**Status:** Accepted · 2026-10-30 · *Revised 2026-10-30 after Codex review 1: stopped claiming anonymity; added an editable preview, a staff-access disclosure, a topic label, 30-day retention and a delete path. Revised again after Codex review 2: the gap note describes the lazy purge honestly, and naming OpenAI is recorded as an explicit exception to the no-real-organisations rule.*
 
 ## Context
 Parents may describe their child's situation in detail. Storing that creates risk (breaches, retention, consent) with little value for a prototype. Staff still need to know what the KB is missing.
@@ -9,6 +9,7 @@ An earlier version said gaps were saved "without your name". That overstated it:
 
 ## Decision
 - No accounts and no stored conversations. Questions are sent to OpenAI to route and answer them. The help page discloses this **before** the parent asks.
+- **Naming the processor is a deliberate exception** (decided by Felipe after Codex review 2): transparency about who processes a parent's words wins over the no-real-organisations rule. Real organizations are not used or imitated, except naming the AI data processor (OpenAI) in privacy disclosures, and the public 911/988 services in fixed safety copy. "OpenAI" appears only in `help.processingNotice` and the `how-lumi-can-help` article, and tests keep it there.
 - After an abstain, the parent is offered: "Would you like to send this question to the Lumi team so they can write a guide?" On yes they see an **editable, minimal preview** of the text that will be stored (contact details removed best-effort), with the note: *"Lumi staff can read the question you choose to save, so remove names and identifying details first. We save the edited question, its language, topic and submission date. Questions older than 30 days are deleted when someone saves a question or staff opens the list."* The note describes the lazy purge below as it really works, rather than promising deletion on day 30.
 - Only on an explicit save do we store: the **edited** text, its language, a **router-assigned topic label** (for triage) and a timestamp. No name, IP, user agent or conversation.
 - **Retention:** rows older than `config.gaps.retentionDays` (30) are purged on every save and every staff list, so no scheduler is needed.

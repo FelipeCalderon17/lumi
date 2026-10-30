@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { findContentViolations } from "./content-rules";
+import { AI_PROCESSOR_NAME, findContentViolations } from "./content-rules";
 
 const rules = (text: string) => findContentViolations(text).map((v) => v.rule);
 
@@ -27,6 +27,12 @@ describe("content-rules.findContentViolations", () => {
     expect(rules("Te lo garantizamos")).toEqual(["banned_word"]);
     expect(rules("your cancer journey")).toEqual(["banned_word"]);
     expect(rules("Procura descansar. Make sure you're secure.")).toEqual([]);
+  });
+
+  it("recognises the AI processor name as a whole word, any case", () => {
+    expect(AI_PROCESSOR_NAME.test("your question is sent to OpenAI")).toBe(true);
+    expect(AI_PROCESSOR_NAME.test("se envía a openai")).toBe(true);
+    expect(AI_PROCESSOR_NAME.test("an open AI model")).toBe(false);
   });
 
   it("does not flag ordinary small numbers", () => {

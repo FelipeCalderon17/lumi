@@ -4,7 +4,7 @@ import { en } from "@/i18n/dictionaries/en";
 import { es } from "@/i18n/dictionaries/es";
 import { ABSTAIN_MARKER } from "../answer";
 import { config } from "../config";
-import { findContentViolations } from "../content-rules";
+import { AI_PROCESSOR_NAME, findContentViolations } from "../content-rules";
 import { LANGUAGES } from "../types";
 import { type Article, countWords, MEDICAL_REDIRECT_ARTICLE_ID, parseArticleFile } from "./index";
 
@@ -91,6 +91,13 @@ describe("KB content", () => {
       expect(article.body).not.toContain(ABSTAIN_MARKER);
     },
   );
+
+  it("names the AI data processor only in the how-lumi-can-help disclosure (ADR 0005)", () => {
+    const naming = all
+      .filter((e) => AI_PROCESSOR_NAME.test(`${e.article.title}\n${e.article.body}`))
+      .map((e) => `${e.lang}/${e.article.id}`);
+    expect(naming).toEqual(["en/how-lumi-can-help", "es/how-lumi-can-help"]);
+  });
 
   it("the medical template's article exists in both languages", () => {
     for (const lang of LANGUAGES) {

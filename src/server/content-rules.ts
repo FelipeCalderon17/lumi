@@ -7,6 +7,13 @@
 /** The only numbers that may be shown as phone numbers: 911 (emergency) and 988 (crisis). */
 export const ALLOWED_SERVICE_NUMBERS = ["911", "988"] as const;
 
+/**
+ * The one real company content may name: the AI data processor, and only in the privacy
+ * disclosures (ADR 0005, CONTENT-GUIDELINES § Truthfulness). Where it may appear is checked by
+ * the dictionary and KB tests.
+ */
+export const AI_PROCESSOR_NAME = /\bOpenAI\b/i;
+
 /** 7+ digits, optionally separated: "555-123-4567", "(555) 123 4567", "1-800-…". */
 const PHONE_LIKE = /(?:\+?\d[\s().-]*){7,}/g;
 /** US N11 service codes (211, 311 …) other than 911. */

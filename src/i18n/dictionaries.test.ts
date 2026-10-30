@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { config } from "@/server/config";
-import { findContentViolations } from "@/server/content-rules";
+import { AI_PROCESSOR_NAME, findContentViolations } from "@/server/content-rules";
 import { en } from "./dictionaries/en";
 import { es } from "./dictionaries/es";
 
@@ -45,6 +45,13 @@ describe.each([
       findContentViolations(s).map((v) => `${path}: ${v.rule} "${v.match}"`),
     );
     expect(violations).toEqual([]);
+  });
+
+  it("names the AI data processor only in the privacy disclosure (ADR 0005)", () => {
+    const naming = strings(dict)
+      .filter(([, s]) => AI_PROCESSOR_NAME.test(s))
+      .map(([path]) => path);
+    expect(naming).toEqual(["help.processingNotice"]);
   });
 
   it("the gap disclosure states the configured retention period", () => {
