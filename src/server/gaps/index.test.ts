@@ -103,14 +103,86 @@ describe("gaps.saveGap", () => {
     expect(await saveGap(submission, null)).toEqual({ status: "unavailable" });
   });
 
-  it("returns 'failed' when the database is down or hangs, never throws", async () => {
+  it("returns 'failed' when nothing was written (purge fails or hangs), never throws", async () => {
     const down: GapStore = {
       ...memoryGapStore().store,
       purgeOlderThan: async () => Promise.reject(new Error("ECONNREFUSED")),
     };
     expect(await saveGap(submission, down)).toEqual({ status: "failed" });
-    const hanging: GapStore = { ...memoryGapStore().store, insert: () => new Promise(() => {}) };
-    expect(await saveGap(submission, hanging, new Date(), 20)).toEqual({ status: "failed" });
+    const hangingPurge: GapStore = {
+      ...memoryGapStore().store,
+      purgeOlderThan: () => new Promise(() => {}),
+    };
+    expect(await saveGap(submission, hangingPurge, new Date(), 20)).toEqual({ status: "failed" });
+  });
+
+  it("an insert that errors or hangs → 'uncertain' WITH the id and delete token", async () => {
+    for (const insert of [
+      () => new Promise<never>(() => {}),
+      async () => Promise.reject(new Error("connection reset")),
+    ]) {
+      const store: GapStore = { ...memoryGapStore().store, insert };
+      const saved = await saveGap(submission, store, new Date(), 20);
+      expect(saved).toEqual({
+        status: "uncertain",
+        id: expect.stringMatching(/^[0-9a-f-]{36}$/),
+        deleteToken: expect.any(String),
+      });
+    }
+  });
+
+  it("regression (Codex review 3): a commit that lands after the timeout can still be deleted", async () => {
+    const memory = memoryGapStore();
+    let committed: Promise<unknown> = Promise.resolve();
+    const slow: GapStore = {
+      ...memory.store,
+      insert: (row) => {
+        // The database commits 50 ms later; saveGap stops waiting after 20 ms.
+        committed = new Promise((resolve) => setTimeout(resolve, 50)).then(() =>
+          memory.store.insert(row),
+        );
+        return committed as Promise<"inserted">;
+      },
+    };
+    const saved = await saveGap(submission, slow, new Date(), 20);
+    if (saved.status !== "uncertain") throw new Error(saved.status);
+    expect(memory.rows).toHaveLength(0);
+    await committed;
+    expect(memory.rows).toHaveLength(1);
+    expect(memory.rows[0]?.id).toBe(saved.id);
+    expect(await deleteGapWithToken(saved.id, saved.deleteToken, memory.store)).toEqual({
+      status: "deleted",
+    });
+    expect(memory.rows).toHaveLength(0);
+  });
+
+  it("retrying with the same id and token is idempotent: one row, same credentials", async () => {
+    const { store, rows } = memoryGapStore();
+    const first = await saveGap(submission, store);
+    if (first.status !== "saved") throw new Error(first.status);
+    const retry = { id: first.id, deleteToken: first.deleteToken };
+    expect(await saveGap({ ...submission, retry }, store)).toEqual({ status: "saved", ...retry });
+    expect(rows).toHaveLength(1);
+  });
+
+  it("a retry id that belongs to another row writes nothing → 'failed'", async () => {
+    const { store, rows } = memoryGapStore();
+    const first = await saveGap(submission, store);
+    if (first.status !== "saved") throw new Error(first.status);
+    const hijack = { id: first.id, deleteToken: "someone-elses-token-123" };
+    expect(await saveGap({ ...submission, retry: hijack }, store)).toEqual({ status: "failed" });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.deleteTokenHash).toBe(hashDeleteToken(first.deleteToken));
+  });
+
+  it("the retry field is strict: a uuid id and a token of the right length", () => {
+    const parse = (retry: unknown) =>
+      GapSubmissionSchema.safeParse({ ...submission, retry }).success;
+    expect(parse({ id: "00000000-0000-4000-8000-000000000001", deleteToken: "x".repeat(32) })).toBe(
+      true,
+    );
+    expect(parse({ id: "nope", deleteToken: "x".repeat(32) })).toBe(false);
+    expect(parse({ id: "00000000-0000-4000-8000-000000000001", deleteToken: "short" })).toBe(false);
   });
 });
 

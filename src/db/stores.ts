@@ -56,12 +56,20 @@ export function createDbUsageReader(db: Db): UsageReader {
 export function createDbGapStore(db: Db): GapStore {
   return {
     async insert(row) {
-      const [inserted] = await db
+      const inserted = await db
         .insert(gapQuestion)
         .values({ ...row, consent: true })
+        .onConflictDoNothing({ target: gapQuestion.id })
         .returning({ id: gapQuestion.id });
-      if (!inserted) throw new Error("insert returned no row");
-      return inserted;
+      if (inserted.length > 0) return "inserted";
+      const same = await db
+        .select({ id: gapQuestion.id })
+        .from(gapQuestion)
+        .where(
+          and(eq(gapQuestion.id, row.id), eq(gapQuestion.deleteTokenHash, row.deleteTokenHash)),
+        )
+        .limit(1);
+      return same.length > 0 ? "exists" : "conflict";
     },
     async listRecent(limit): Promise<GapRecord[]> {
       return db

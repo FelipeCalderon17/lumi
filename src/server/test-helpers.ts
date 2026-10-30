@@ -152,12 +152,12 @@ type StoredGap = GapRecord & { deleteTokenHash: string };
 /** An in-memory GapStore with the same semantics as the Drizzle one. */
 export function memoryGapStore(now: () => Date = () => new Date()) {
   const rows: StoredGap[] = [];
-  let next = 1;
   const store: GapStore = {
     async insert(row) {
-      const id = `00000000-0000-4000-8000-${String(next++).padStart(12, "0")}`;
-      rows.push({ ...row, id, createdAt: now() });
-      return { id };
+      const existing = rows.find((r) => r.id === row.id);
+      if (existing) return existing.deleteTokenHash === row.deleteTokenHash ? "exists" : "conflict";
+      rows.push({ ...row, createdAt: now() });
+      return "inserted";
     },
     async listRecent(limit) {
       return [...rows]

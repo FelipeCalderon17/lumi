@@ -125,8 +125,14 @@ export const config = {
     answerTotalMs: 25_000,
     /** Ledger writes are best-effort and abandoned after this, after the response is sent. */
     ledgerWriteMs: 1_500,
-    /** Gap save / staff list database calls. */
+    /** Gap save / staff list database calls (app-side wait). */
     dbMs: 3_000,
+    /**
+     * Postgres `statement_timeout` for every statement. Below dbMs, so the database cancels a
+     * slow statement before the app stops waiting for it; a gap insert that still outlives the
+     * app's wait is reported as `uncertain` with its id and delete token.
+     */
+    dbStatementMs: 2_500,
     /** Notebook structuring: one structured call over up to maxNotes notes. */
     notebookMs: 30_000,
     /** One transcription call for up to maxAudioSeconds of audio. */

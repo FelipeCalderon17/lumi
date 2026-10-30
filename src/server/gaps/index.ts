@@ -15,7 +15,8 @@ import { LANGUAGES, type Language } from "../types";
  *
  * Retention: rows older than config.gaps.retentionDays are deleted (purged on every save/list).
  * Delete path: staff can delete any row; the parent gets a one-time delete token on save
- * (only its hash is stored) to remove it from the same tab.
+ * (only its hash is stored) to remove it from the same tab. The id and token exist before the
+ * insert, so even an `uncertain` save hands them back.
  */
 
 export const GAP_TOPICS = [...KB_TOPICS, "other"] as const;
@@ -29,6 +30,14 @@ export const GapSubmissionSchema = z
     topic: z.enum(GAP_TOPICS),
     /** Must be literally `true`: the parent saw the preview and the "staff can read this" note. */
     consent: z.literal(true),
+    /**
+     * Retry of an `uncertain` save: the id and delete token that save returned. Saving again
+     * with them is idempotent (one row at most), and the parent keeps working credentials.
+     */
+    retry: z
+      .object({ id: z.uuid(), deleteToken: z.string().min(16).max(128) })
+      .strict()
+      .optional(),
   })
   .strict();
 export type GapSubmission = z.infer<typeof GapSubmissionSchema>;
@@ -46,12 +55,18 @@ export type GapRecord = {
 
 /** Storage, implemented with Drizzle in src/db/stores.ts. `null` when there's no database. */
 export interface GapStore {
+  /**
+   * Idempotent insert with a caller-chosen id (`ON CONFLICT (id) DO NOTHING`). "inserted" or
+   * "exists" (the same id AND token hash are already stored: a retry) mean the row is there;
+   * "conflict" means the id belongs to another row and nothing was written.
+   */
   insert(row: {
+    id: string;
     question: string;
     language: GapSubmission["language"];
     topic: GapSubmission["topic"];
     deleteTokenHash: string;
-  }): Promise<{ id: string }>;
+  }): Promise<"inserted" | "exists" | "conflict">;
   listRecent(limit: number): Promise<GapRecord[]>;
   /** Staff delete. */
   delete(id: string): Promise<boolean>;
@@ -95,13 +110,22 @@ export function hashDeleteToken(token: string): string {
 
 export type GapSaveResult =
   | { status: "saved"; id: string; deleteToken: string }
+  /**
+   * The insert didn't confirm in time (or the connection failed mid-way): the row may or may
+   * not exist. The parent still gets the id and token, so they can delete it, or retry with
+   * `retry: { id, deleteToken }` (idempotent).
+   */
+  | { status: "uncertain"; id: string; deleteToken: string }
   /** No database in this deployment (demo mode). */
   | { status: "unavailable" }
+  /** Nothing was written (the purge before the insert failed, or the retry id is taken). */
   | { status: "failed" };
 
 /**
- * Purges expired rows (lazy retention), then saves the redacted question with the hash of a
- * fresh one-time delete token. The token goes back to the parent once and is never stored.
+ * Purges expired rows (lazy retention), then saves the redacted question. The id and the
+ * one-time delete token are created BEFORE the insert (only the token's hash is stored), so an
+ * insert that outlives our wait can still be deleted or retried by the parent. The token goes
+ * back to the parent and is never stored.
  */
 export async function saveGap(
   submission: GapSubmission,
@@ -110,11 +134,17 @@ export async function saveGap(
   timeoutMs: number = config.timeouts.dbMs,
 ): Promise<GapSaveResult> {
   if (!store) return { status: "unavailable" };
-  const deleteToken = newDeleteToken();
+  const id = submission.retry?.id ?? crypto.randomUUID();
+  const deleteToken = submission.retry?.deleteToken ?? newDeleteToken();
   try {
     await withTimeout(store.purgeOlderThan(retentionCutoff(now)), timeoutMs);
-    const { id } = await withTimeout(
+  } catch {
+    return { status: "failed" };
+  }
+  try {
+    const outcome = await withTimeout(
       store.insert({
+        id,
         question: redactContactDetails(submission.question, submission.language),
         language: submission.language,
         topic: submission.topic,
@@ -122,9 +152,10 @@ export async function saveGap(
       }),
       timeoutMs,
     );
+    if (outcome === "conflict") return { status: "failed" };
     return { status: "saved", id, deleteToken };
   } catch {
-    return { status: "failed" };
+    return { status: "uncertain", id, deleteToken };
   }
 }
 

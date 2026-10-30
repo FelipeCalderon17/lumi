@@ -19,7 +19,13 @@ const row: UsageRow = {
 describe("staff.staffOverview", () => {
   it("lists gaps and summarises usage with cost derived from the catalog", async () => {
     const { store } = memoryGapStore();
-    await store.insert({ question: "Q", language: "en", topic: "other", deleteTokenHash: "h" });
+    await store.insert({
+      id: "00000000-0000-4000-8000-000000000001",
+      question: "Q",
+      language: "en",
+      topic: "other",
+      deleteTokenHash: "h",
+    });
     const usage: UsageReader = { since: async () => [row, { ...row, model: "gpt-6.1-terra" }] };
     const overview = await staffOverview({ gaps: store, usage });
     expect(overview.gaps).toMatchObject({ status: "ok", items: [{ question: "Q" }] });
