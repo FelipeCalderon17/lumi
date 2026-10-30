@@ -2,7 +2,7 @@
 
 One Next.js app (App Router) serves the pages and a small set of API routes. All assistant logic lives in [`src/server/`](../src/server) as framework-free TypeScript ([ADR 0001](decisions/0001-single-nextjs-app.md)): no `next`, `react` or `src/app` imports, so it can be unit-tested directly and extracted later.
 
-> **Status (Phase 1):** contracts, pure helpers and the knowledge base are in place. Model-backed modules still throw `NotImplementedError`; their planned behaviour is listed as `it.todo` in each module's tests. Revised after Codex review round 1 (see [PROCESS.md](PROCESS.md), entry 2).
+> **Status (Phase 2):** the server side is implemented and tested with mocked models: the chat pipeline, voice-to-text, notebook structuring, gaps, staff endpoints and the usage ledger. One live smoke test has been run ([PROCESS.md](PROCESS.md), entry 4). The UI is Phase 3.
 
 **Scope.** Lumi serves English- and Spanish-speaking families **in the US** ([ADR 0012](decisions/0012-us-scope-and-crisis-contacts.md)): 911 for emergencies, the 988 Suicide & Crisis Lifeline for emotional crisis, and "contact your local emergency services" for anyone outside the US.
 
@@ -55,13 +55,27 @@ One Next.js app (App Router) serves the pages and a small set of API routes. All
    │        └─ invalid ─────────→ fallback(invalid_output)
    │
    └─ 11. ledger/ ─────────────── AFTER the terminal event: one row per model call (router AND answer,
-                                  success or failure), best-effort, time-bounded. Numbers only.
+                                  success or failure), best-effort, time-bounded. Token facts only;
+                                  cost is derived on read (ADR 0013).
 
  Separate, opt-in, after `abstained`:
    editable preview + "Lumi staff can read this" → POST /api/gaps { question, language, topic, consent: true }
    → gaps/ → gap_question (30-day retention, delete token)       rate-limited separately
    Staff: /[locale]/staff/gaps (passcode → HMAC session cookie, ADR 0008)
 ```
+
+### Other endpoints
+
+All thin adapters over `src/server`, with the same rules: bounded body read, Zod at the boundary, safety before limits where text is involved, a separate rate limit plus the instance-wide model-call ceiling, best-effort ledger, nothing stored that isn't listed here.
+
+| Endpoint | Server module | What it does |
+|---|---|---|
+| `POST /api/transcribe` | `transcribe/` | Voice → text with `gpt-transcribe` ([ADR 0014](decisions/0014-voice-transcription.md)). webm/mp4/m4a, max 2 minutes (bytes, declared duration and provider-measured duration), container signature check. Returns text only; audio stays in memory for the request. |
+| `POST /api/notebook/prepare` | `notebook/` | The parent's on-device notes → a structured page: observations by topic + questions for the care team, each citing its source notes. Safety check on every note first. Code checks the source indexes and that no number is invented; dates come from the notes. Any failure → the raw notes grouped by date. Stateless. |
+| `POST /api/gaps`, `DELETE /api/gaps/[id]` | `gaps/` | Consented gap save (redacted, 30-day retention, one-time delete token) and parent delete. `unavailable` without a database. |
+| `POST /api/staff/login`, `/logout`; `GET /api/staff/gaps`; `DELETE /api/staff/gaps/[id]` | `staff-auth/`, `staff.ts` | Passcode → HMAC session cookie; every request verified; fails closed. The list shows gaps and usage with **derived** cost. |
+
+Event names on the chat stream are the Phase 0 contract: `abstained` is the "no answer" outcome and `fallback` (with a `reason`) covers every error, so there's no separate `error` event.
 
 ### Why this order
 
@@ -144,7 +158,7 @@ All numbers live in [`src/server/config.ts`](../src/server/config.ts), including
 - **Cheap router.** `gpt-6-luna`, small output cap, short deadline.
 - **Prompt caching (not guaranteed).** The answer prompt is `[policy][KB][question]`, and the first two parts are byte-identical across requests (articles sorted by id). OpenAI applies automatic prefix caching to repeated long prefixes, but it's best-effort: it depends on traffic, timing and the provider. We **measure** it: the ledger records `cachedInputTokens`, and the evals report cold vs warm cost separately.
 - **Caps.** `maxRequestBytes`, `maxInputChars`, `maxRouterOutputTokens`, `maxAnswerOutputTokens`, rate limits and the instance ceiling.
-- **Ledger.** One row per model call, router **and** answer, success **and** failure, with tokens (null if unknown), latency, finish reason and estimated USD. **Cost per conversation** = sum of rows sharing a `requestId`, so router overhead is always included.
+- **Ledger.** One row per model call (router, answer, transcribe, notebook), success **and** failure, with token facts (input, cached input, output, reasoning; `null` if unknown), audio seconds for transcription, latency, finish reason and outcome. **No stored cost** ([ADR 0013](decisions/0013-store-tokens-derive-cost.md)): `estimateCost(row, catalog)` derives it on read, and unknown prices or usage show as "unknown", never $0. **Cost per conversation** = sum of rows sharing a `requestId`, so router overhead is always included.
 - **Evals are not in CI** (they cost money). They run on demand with `pnpm eval`, behind a budget guard ([ADR 0007](decisions/0007-evals.md), [ADR 0009](decisions/0009-model-selection.md)).
 
 ## Privacy
@@ -157,7 +171,7 @@ All numbers live in [`src/server/config.ts`](../src/server/config.ts), including
 
 ## Data model
 
-Two tables ([`src/db/schema.ts`](../src/db/schema.ts)): `gap_question` (question, language, topic, delete token hash, created_at) and `usage_ledger` (one row per model call; nullable token counts and cost). See ADR 0006.
+Two tables ([`src/db/schema.ts`](../src/db/schema.ts), migration in [`drizzle/`](../drizzle)): `gap_question` (question, language, topic, consent, delete token hash, created_at) and `usage_ledger` (one row per model call: step, model, nullable token counts, reasoning tokens, audio seconds, latency, finish reason, outcome; **no cost column**, ADR 0013). See ADR 0006. Without `DATABASE_URL` both degrade: the ledger is a no-op with one warning, and gap save returns `unavailable`.
 
 ## Open questions
 
@@ -166,4 +180,5 @@ Decided in review round 1: buffering (ADR 0010), deterministic self-harm check (
 Still open:
 
 1. **Spanish name for 988.** The fixed copy uses the English service name "988 Suicide & Crisis Lifeline" in both languages. Should the Spanish copy use the service's official Spanish name? Needs checking against the official source before launch.
-2. **Prices for `gpt-6.1-terra` and `gpt-6.1-sol`** are unknown (`null`). The budget guard can't estimate them until they're filled in.
+2. **Prices for `gpt-6.1-terra`, `gpt-6.1-sol` and `gpt-transcribe`** are unknown (`null`). Costs that depend on them show as "unknown" until they're filled in. The Luna and 6 Sol placeholders predate the September 2026 price cut and should be re-verified.
+3. **Notebook safety on past events.** A note like "last night he stopped breathing for a few seconds" triggers the emergency steps and blocks the notebook, which is the brief's rule but may hurt the parents who most need the page. Option: show the emergency steps *and* still prepare the page. Felipe to decide.

@@ -4,7 +4,7 @@
 
 A prototype website for **Lumi**, a fictional foundation supporting families of children with cancer, built for the FutureProofing take-home ([brief](docs/BRIEF.md)).
 
-> **Status:** Phase 1, knowledge base. Contracts, docs and 12 bilingual guides are in place. The assistant isn't wired up yet.
+> **Status:** Phase 2, server side. The assistant pipeline, voice-to-text, the notebook, gaps and staff endpoints work behind tests and a first live smoke test. The UI is next (Phase 3).
 >
 > **Live demo:** _TODO: Railway URL after Phase 3._
 
@@ -50,7 +50,12 @@ pnpm dev                     # http://localhost:3000 → redirects to /en or /es
 | `pnpm lint` / `format` | Biome |
 | `pnpm typecheck` | `next typegen && tsc --noEmit` |
 | `pnpm test` | Vitest (no network, no API calls) |
+| `pnpm test:kb` | KB content gate and golden-set format only (its own CI job) |
+| `pnpm smoke` | Small live run through the real pipeline (~14 cheap calls + 2 short transcriptions). **Costs money.** Needs `.env.local`. |
 | `pnpm eval` | Golden-set evals against the real model. **Costs money.** Not in CI. |
+| `pnpm db:generate` / `db:migrate` | Drizzle migrations (`drizzle/`). Migrate by hand against `DATABASE_URL`. |
+
+Without `DATABASE_URL` the app still runs: the usage ledger is a no-op and saving a question says it isn't available in this demo. Without `STAFF_PASSCODE` and `STAFF_SESSION_SECRET` the staff area stays closed.
 
 CI (`.github/workflows/ci.yml`) runs Biome, typecheck, tests (including the KB content gate) and a production build. No secrets.
 
@@ -60,7 +65,7 @@ Plan and results: [docs/EVALS.md](docs/EVALS.md). _Results TODO._
 
 ## Cost
 
-_TODO: measured cost per conversation (router included), cold vs warm, from the usage ledger and the eval run._ Prompt caching is best-effort on the provider side, so we report what we measure rather than assume it. Controls are described in [ARCHITECTURE.md § Cost controls](docs/ARCHITECTURE.md#cost-controls).
+_TODO: measured cost per conversation (router included), cold vs warm, from the usage ledger and the eval run._ First data point (one smoke run, placeholder prices, [PROCESS.md entry 4](docs/PROCESS.md)): a practical question cost about $0.0008 cold and $0.0002 warm, router included, with the KB prefix ~99% cached from the second English answer on. The ledger stores token counts only; cost is derived from the price catalog when it's read ([ADR 0013](docs/decisions/0013-store-tokens-derive-cost.md)). Prompt caching is best-effort on the provider side, so we report what we measure rather than assume it. Controls are described in [ARCHITECTURE.md § Cost controls](docs/ARCHITECTURE.md#cost-controls).
 
 ## What I'd do next
 

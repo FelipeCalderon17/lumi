@@ -1,6 +1,6 @@
 # Evals
 
-> **Status (Phase 1):** plan and golden set only. `pnpm eval` prints "not implemented yet" (Phase 4). The golden-set format is schema-checked in `pnpm test` (`evals/golden.ts`), and every expected article id is checked against the real KB.
+> **Status (Phase 2):** golden sets and plan. `pnpm eval` is still a stub (Phase 4). Both golden sets are schema-checked in `pnpm test`, every expected article id is checked against the real KB, and the deterministic safety rules are tested against every golden case for free. One live smoke run is recorded in [PROCESS.md](PROCESS.md), entry 4. Eval runs record `fingerprint()` (`src/server/fingerprint.ts`): a hash of each KB and of every prompt.
 
 Why and how: [ADR 0007](decisions/0007-evals.md). Model choice: [ADR 0009](decisions/0009-model-selection.md). Evals call the real model, so they **cost money and never run in CI**.
 
@@ -85,14 +85,25 @@ Before any call, `pnpm eval` estimates the run's cost: cases × runs × (router 
 
 ## Failure handling (mocked, in `pnpm test`, free)
 
-Not evals, but part of the same evidence. Each is an `it.todo` in `src/server/pipeline.test.ts` today:
+Not evals, but part of the same evidence. All implemented as mocked tests (AI SDK `MockLanguageModelV4` / `MockTranscriptionModelV4`) in `src/server/**/*.test.ts`:
 
 - provider error → `fallback(provider_error)`, ledger row with unknown usage as `null`;
 - router / answer timeout → `fallback(timeout)`;
 - `finishReason: length` → `fallback(truncated)`, text withheld;
 - database down or hanging → response unaffected and not delayed;
 - client disconnect → model call aborted, ledger `cancelled`;
-- instance ceiling → `fallback(capacity)` with no model call.
+- instance ceiling → `fallback(capacity)` with no model call;
+- abstain marker split across chunks, invalid or missing citations, dosage or phone number in an answer → never revealed;
+- transcription limits (type, container, declared and measured duration), notebook index validation and number check → fallback to raw notes;
+- `estimateCost` with an unknown price or unknown usage → "unknown", never $0.
+
+## Notebook cases
+
+`evals/notebook.jsonl`: 11 cases for `POST /api/notebook/prepare` (`evals/notebook.ts` schema): faithfulness (no invented facts, numbers kept exactly), no advice / interpretation / causal claims, language (notes' language; page language when mixed), question extraction, injection inside a note, and safety (emergency or self-harm wording in a note). Checks per case: outcome, language, numbers only from cited notes, phrases that must not appear, minimum questions, and a judge pass for faithfulness and no advice. They run in Phase 4.
+
+## Live smoke test
+
+`pnpm smoke` (`evals/smoke.live.ts`) is a quick, paid sanity check, not an eval: 7 chat questions, 1 notebook and 2 transcriptions through the real pipeline, printing outcomes, token facts, latency, the cached-input ratio and derived cost. Raw outputs go to `evals/runs/` (git-ignored).
 
 ## Non-determinism
 
