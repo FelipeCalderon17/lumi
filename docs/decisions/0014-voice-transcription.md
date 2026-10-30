@@ -12,7 +12,7 @@ Parents often have their hands full, or find it easier to say a worry out loud t
   - It reports the **billed duration** in `usage` (it's duration-billed), so the ledger gets `audio_seconds` from the provider rather than from the client.
   - It supports streaming transcription in the same SDK, if we later want live captions.
   - `gpt-4o-transcribe` is the fallback choice if the live check shows worse Spanish. `whisper-1` is older and weaker on noisy phone audio. Diarization isn't needed for one speaker.
-  - Price is unknown (`usdPerMinute: null`), so its cost shows as "unknown" until Felipe verifies it.
+  - Price: $0.0045 per audio minute (OpenAI launch pages + public pricing trackers, applied 2026-10-30).
 - **Limits** (`config.limits.audio`):
   - **Max 2 minutes.** The server can't trust the client, so it checks three times: the body read stops at `maxBytes` (4 MB, about 2 minutes at 256 kbps); a declared `durationMs` over 2 minutes is refused before any model call; and if the provider measures more than 2 minutes (+2 s tolerance), **or reports no duration at all**, the text is discarded (`failed`, reason `unverified_duration`; the ledger keeps the call with `audio_seconds` null). Only the provider's duration is trusted; the client's is a pre-check.
   - Media type allowlist plus a container signature check (WebM EBML header, MP4 `ftyp` box), so arbitrary files aren't forwarded.

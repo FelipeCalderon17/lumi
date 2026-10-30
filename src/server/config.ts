@@ -12,7 +12,7 @@ export type TokenPrice = {
   outputUsdPerMillion: number | null;
   /** Where the numbers came from. */
   source: string;
-  /** ISO date the numbers were checked against platform.openai.com/pricing. `null` = not yet. */
+  /** ISO date the numbers were last checked. `null` = not yet. */
   verifiedAt: string | null;
 };
 
@@ -26,11 +26,14 @@ export type AudioPrice = {
 
 export type ModelPrice = TokenPrice | AudioPrice;
 
+const PRICE_SOURCE = "OpenAI launch pages + public pricing trackers";
+const PRICES_VERIFIED_AT = "2026-10-30";
+
 /**
  * Every model the app or the evals may call (ADR 0009, 0014), with its price.
  * The ledger stores token FACTS only; cost is derived from this catalog when it's read
  * (ADR 0013), so fixing a price here corrects every past estimate. The provider's invoice is
- * the truth; these only estimate it.
+ * the truth; these only estimate it. Prices applied by Felipe after Codex review 3.
  */
 export const modelCatalog = {
   "gpt-6-luna": {
@@ -38,39 +41,38 @@ export const modelCatalog = {
     inputUsdPerMillion: 0.1,
     cachedInputUsdPerMillion: 0.01,
     outputUsdPerMillion: 0.5,
-    source: "Public reporting, Sep 2026 (placeholder). TODO: verify on platform.openai.com/pricing",
-    verifiedAt: null,
+    source: PRICE_SOURCE,
+    verifiedAt: PRICES_VERIFIED_AT,
   },
   "gpt-6.1-terra": {
     billing: "tokens",
-    inputUsdPerMillion: null,
-    cachedInputUsdPerMillion: null,
-    outputUsdPerMillion: null,
-    source: "Unknown. TODO: verify on platform.openai.com/pricing",
-    verifiedAt: null,
+    inputUsdPerMillion: 1,
+    cachedInputUsdPerMillion: 0.05,
+    outputUsdPerMillion: 5,
+    source: PRICE_SOURCE,
+    verifiedAt: PRICES_VERIFIED_AT,
   },
   "gpt-6-sol": {
     billing: "tokens",
     inputUsdPerMillion: 2,
     cachedInputUsdPerMillion: 0.2,
     outputUsdPerMillion: 10,
-    source: "Public reporting, Sep 2026 (placeholder). TODO: verify on platform.openai.com/pricing",
-    verifiedAt: null,
+    source: PRICE_SOURCE,
+    verifiedAt: PRICES_VERIFIED_AT,
   },
   "gpt-6.1-sol": {
     billing: "tokens",
-    inputUsdPerMillion: null,
-    cachedInputUsdPerMillion: null,
-    outputUsdPerMillion: null,
-    source: "Unknown. TODO: verify on platform.openai.com/pricing",
-    verifiedAt: null,
+    inputUsdPerMillion: 2,
+    cachedInputUsdPerMillion: 0.1,
+    outputUsdPerMillion: 10,
+    source: PRICE_SOURCE,
+    verifiedAt: PRICES_VERIFIED_AT,
   },
   "gpt-transcribe": {
     billing: "audio_duration",
-    usdPerMinute: null,
-    source:
-      "Unknown. Duration-billed per @ai-sdk/openai 4.0.104 changelog. TODO: verify on platform.openai.com/pricing",
-    verifiedAt: null,
+    usdPerMinute: 0.0045,
+    source: PRICE_SOURCE,
+    verifiedAt: PRICES_VERIFIED_AT,
   },
 } as const satisfies Record<string, ModelPrice>;
 
@@ -153,8 +155,9 @@ export const config = {
     /**
      * Output caps INCLUDE reasoning tokens on OpenAI reasoning models, so they leave headroom
      * for thinking. Visible length is set by the prompt (router: a tiny JSON object; answer:
-     * ~180 words). Hitting a cap → fallback(truncated), never a cut-off answer. Tune from the
-     * measured reasoning_tokens in the ledger/evals.
+     * ~180 words). Hitting a cap → fallback(truncated), never a cut-off answer.
+     * Router 1,000 and answer 3,000 are approved by Felipe for now (Phase 2, after Codex
+     * review 3); they'll be tuned in Phase 4 from the measured reasoning_tokens in the evals.
      */
     maxRouterOutputTokens: 1_000,
     maxAnswerOutputTokens: 3_000,

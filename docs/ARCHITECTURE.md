@@ -175,9 +175,8 @@ Two tables ([`src/db/schema.ts`](../src/db/schema.ts), migration in [`drizzle/`]
 
 ## Open questions
 
-Decided in review round 1: buffering (ADR 0010), deterministic self-harm check (ADR 0003), country and crisis contacts (ADR 0012), transport (NDJSON, above). Decided after Codex review 3: notebook safety on past events: a safety notice comes **with** the page, never instead of it (ADR 0003).
+Decided in review round 1: buffering (ADR 0010), deterministic self-harm check (ADR 0003), country and crisis contacts (ADR 0012), transport (NDJSON, above). Decided after Codex review 3: notebook safety on past events: a safety notice comes **with** the page, never instead of it (ADR 0003); the price catalog for every model is applied (ADR 0009, 0014); output caps router 1,000 / answer 3,000 approved until Phase 4 tuning.
 
 Still open:
 
 1. **Spanish name for 988.** The fixed copy uses the English service name "988 Suicide & Crisis Lifeline" in both languages. Should the Spanish copy use the service's official Spanish name? Needs checking against the official source before launch.
-2. **Prices for `gpt-6.1-terra`, `gpt-6.1-sol` and `gpt-transcribe`** are unknown (`null`). Costs that depend on them show as "unknown" until they're filled in. The Luna and 6 Sol placeholders predate the September 2026 price cut and should be re-verified.

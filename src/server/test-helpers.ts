@@ -4,6 +4,7 @@
  */
 import { simulateReadableStream } from "ai";
 import { MockLanguageModelV4 } from "ai/test";
+import { modelCatalog, type PriceCatalog } from "./config";
 import type { RequestContext } from "./context";
 import type { GapRecord, GapStore } from "./gaps";
 import { type Article, buildKnowledgeBase, type KnowledgeBase } from "./knowledge";
@@ -137,6 +138,21 @@ export function testKb(language: Language = "en"): KnowledgeBase {
     },
   ]);
 }
+
+/**
+ * The real catalog with two prices set to unknown (`null`), for the "unknown, never $0" paths.
+ * Every production entry is priced; this fixture keeps those paths tested.
+ */
+export const unknownPriceCatalog: PriceCatalog = {
+  ...modelCatalog,
+  "gpt-6.1-terra": {
+    ...modelCatalog["gpt-6.1-terra"],
+    inputUsdPerMillion: null,
+    cachedInputUsdPerMillion: null,
+    outputUsdPerMillion: null,
+  },
+  "gpt-transcribe": { ...modelCatalog["gpt-transcribe"], usdPerMinute: null },
+};
 
 export function testCtx(overrides: Partial<RequestContext> = {}): RequestContext {
   return {

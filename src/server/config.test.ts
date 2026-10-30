@@ -19,6 +19,22 @@ describe("config", () => {
     }
   });
 
+  it("applies Felipe's price catalog (2026-10-30), with source and date", () => {
+    const tokens = (model: Exclude<keyof typeof modelCatalog, "gpt-transcribe">) => {
+      const p = modelCatalog[model];
+      return [p.inputUsdPerMillion, p.cachedInputUsdPerMillion, p.outputUsdPerMillion];
+    };
+    expect(tokens("gpt-6-luna")).toEqual([0.1, 0.01, 0.5]);
+    expect(tokens("gpt-6-sol")).toEqual([2, 0.2, 10]);
+    expect(tokens("gpt-6.1-sol")).toEqual([2, 0.1, 10]);
+    expect(tokens("gpt-6.1-terra")).toEqual([1, 0.05, 5]);
+    expect(modelCatalog["gpt-transcribe"].usdPerMinute).toBe(0.0045);
+    for (const price of Object.values(modelCatalog)) {
+      expect(price.source).toBe("OpenAI launch pages + public pricing trackers");
+      expect(price.verifiedAt).toBe("2026-10-30");
+    }
+  });
+
   it("unknown token prices are null in all three fields together, never 0", () => {
     for (const price of Object.values(modelCatalog)) {
       if (price.billing !== "tokens") continue;

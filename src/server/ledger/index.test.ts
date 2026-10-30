@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { modelCatalog, type PriceCatalog } from "../config";
+import { unknownPriceCatalog } from "../test-helpers";
 import type { ModelCall } from "../types";
 import {
   addCosts,
@@ -24,17 +25,38 @@ const facts = {
 };
 
 describe("ledger.estimateCost", () => {
-  it("bills cached input tokens at the cached rate (gpt-6-luna placeholder prices)", () => {
+  it("bills cached input tokens at the cached rate (gpt-6-luna)", () => {
     // 2_000 × 0.10 + 8_000 × 0.01 + 200 × 0.50 = 200 + 80 + 100 = 380 per 1M → $0.00038
     expect(estimateCost({ model: "gpt-6-luna", ...facts }, modelCatalog)).toBeCloseTo(0.00038, 10);
   });
 
-  it("returns 'unknown' (not 0) when the price is unknown", () => {
-    expect(estimateCost({ model: "gpt-6.1-terra", ...facts }, modelCatalog)).toBe("unknown");
-    expect(estimateCost({ model: "gpt-6.1-sol", ...facts }, modelCatalog)).toBe("unknown");
+  it("returns 'unknown' (not 0) when the price is unknown (explicit fixture)", () => {
+    expect(estimateCost({ model: "gpt-6.1-terra", ...facts }, unknownPriceCatalog)).toBe("unknown");
     expect(
-      estimateCost({ model: "gpt-transcribe", ...facts, audioSeconds: 30 }, modelCatalog),
+      estimateCost({ model: "gpt-transcribe", ...facts, audioSeconds: 30 }, unknownPriceCatalog),
     ).toBe("unknown");
+    expect(estimateCost({ model: "retired-model" as "gpt-6-luna", ...facts }, modelCatalog)).toBe(
+      "unknown",
+    );
+  });
+
+  it("prices every production model from the applied catalog (Felipe, 2026-10-30)", () => {
+    // 2_000 uncached input, 8_000 cached input, 200 output.
+    const expected = {
+      "gpt-6-luna": (2_000 * 0.1 + 8_000 * 0.01 + 200 * 0.5) / 1e6,
+      "gpt-6-sol": (2_000 * 2 + 8_000 * 0.2 + 200 * 10) / 1e6,
+      "gpt-6.1-sol": (2_000 * 2 + 8_000 * 0.1 + 200 * 10) / 1e6,
+      "gpt-6.1-terra": (2_000 * 1 + 8_000 * 0.05 + 200 * 5) / 1e6,
+    } as const;
+    for (const [model, usd] of Object.entries(expected)) {
+      expect(estimateCost({ model: model as keyof typeof expected, ...facts }, modelCatalog)).toBe(
+        usd,
+      );
+    }
+    // gpt-transcribe: $0.0045 per audio minute.
+    expect(
+      estimateCost({ model: "gpt-transcribe", ...facts, audioSeconds: 90 }, modelCatalog),
+    ).toBeCloseTo(0.00675, 12);
   });
 
   it("returns 'unknown' (not 0) when any token count is unknown", () => {
@@ -121,7 +143,7 @@ describe("ledger.summarizeUsage", () => {
   it("reports an unknown price or unknown usage as unknown, never as $0", () => {
     const summary = summarizeUsage(
       [row({}), row({ requestId: "r2", outputTokens: null }), row({ model: "gpt-6.1-terra" })],
-      modelCatalog,
+      unknownPriceCatalog,
     );
     const luna = summary.groups.find((g) => g.model === "gpt-6-luna");
     expect(luna?.callsWithUnknownUsage).toBe(1);

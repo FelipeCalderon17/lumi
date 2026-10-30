@@ -27,7 +27,8 @@ describe("staff.staffOverview", () => {
       deleteTokenHash: "h",
     });
     const usage: UsageReader = {
-      totalsSince: async () => totalsFromRows([row, { ...row, model: "gpt-6.1-terra" }]),
+      totalsSince: async () =>
+        totalsFromRows([row, { ...row, model: "retired-model" as UsageRow["model"] }]),
     };
     const overview = await staffOverview({ gaps: store, usage });
     expect(overview.gaps).toMatchObject({ status: "ok", items: [{ question: "Q" }] });
@@ -35,7 +36,7 @@ describe("staff.staffOverview", () => {
     if (overview.usage.status !== "ok") throw new Error(overview.usage.status);
     expect(overview.usage.summary.groups.map((g) => [g.model, g.estimatedUsd])).toEqual([
       ["gpt-6-luna", expect.closeTo(0.00038, 10)],
-      ["gpt-6.1-terra", "unknown"],
+      ["retired-model", "unknown"],
     ]);
     expect(overview.usage.summary.estimatedUsd).toBe("unknown");
   });

@@ -162,7 +162,7 @@ it.skipIf(!live)("live smoke: pipeline, notebook and transcription", async () =>
   console.log(
     `all-call cached-input ratio: ${summary.cachedInputRatio === null ? "n/a" : `${(summary.cachedInputRatio * 100).toFixed(1)}%`}`,
   );
-  console.log(`estimated cost (placeholder prices): ${summary.estimatedUsd}`);
+  console.log(`estimated cost (catalog prices): ${summary.estimatedUsd}`);
   console.log(`model calls: ${rows.length}`);
 
   const fp = fingerprint(kbs);

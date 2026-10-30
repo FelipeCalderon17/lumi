@@ -7,12 +7,16 @@ The answer step is where quality, cost and latency trade off most. The router is
 
 Candidates (all known ids in `@ai-sdk/openai@4.0.106`), with prices from `modelCatalog` in `src/server/config.ts`:
 
-| Model | Input $/1M | Cached input $/1M | Output $/1M | Price status |
-|---|---|---|---|---|
-| `gpt-6-luna` | 0.10 | 0.01 | 0.50 | Placeholder (public reporting, Sep 2026). To verify. |
-| `gpt-6.1-terra` | ? | ? | ? | Unknown. To verify. |
-| `gpt-6-sol` | 2.00 | 0.20 | 10.00 | Placeholder (public reporting, Sep 2026). To verify. |
-| `gpt-6.1-sol` | ? | ? | ? | Unknown. To verify. |
+| Model | Input $/1M | Cached input $/1M | Output $/1M |
+|---|---|---|---|
+| `gpt-6-luna` | 0.10 | 0.01 | 0.50 |
+| `gpt-6.1-terra` | 1.00 | 0.05 | 5.00 |
+| `gpt-6-sol` | 2.00 | 0.20 | 10.00 |
+| `gpt-6.1-sol` | 2.00 | 0.10 | 10.00 |
+
+Source: OpenAI launch pages + public pricing trackers, applied by Felipe on 2026-10-30 (`verifiedAt` in the catalog). The provider's invoice remains the truth; because cost is derived on read (ADR 0013), a later correction fixes every past estimate.
+
+Output caps (router 1,000, answer 3,000 tokens, reasoning included) are approved by Felipe for now and will be tuned in Phase 4 from the measured reasoning tokens.
 
 ## Decision
 _Pending._ We'll pick the cheapest model that:
