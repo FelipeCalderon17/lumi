@@ -208,3 +208,15 @@ A fixes-only round: the reviewer's findings plus Felipe's decisions on them, not
 The golden set is now **65 cases (34 EN / 31 ES)**, up from 40. Every new emergency input was checked against the deterministic safety rules (the existing golden-vs-safety test passes for all 65).
 
 **Checks.** `pnpm lint` ✓, `pnpm typecheck` ✓, `pnpm test` ✓ (24 files, 410 tests), `pnpm test:kb` ✓ (4 files, 129 tests), `pnpm build` ✓.
+
+## Fixes from Codex re-review 1
+
+Fixes-only round. The reviewer's exact text was used, with one noted exception. No logic, UI or tests changed.
+
+| Finding | Status | Notes |
+|---|---|---|
+| 1 Staff privacy copy | Applied | `staff.gapsLede` EN/ES now say saved questions may contain names or identifying details, and that no conversation history is stored. |
+| 2 Retention and name handling (NEW-1, NEW-2) | Applied | ADR 0005 consequences (lines 19 and 22) and README now describe the lazy purge (runs on the next question save or staff list request). ADR 0005 and ARCHITECTURE now say there is no separate name field, IP, user agent or conversation history, and that the question may still identify someone. ARCHITECTURE's "deleted after 30 days" now describes the lazy purge. The `gaps/index.ts` header comment was updated (comment only). |
+| 3 Qualify grounding claims (NEW-3) | Applied | `how-lumi-can-help` EN/ES, `help.lede` EN/ES, README line 13 and the first sentence of `content/kb/README.md`. **Exception:** the new ES sentence pushed the article to 456 words (limit 450), so the placeholder "El equipo de familias" sentence was shortened ("a preparar las conversaciones con el hospital y a contactar al trabajador social"). It has the same meaning and does not touch safety copy. |
+
+**Checks.** `lint` ✓, `typecheck` ✓, `test` ✓ (24 files, 410 tests), `test:kb` ✓ (4 files, 129 tests), `build` ✓.
