@@ -11,7 +11,7 @@ Each article exists as `content/kb/en/<id>.md` and `content/kb/es/<id>.md` with 
 ## Consequences
 - Spanish answers cite Spanish articles, so citations open text the parent can read.
 - Parity is checked automatically (same ids in both folders) once articles exist.
-- Twice the writing and review work for every article. That's acceptable at ~25 articles and is the honest cost of being bilingual.
+- Twice the writing and review work for every article. That's acceptable at 12 articles per language and is the honest cost of being bilingual.
 - If the question's language differs from the page locale, we answer in the question's language (golden set covers it).
 
 ## Alternatives

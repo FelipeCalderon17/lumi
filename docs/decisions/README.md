@@ -1,14 +1,18 @@
 # Architecture decision records
 
-Short records: Context / Decision / Consequences / Alternatives. A guardrail is never weakened without a new ADR that supersedes the old one.
+Short records: Context / Decision / Consequences / Alternatives. A guardrail is never weakened without a new ADR that supersedes the old one. Revisions that *strengthen* a decision are noted in the ADR's status line.
 
 | # | Decision | Status |
 |---|---|---|
 | [0001](0001-single-nextjs-app.md) | One Next.js app; framework-free logic in `src/server` | Accepted |
-| [0002](0002-whole-kb-in-context.md) | Whole KB in context with prompt caching, no vector DB | Accepted |
-| [0003](0003-deterministic-safety-precheck.md) | Deterministic safety check before any model call | Accepted |
+| [0002](0002-whole-kb-in-context.md) | Whole KB in context with prompt caching (measured, not guaranteed), no vector DB | Accepted (revised) |
+| [0003](0003-deterministic-safety-precheck.md) | Deterministic safety check before any model call and any limit; self-harm backstop | Accepted (revised) |
 | [0004](0004-bilingual-kb-authored-per-language.md) | Bilingual KB authored per language, not translated at runtime | Accepted |
-| [0005](0005-no-conversation-storage.md) | No conversation storage; consent-based gaps only | Accepted |
+| [0005](0005-no-conversation-storage.md) | No conversation storage; consented, previewed gaps with 30-day retention | Accepted (revised) |
 | [0006](0006-railway-postgres-drizzle.md) | Railway + Postgres (Drizzle) for gaps and usage ledger only | Accepted |
-| [0007](0007-evals.md) | Golden set + deterministic checks + small LLM-as-judge, run locally | Accepted |
-| [0008](0008-staff-passcode.md) | Staff gaps view behind a shared passcode | Accepted |
+| [0007](0007-evals.md) | Golden set + deterministic checks + LLM-as-judge, run locally behind a budget guard | Accepted (revised) |
+| [0008](0008-staff-passcode.md) | Staff gaps view behind a shared passcode and a signed, expiring session | Accepted (revised) |
+| [0009](0009-model-selection.md) | Model selection for the answer step | **Proposed** |
+| [0010](0010-buffer-validate-reveal.md) | Buffer, validate, reveal; NDJSON transport | Accepted |
+| [0011](0011-medical-fixed-template.md) | Medical questions get a fixed, reviewed template | Accepted |
+| [0012](0012-us-scope-and-crisis-contacts.md) | US scope; fixed crisis contacts (911, 988) | Accepted |

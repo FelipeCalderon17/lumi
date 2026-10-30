@@ -1,108 +1,169 @@
 # Architecture
 
-One Next.js app (App Router) serves the pages and a single chat API route. All assistant logic lives in [`src/server/`](../src/server) as framework-free TypeScript ([ADR 0001](decisions/0001-single-nextjs-app.md)): no `next`, `react` or `src/app` imports, so it can be unit-tested directly and extracted later.
+One Next.js app (App Router) serves the pages and a small set of API routes. All assistant logic lives in [`src/server/`](../src/server) as framework-free TypeScript ([ADR 0001](decisions/0001-single-nextjs-app.md)): no `next`, `react` or `src/app` imports, so it can be unit-tested directly and extracted later.
 
-> **Status (Phase 0):** contracts and stubs only. Modules throw `NotImplementedError`; planned behaviour is listed as `it.todo` in each module's tests.
+> **Status (Phase 1):** contracts, pure helpers and the knowledge base are in place. Model-backed modules still throw `NotImplementedError`; their planned behaviour is listed as `it.todo` in each module's tests. Revised after Codex review round 1 (see [PROCESS.md](PROCESS.md), entry 2).
+
+**Scope.** Lumi serves English- and Spanish-speaking families **in the US** ([ADR 0012](decisions/0012-us-scope-and-crisis-contacts.md)): 911 for emergencies, the 988 Suicide & Crisis Lifeline for emotional crisis, and "contact your local emergency services" for anyone outside the US.
 
 ## Request flow
 
 ```
  Parent (browser, /en/help or /es/help)
-   │  POST /api/chat  { message, locale }
+   │  POST /api/chat  { message, locale }      fetch + AbortController
    ▼
- src/app/api/chat/route.ts        thin adapter: parse → runPipeline → stream NDJSON ChatEvents
+ src/app/api/chat/route.ts        thin adapter: bounded read → parse → RequestContext → NDJSON
    │
+   ├─ 0. body ≤ maxRequestBytes ─── read as a stream, stop past the cap           ✗ → 413
+   ├─ 1. JSON + shape ───────────── { message: string, locale ∈ {en, es} }       ✗ → 400
    ▼
- src/server/pipeline.ts
+ src/server/pipeline.ts           runPipeline(request, ctx: { requestId, rateLimitKey, signal })
    │
-   ├─ 1. input check ──────────── Zod: 1..maxInputChars, locale ∈ {en, es}       ✗ → 400
-   ├─ 2. rate-limit/ ──────────── in-memory fixed window per instance             ✗ → fallback(rate_limited)
+   ├─ 2. safety/  (NO AI) ──────── EN+ES rules on the raw text, ANY length         ✓ → emergency (fixed copy)
+   │                               medical_emergency → 911 · self_harm → 911 + 988     no model call, no cost,
+   │                                                                                     NEVER rate-limited
+   ├─ 3. length check ──────────── 1..maxInputChars                                ✗ → 400 too_long
+   ├─ 4. rate-limit/ (client) ──── per hashed client IP                            ✗ → fallback(rate_limited)
+   ├─ 5. rate-limit/ (instance) ── ceiling on model calls per instance             ✗ → fallback(capacity)
    │
-   ├─ 3. safety/  (NO AI) ─────── EN+ES keyword/regex emergency check             ✓ → emergency (fixed copy, 911 / hospital / care team)
-   │                                                                                  └─ no model call, no cost
-   ├─ 4. router/  (cheap model) ─ generateText + Output.object → { language, category }
-   │        │                                                                     ✗ timeout/invalid → fallback
-   │        ├─ emotional_crisis → crisis (fixed calm copy + human contacts)
-   │        ├─ off_topic ───────→ off_topic (fixed short redirect)
-   │        ├─ medical ─────────→ answer mode "medical_prep" (no advice; care team + questions to ask)
-   │        └─ practical ───────→ answer mode "practical"
+   │     ── progress { stage: "reading_guides" } ──▶  UI: "Looking through our family guides…"
    │
-   ├─ 5. knowledge/ ───────────── KB for router.language, handles [1]..[n] (loaded once, cached in memory)
+   ├─ 6. router/  (gpt-6-luna) ─── Output.object → { language, intents[], topic }
+   │        │                      code resolves precedence:                       ✗ timeout/invalid → fallback
+   │        │                      urgent → emotional_crisis → medical → practical → off_topic
+   │        ├─ urgent ──────────→ emergency(detectedBy: router)   fixed copy, 911
+   │        ├─ emotional_crisis → crisis                          fixed copy, 988 + human contacts
+   │        ├─ medical ─────────→ medical                         fixed template + link to
+   │        │                                                     "Questions to ask your care team"
+   │        ├─ off_topic ───────→ off_topic                       fixed short redirect
+   │        └─ practical ───────→ continue
    │
-   ├─ 6. answer/  (model) ─────── streamText; system = rules + WHOLE KB (stable prefix → prompt cache)
-   │        │                     must cite [n] or start with [[NO_ANSWER]]
-   │        │                                                                     ✗ timeout/provider → fallback
-   │        └─ delta, delta, …  → streamed to the UI
+   ├─ 7. knowledge/ ───────────── KB for router.language, handles [1]..[n] (loaded once)
    │
-   ├─ 7. validate/ ────────────── every [n] maps to a real handle?
-   │        ├─ valid ─────────→ answer_done { citations }
-   │        ├─ abstained ─────→ abstained (human contact + "save this question?")
-   │        └─ invalid ───────→ fallback(invalid_output)
+   ├─ 8. answer/  (model) ─────── streamText, BUFFERED on the server (nothing sent yet)
+   │        │                     system = policy  +  <reference_data> KB </reference_data>
+   │        │                     user   = <question> … </question>
+   │        │                                                                      ✗ no first token / total deadline
+   │        │                                                                        / provider error → fallback
+   │        ▼
+   ├─ 9. completion check ──────── finishReason must be "stop"                     ✗ length → fallback(truncated)
+   │                               [[NO_ANSWER]] first (checked on the full text)    ✗ other → fallback(interrupted)
+   │        ├─ abstained ───────→ abstained { topic }   human contact + offer to save the question
+   │        ▼
+   ├─ 10. validate/ ────────────── citation integrity: every [n] is a real handle, ≥ 1 cited
+   │        ├─ valid ───────────→ answer { text, citations }   revealed in one piece
+   │        └─ invalid ─────────→ fallback(invalid_output)
    │
-   └─ 8. ledger/ ──────────────── per model call: tokens, cached tokens, est. cost, latency, outcome (no content)
+   └─ 11. ledger/ ─────────────── AFTER the terminal event: one row per model call (router AND answer,
+                                  success or failure), best-effort, time-bounded. Numbers only.
 
- Separate, opt-in:  "Save this question so the team can write a guide?" [yes]
-   POST /api/gaps { question, language, consent: true } → gaps/ → gap_question table
-   Staff: /[locale]/staff/gaps (shared passcode, ADR 0008)
+ Separate, opt-in, after `abstained`:
+   editable preview + "Lumi staff can read this" → POST /api/gaps { question, language, topic, consent: true }
+   → gaps/ → gap_question (30-day retention, delete token)       rate-limited separately
+   Staff: /[locale]/staff/gaps (passcode → HMAC session cookie, ADR 0008)
 ```
 
 ### Why this order
 
-- **Safety first, without AI.** The emergency check is deterministic and runs on the raw text before anything can time out, fail, or be prompt-injected ([ADR 0003](decisions/0003-deterministic-safety-precheck.md)).
-- **Router before answer.** A cheap classification call keeps the expensive call (whole KB in context) for questions that need it, and keeps medical and crisis messages on fixed, reviewed paths.
-- **Validate after streaming.** Citations are checked against real handles before the answer is marked final. See [open question](#open-questions) on how invalid answers are shown.
+- **Safety first, without AI, and before any limit.** The deterministic check runs on the raw text before the length check, the rate limiter, or anything that can time out, fail or be prompt-injected ([ADR 0003](decisions/0003-deterministic-safety-precheck.md)). An over-long or rate-limited message that describes an emergency still gets the emergency steps.
+- **Router before answer.** A cheap classification call keeps the expensive call (whole KB in context) for practical questions only, and keeps urgent, crisis and medical messages on fixed, reviewed paths.
+- **Precedence in code, not in the model.** The router lists every intent it sees. Code picks the path with a fixed order, so "what should I pack, also he's not breathing well" can't come out as a packing answer. (The deterministic check should already catch that example; the router is the second layer for paraphrases.)
+- **Buffer → validate → reveal** ([ADR 0010](decisions/0010-buffer-validate-reveal.md)). No model text reaches the parent until it has passed the completion check and citation integrity. The wait is shown as a calm progress state and measured in the evals (p50/p95).
+
+### What citation integrity does and doesn't guarantee
+
+`validate/` checks that every `[n]` maps to a real article and that at least one is cited. That's **integrity, not grounding**: a real handle can sit next to a sentence the article doesn't support. We reduce that risk in three ways, and measure what's left:
+
+1. **Clinical questions never reach generation.** `medical` gets a fixed, reviewed template ([ADR 0011](decisions/0011-medical-fixed-template.md)).
+2. **Policy and data are separated.** The KB is placed in a delimited `<reference_data>` block that the policy describes as data, never instructions, and the question sits in its own block. This lowers (but doesn't remove) the risk of injected text in either one being followed.
+3. **Groundedness is measured offline.** An LLM-as-judge check flags unsupported claims, including golden cases built to tempt the model into a valid handle plus an unsupported claim ([EVALS.md](EVALS.md)).
+
+## Transport
+
+**NDJSON over `fetch`** (decided; [ADR 0010](decisions/0010-buffer-validate-reveal.md)).
+
+- **Framing.** `Content-Type: application/x-ndjson; charset=utf-8`, `Cache-Control: no-store`. One `ChatEvent` JSON object per line, `\n`-terminated, no blank lines (`encodeEvent` in `pipeline.ts`). Newlines inside text are JSON-escaped, so framing can't break.
+- **Events.** Zero or more `progress` events, then **exactly one terminal event**: `emergency | crisis | medical | off_topic | answer | abstained | fallback`. The server closes the stream right after the terminal event. Nothing is sent after it.
+- **Cancellation.** The client aborts with an `AbortController` (new question, page leave). The server sees `request.signal` abort. `RequestContext.signal` aborts every stage, the model call is cancelled, and the ledger records `cancelled`.
+- **HTTP errors.** Only transport problems are non-2xx: `413 too_large`, `400 invalid_request`, `400 too_long` (shown as an inline "please shorten it" message), `5xx`. The client shows the **fallback** for any non-2xx except `too_long`. All pipeline outcomes, including rate limits, are `200` with a terminal event.
+- **Premature EOF.** If the stream ends without a terminal event (network drop, proxy timeout, crash), or a line fails to parse, the client shows the **fallback**. It never shows a partial state as an answer.
+
+## Request context and deadlines
+
+`RequestContext { requestId, rateLimitKey, signal }` ([`context.ts`](../src/server/context.ts)) is built by the route from the request and passed to every stage. `stageSignal(ctx, ms)` combines the request's signal with a per-stage deadline (`config.timeouts.*`), so a stage stops either when the parent goes away or when its own time is up, and `isDeadline()` tells the two apart for the ledger.
+
+Ledger writes happen **after** the terminal event is sent, through `recordBestEffort` (never throws, gives up after `ledgerWriteMs`). A slow or down database can't delay or break an answer.
 
 ## Failure modes
 
-The UI never shows a blank screen or a raw error. Every failure becomes a `fallback` event with calm copy and human contacts. The emergency banner on `/help` is static HTML and does not depend on the API.
+The UI never shows a blank screen or a raw error. Every failure becomes a terminal event with calm, fixed copy and human contacts. The emergency and 988 lines on `/help` are static HTML and don't depend on the API.
 
 | Failure | Where | Detected by | What the parent sees |
 |---|---|---|---|
-| Emergency wording | safety | regex match | Fixed emergency steps (911, hospital emergency line, care team). No model call. |
-| Message too long / empty | input | Zod | Inline message to shorten it. No model call. |
-| Too many requests | rate-limit | counter | "Let's take a short pause" + human contacts. |
-| Router slow (> `routerMs`) | router | `AbortSignal.timeout` | Fallback with human contacts. |
+| Emergency wording (any length) | safety | rule match | Fixed emergency steps (911, nurse/call button, outside-US line). No model call. Never rate-limited. |
+| Explicit, imminent self-harm wording | safety | rule match | Fixed steps: 911 if in danger, 988 (call or text, Spanish available). No model call. |
+| Urgent wording the rules missed | router | `urgent` intent | Same fixed emergency steps. |
+| Emotional crisis | router | `emotional_crisis` intent | Fixed calm copy with 988 and the hospital social worker. |
+| Medical question | router | `medical` intent | Fixed template: ask the care team + link to "Questions to ask your care team". No generation. |
+| Body too large | route | bounded read | Fallback (413). Nothing parsed. |
+| Message too long / empty | pipeline | Zod, after safety | Inline message to shorten it. No model call. |
+| Too many requests (client) | rate-limit | counter | "Let's take a short pause" + human contacts. |
+| Instance model-call ceiling | rate-limit | global counter | Fallback(capacity). |
+| Router slow (> `routerMs`) | router | `stageSignal` deadline | Fallback. |
 | Router output fails schema | router | `Output.object` / Zod | Fallback. |
 | Provider down / 5xx / 429 | router, answer | AI SDK error after `maxRetries: 1` | Fallback. |
 | No first token in `answerFirstTokenMs` | answer | timer | Fallback. |
-| Stream exceeds `answerTotalMs` | answer | `AbortSignal.timeout` | Partial text is withdrawn → fallback. |
-| Not in the KB | answer | `[[NO_ANSWER]]` marker | "I don't have that yet" + human contact + optional consent to save the question. |
-| Cites a handle that doesn't exist / no citations | validate | handle check | Fallback (answer is not shown as grounded). |
-| Prompt injection ("ignore your rules…") | router, answer | system rules + validate | Answer still has to cite the KB; uncited text fails validation. Covered by evals. |
-| KB fails to load / invalid frontmatter | knowledge | Zod at startup | Build/test fails (articles are validated in CI), so it doesn't reach production. |
-| Database down | gaps, ledger | driver error | Chat still works. Ledger write is best-effort; gap save shows "couldn't save, try later". |
+| Answer exceeds `answerTotalMs` | answer | `stageSignal` deadline | Fallback. Nothing was shown, so nothing is withdrawn. |
+| Answer cut off (`finishReason: length`) | completion check | `interpretCompletion` | Fallback(truncated). Never shown, even if its citations are valid. |
+| Answer interrupted / filtered / other finish | completion check | `interpretCompletion` | Fallback(interrupted). |
+| Abstain marker split across chunks | completion check | checked on the full buffered text | Abstained, as intended. |
+| Not in the KB | answer | `[[NO_ANSWER]]` first | "I don't have a guide on that yet" + human contact + optional, previewed gap save. |
+| Unknown handle / no citations | validate | integrity check | Fallback (not shown as grounded). |
+| Valid handle, unsupported claim | validate can't see it | offline judge (evals) | **Can reach the parent.** Measured, not prevented. Kept small by the fixed medical path and the prompt rules. |
+| Prompt injection ("ignore your rules…") | router, answer | policy/data separation + integrity | Still has to cite real articles or abstain. Covered by evals. |
+| Client disconnects | all | `ctx.signal` | Nothing (they left). Model call cancelled; ledger `cancelled`. |
+| Stream ends without a terminal event | client | NDJSON reader | Fallback. |
+| KB fails to load / invalid frontmatter | knowledge | Zod + KB tests in CI | Build/test fails, so it doesn't reach production. |
+| Database down | gaps, ledger | driver error / timeout | Chat unaffected. Ledger write skipped after `ledgerWriteMs`; gap save says "couldn't save, try later". |
 
 Retries: **one layer only**, `config.retry.maxRetries` passed to the AI SDK. No retry loops of our own, since stacked retries multiply cost and latency.
 
+## Abuse controls
+
+- **Bounded body.** `readBodyBounded` reads the request stream and stops past `maxRequestBytes` (8 KB). `Content-Length` isn't trusted, and nothing over the cap is parsed.
+- **Trusted client IP.** On Railway, the edge proxy appends the address it received the connection from to `X-Forwarded-For`. Anything to the left of that entry was sent by the client and can be forged. So we take the **right-most** entry (`config.clientIp.trustedProxyHops = 1`, `clientIpFromForwardedFor`). If the header is missing, the request goes into a shared "unknown" bucket rather than being unlimited. The hop count is config, because a CDN in front of Railway would add a hop. *To verify on first deploy:* log the header's entry count (never the IPs) once and confirm it's 1.
+- **Separate limiters** (`config.rateLimit`): chat per client, gap submissions per client, staff login per client, and an instance-wide model-call ceiling. Fixed windows in memory; expired entries are swept and the table is capped at `maxTrackedKeys`.
+- **Rate-limit keys** are a salted hash of the trusted IP, held in memory, never persisted or logged.
+- **Known limitation:** limits are per instance and reset on deploy (ADR 0006).
+
 ## Cost controls
 
-All numbers live in [`src/server/config.ts`](../src/server/config.ts).
+All numbers live in [`src/server/config.ts`](../src/server/config.ts), including a **priced model catalog** (`modelCatalog`) with a `source` and `verifiedAt` for every price. Unknown prices are `null`, and costs that depend on them are reported as unknown, never as $0.
 
-- **Free paths first.** Emergency, input-too-long and rate-limited requests never reach a model.
-- **Cheap router.** Small output cap (`maxRouterOutputTokens`) and a short timeout.
-- **Prompt caching.** The answer prompt is `[static rules][whole KB][question]`. The first two parts are byte-identical across requests (handles sorted by id), so OpenAI's automatic prefix caching bills them at the cached rate after the first call. The ledger records `cacheReadTokens` so we can show this in practice instead of just claiming it.
-- **Caps.** `maxInputChars`, `maxAnswerOutputTokens`, per-instance rate limit.
-- **Ledger.** Each model call records tokens and estimated USD; `docs/EVALS.md` and the README will report cost per answer.
-- **Evals are not in CI** (they cost money); they run on demand with `pnpm eval` ([ADR 0007](decisions/0007-evals.md)).
+- **Free paths first.** Emergency, self-harm, too-large, too-long and rate-limited requests never reach a model. Crisis, medical and off-topic stop after the router.
+- **Cheap router.** `gpt-6-luna`, small output cap, short deadline.
+- **Prompt caching (not guaranteed).** The answer prompt is `[policy][KB][question]`, and the first two parts are byte-identical across requests (articles sorted by id). OpenAI applies automatic prefix caching to repeated long prefixes, but it's best-effort: it depends on traffic, timing and the provider. We **measure** it: the ledger records `cachedInputTokens`, and the evals report cold vs warm cost separately.
+- **Caps.** `maxRequestBytes`, `maxInputChars`, `maxRouterOutputTokens`, `maxAnswerOutputTokens`, rate limits and the instance ceiling.
+- **Ledger.** One row per model call, router **and** answer, success **and** failure, with tokens (null if unknown), latency, finish reason and estimated USD. **Cost per conversation** = sum of rows sharing a `requestId`, so router overhead is always included.
+- **Evals are not in CI** (they cost money). They run on demand with `pnpm eval`, behind a budget guard ([ADR 0007](decisions/0007-evals.md), [ADR 0009](decisions/0009-model-selection.md)).
 
 ## Privacy
 
-- **No accounts, no conversation storage** ([ADR 0005](decisions/0005-no-conversation-storage.md)). Messages live in the request and the browser tab, nowhere else.
-- **Gaps are opt-in.** A question is saved only when the parent explicitly agrees, after the assistant couldn't answer. We save the question text, language and timestamp. No name, IP, user agent or conversation. Emails and phone numbers are stripped (best effort), and the UI asks parents not to include names.
-- **Ledger is numbers only.** Token counts, model, latency and outcome enum. Never text.
-- **Logs.** Never log message content; log request id, stage, outcome and the safety rule id.
-- **Rate-limit keys** are hashed IPs held in memory and never persisted.
-- **Third party.** Questions are sent to OpenAI for routing and answering. This is disclosed on the help page.
+- **No accounts, no conversation storage** ([ADR 0005](decisions/0005-no-conversation-storage.md)). Lumi doesn't store messages. To answer, the question **is sent to OpenAI** (router and answer calls) and processed under OpenAI's API data terms. The help page says this before the parent asks.
+- **Gaps are opt-in and not anonymous.** After an abstain, the parent can save the question. They see an **editable, minimal preview** of exactly what will be stored, with a plain note that Lumi staff can read it. We store that edited text, the language, a router-assigned topic label and a timestamp. No name, IP, user agent or conversation. Emails and phone numbers are removed from the preview (best effort). Rows are **deleted after 30 days**. Staff can delete any row, and the parent gets a one-time delete token on save (only its hash is stored).
+- **Ledger is numbers only.** Token counts, model, latency, finish reason and outcome enums. Never text.
+- **Logs.** Never log message content. Log the request id, stage, outcome and the safety rule id.
+- **Staff view** requires a signed, expiring session. Responses are `private, no-store` ([ADR 0008](decisions/0008-staff-passcode.md)).
 
 ## Data model
 
-Two tables ([`src/db/schema.ts`](../src/db/schema.ts)): `gap_question` and `usage_ledger`. See ADR 0006.
+Two tables ([`src/db/schema.ts`](../src/db/schema.ts)): `gap_question` (question, language, topic, delete token hash, created_at) and `usage_ledger` (one row per model call; nullable token counts and cost). See ADR 0006.
 
 ## Open questions
 
-Tracked here until decided. Each decision becomes an ADR.
+Decided in review round 1: buffering (ADR 0010), deterministic self-harm check (ADR 0003), country and crisis contacts (ADR 0012), transport (NDJSON, above).
 
-1. **Showing an answer that fails validation after streaming.** Options: (a) stream and replace with the fallback if validation fails, (b) buffer and reveal only when valid, (c) stream into a visually "drafting" state and confirm on `answer_done`. Leaning towards (c): it keeps the speed of streaming without presenting text as final before it's checked.
-2. **Deterministic self-harm check.** Should `safety/` also match explicit self-harm phrases (defence in depth), or leave that to the router's `emotional_crisis`? The contract already allows `kind: "self_harm"`.
-3. **Crisis contacts and country.** Content rules allow only the generic 911. A real crisis message would usually include a crisis line (988 in the US), and Spanish-speaking families outside the US use other emergency numbers. Lumi's assumed country decides this.
-4. **Transport.** Plain NDJSON of `ChatEvent`s over `fetch` (simple, fully typed, no extra client library) vs. AI SDK UI message streams with `useChat`. Leaning towards NDJSON.
+Still open:
+
+1. **Spanish name for 988.** The fixed copy uses the English service name "988 Suicide & Crisis Lifeline" in both languages. Should the Spanish copy use the service's official Spanish name? Needs checking against the official source before launch.
+2. **Prices for `gpt-6.1-terra` and `gpt-6.1-sol`** are unknown (`null`). The budget guard can't estimate them until they're filled in.

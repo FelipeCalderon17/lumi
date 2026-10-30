@@ -10,7 +10,7 @@ Lumi is the small light you leave on in a hospital room. The interface should fe
 
 - Readable by tired eyes on a phone in a dark room: large body text, high contrast, no glare.
 - One obvious next action. Nothing blinks, nothing auto-plays, nothing celebrates.
-- The emergency line is always visible on the help page and works without JavaScript or the AI.
+- The emergency (911) and crisis (988) lines are always visible on the help page and work without JavaScript or the AI.
 - Nothing on screen makes the parent feel watched, sold to, or pitied.
 
 ## Colour
@@ -79,7 +79,7 @@ Loaded with `next/font` (self-hosted at build, no runtime requests to Google).
 ## Motion
 
 - Motion is **slow and small**: a gentle flicker on the firefly mark (4.5s), soft hover lifts (≤ 2px), 200–300ms colour transitions with `--ease-lumi`.
-- Streaming text appears as it arrives; no typewriter effects, no bouncing dots longer than needed.
+- Answers appear **in one piece, once checked** (ADR 0010). While waiting, show one calm, static line ("Looking through our family guides…") with at most a slow, subtle glow; no typewriter effects, no bouncing dots.
 - **`prefers-reduced-motion: reduce` turns all animation and transitions off** (global rule in `globals.css`).
 - Nothing flashes. Nothing moves while the parent is reading.
 
@@ -105,6 +105,6 @@ Full rules: [CONTENT-GUIDELINES.md](CONTENT-GUIDELINES.md). In short:
 - [ ] AA contrast on every text pair (table above)
 - [ ] Visible focus ring (3px `glow`) on every interactive element
 - [ ] `lang` on `<html>` matches the page; the language switch link has `hreflang`/`lang`
-- [ ] Streaming answer region is `aria-live="polite"`; emergency is not hidden behind animation
+- [ ] Answer region is `aria-live="polite"` and announces the progress line once, then the complete answer; emergency is not hidden behind animation
 - [ ] All motion off under `prefers-reduced-motion`
 - [ ] Works at 200% zoom and 320px width

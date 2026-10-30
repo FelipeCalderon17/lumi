@@ -7,15 +7,16 @@ Lumi is a prototype assistant for families of children with cancer. Mistakes her
 - **Never open, print, `cat`, `grep`, copy or commit `.env` / `.env.local` or any secret.** Only `.env.example` (empty values) is tracked. `.gitignore` ignores `.env*` except `.env.example`; don't change that.
 - **Don't call paid APIs** (OpenAI etc.) unless the task explicitly asks for it (e.g. `pnpm eval` run by the human). Tests must never hit the network.
 - **Don't create remotes, push or deploy** unless explicitly asked.
-- **Don't use or imitate real organisations, hospitals, people or phone numbers.** The only number allowed in content is the generic 911.
-- **Never weaken a guardrail without an ADR.** That includes the safety pre-check, the medical boundary, citation validation, input/output limits, rate limits, timeouts, the single retry layer and the no-conversation-storage rule. Write a new ADR in `docs/decisions/` that supersedes the old one, and get the human to approve it.
+- **Don't use or imitate real organisations, hospitals, people or phone numbers.** The only numbers allowed are 911, and 988 in the fixed safety copy only (ADR 0012). Tests enforce this.
+- **Never weaken a guardrail without an ADR.** That includes the safety pre-check (and its place before rate limiting), the fixed medical template, buffer → validate → reveal, citation integrity, the completion check, input/output limits, rate limits, timeouts, the single retry layer, gap retention and the no-conversation-storage rule. Write a new ADR in `docs/decisions/` that supersedes the old one, and get the human to approve it.
 
 ## Architecture conventions
 
 - `src/server/` is **framework-free TypeScript**: no imports from `next`, `react`, or `src/app`. Route handlers in `src/app/api/` stay thin (parse → call server → serialise).
-- **All tunables live in `src/server/config.ts`** (models, timeouts, limits, rate limit, retries, pricing). No magic numbers elsewhere.
+- **All tunables live in `src/server/config.ts`** (models and the priced model catalog, timeouts, limits, rate limits, retries, retention, eval budget). No magic numbers elsewhere.
 - **One retry layer only**: `maxRetries` on the AI SDK call. Don't add retry loops.
-- Every failure path ends in a calm, typed `ChatEvent` (`fallback`, `abstained`…). Never a blank screen or raw error.
+- Every request ends in **exactly one** terminal `ChatEvent` (`fallback`, `abstained`…). Never a blank screen or raw error. No model text reaches the client before it's validated (ADR 0010).
+- Model-backed steps return `ModelStep<T>`: the business `result` and the call metadata (`call`) separately, also on failure. Unknown token counts and costs are `null`, never 0.
 - Never log or store message content. Ledger rows hold numbers and enums only.
 - Validate at boundaries with Zod; use the inferred types.
 - UI copy goes in `src/i18n/dictionaries/` (EN is the reference type; ES must match). KB content goes in `content/kb/{en,es}/` with the same `id` in both.
