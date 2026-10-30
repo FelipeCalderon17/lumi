@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ArticleFrontmatterSchema } from "./index";
+import { ArticleFrontmatterSchema, countWords, parseArticleFile } from "./index";
 
 const valid = {
   id: "first-days-at-the-hospital",
@@ -32,4 +32,43 @@ describe("knowledge.ArticleFrontmatterSchema (contract)", () => {
   });
 
   it.todo("assigns stable handles sorted by id");
+});
+
+describe("knowledge.parseArticleFile", () => {
+  const file = [
+    "---",
+    "id: first-days-at-the-hospital",
+    "lang: en",
+    'title: "Your first days at the hospital: what to bring"',
+    "category: hospital-logistics   ",
+    "risk: standard",
+    "reviewedAt: 2026-10-30",
+    "---",
+    "",
+    "## Bring",
+    "A charger.",
+    "",
+  ].join("\n");
+
+  it("parses flat frontmatter, strips quotes and trims the body", () => {
+    expect(parseArticleFile(file)).toEqual({ ...valid, body: "## Bring\nA charger." });
+  });
+
+  it("accepts CRLF line endings", () => {
+    expect(parseArticleFile(file.replace(/\n/g, "\r\n")).id).toBe(valid.id);
+  });
+
+  it("throws on missing frontmatter, duplicate keys or invalid fields", () => {
+    expect(() => parseArticleFile("no frontmatter")).toThrow();
+    expect(() =>
+      parseArticleFile(file.replace("risk: standard", "risk: standard\nrisk: high")),
+    ).toThrow(/duplicate/);
+    expect(() => parseArticleFile(file.replace("lang: en", "lang: fr"))).toThrow();
+  });
+});
+
+describe("knowledge.countWords", () => {
+  it("counts words, not markdown symbols", () => {
+    expect(countWords("## Two words\n\n- one\n- dos, tres.")).toBe(5);
+  });
 });

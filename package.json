@@ -16,6 +16,7 @@
     "format": "biome format --write .",
     "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run",
+    "test:kb": "vitest run src/server/knowledge evals",
     "eval": "node evals/run.ts",
     "db:generate": "drizzle-kit generate"
   },

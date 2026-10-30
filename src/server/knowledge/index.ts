@@ -50,6 +50,34 @@ export type KnowledgeBase = {
   byHandle: ReadonlyMap<number, HandledArticle>;
 };
 
+const FRONTMATTER = /^---\n([\s\S]*?)\n---\n([\s\S]*)$/;
+
+/**
+ * Parses one article file. Frontmatter is deliberately flat `key: value` lines (optionally
+ * quoted, `#` comments allowed), so no YAML dependency is needed. Throws on invalid input:
+ * a broken article must fail the build, not reach a parent.
+ */
+export function parseArticleFile(text: string): Article {
+  const match = FRONTMATTER.exec(text.replace(/\r\n/g, "\n"));
+  if (!match) throw new Error("missing frontmatter block");
+  const [, head = "", body = ""] = match;
+  const fields: Record<string, string> = {};
+  for (const line of head.split("\n")) {
+    if (line.trim() === "" || line.trim().startsWith("#")) continue;
+    const kv = /^([a-zA-Z]+):\s*(.*?)\s*$/.exec(line);
+    if (!kv) throw new Error(`invalid frontmatter line: ${line}`);
+    const [, key = "", raw = ""] = kv;
+    if (key in fields) throw new Error(`duplicate frontmatter key: ${key}`);
+    fields[key] = raw.replace(/^"(.*)"$/, "$1");
+  }
+  return { ...ArticleFrontmatterSchema.parse(fields), body: body.trim() };
+}
+
+/** Words as a reader would count them: tokens with at least one letter or digit. */
+export function countWords(markdown: string): number {
+  return markdown.split(/\s+/).filter((token) => /[\p{L}\p{N}]/u.test(token)).length;
+}
+
 export async function loadKnowledgeBase(_language: Language): Promise<KnowledgeBase> {
   // TODO(phase-2): read content/kb/<lang>/*.md, parse + validate frontmatter, assign handles.
   throw new NotImplementedError("knowledge.loadKnowledgeBase");
