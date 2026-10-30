@@ -24,8 +24,9 @@ import { LANGUAGES } from "../types";
  *
  * The model may only ORGANISE and REPHRASE. Code then checks what it can:
  *   - every item cites the notes it came from, and those notes exist;
- *   - no item contains a number that isn't in its source notes (catches invented doses,
- *     temperatures, times);
+ *   - every number in an item, with its unit, appears with the same value and the same unit in
+ *     the notes the item cites (catches invented or altered doses, temperatures, times;
+ *     "2.5 ml" ≠ "5.2 ml", "5 ml" ≠ "5 mg"). Timestamps are not a source;
  *   - dates come from the notes' own timestamps, never from the model.
  * Anything off → the raw notes grouped by date, which is still a useful page.
  * What code can't check (advice, interpretation, causal claims) is measured in the evals
@@ -102,7 +103,7 @@ export type NotebookResponse =
     };
 
 /** Bump when the prompt changes, so eval reports show which prompt produced them. */
-export const NOTEBOOK_PROMPT_VERSION = 1;
+export const NOTEBOOK_PROMPT_VERSION = 2;
 
 export const NOTEBOOK_SYSTEM = `You help a parent of a child with cancer get ready for an appointment with the care team. You receive the parent's own notes from the past days inside <notes>. Each note has an index and the date it was written.
 
@@ -111,7 +112,7 @@ Your only job is to ORGANISE and REPHRASE what the notes say, into:
 - questions: questions the parent wants to ask the care team. Include every question the parent wrote. Turn a worry into a question only when the note clearly says the parent wants to ask about it.
 
 Rules:
-1. Use only what is in the notes. Never add facts, numbers, times, names, symptoms or events that aren't written there. Keep every number exactly as the parent wrote it.
+1. Use only what is in the notes. Never add facts, numbers, times, names, symptoms or events that aren't written there. Keep every number exactly as the parent wrote it, with its unit. Don't write dates: the page adds each item's dates from the notes.
 2. No diagnosis, no advice, no interpretation, no reassurance and no guesses about causes. Never write things like "probably because of the medicine", "this is normal", "you should" or "this could mean". If the parent wrote their own guess, keep it as theirs: "You wondered whether…".
 3. Every observation and question lists sourceNoteIndexes: the index of every note it comes from.
 4. Write in the language the notes are written in. If they're mixed, use the page language given before the notes. Set "language" to "en" or "es". In Spanish, use "tú".
@@ -143,8 +144,70 @@ export function groupNotesByDate(notes: readonly Note[]): NotesByDate {
     .map(([date, items]) => ({ date, notes: items }));
 }
 
-/** Digit runs, so "38.5" and "38,5" both give ["38", "5"]. */
-const numbersIn = (text: string): string[] => text.match(/\d+/g) ?? [];
+/** Unit spellings → one canonical unit, so "5 ml", "5ml" and "5 milliliters" compare equal. */
+const UNIT_ALIASES: Record<string, string> = {};
+for (const [unit, aliases] of Object.entries({
+  ml: [
+    "ml",
+    "mls",
+    "milliliter",
+    "milliliters",
+    "millilitre",
+    "millilitres",
+    "mililitro",
+    "mililitros",
+  ],
+  cc: ["cc"],
+  mg: ["mg", "mgs", "milligram", "milligrams", "miligramo", "miligramos"],
+  mcg: ["mcg", "µg", "ug", "microgram", "micrograms", "microgramo", "microgramos"],
+  g: ["g", "gr", "gram", "grams", "gramo", "gramos"],
+  kg: ["kg", "kgs", "kilo", "kilos", "kilogram", "kilograms", "kilogramo", "kilogramos"],
+  lb: ["lb", "lbs", "pound", "pounds", "libra", "libras"],
+  oz: ["oz", "ounce", "ounces", "onza", "onzas"],
+  deg: ["°", "°c", "°f", "degree", "degrees", "grado", "grados"],
+  pct: ["%", "percent", "porciento"],
+  am: ["am"],
+  pm: ["pm"],
+  h: ["h", "hr", "hrs", "hour", "hours", "hora", "horas"],
+  min: ["min", "mins", "minute", "minutes", "minuto", "minutos"],
+  day: ["day", "days", "dia", "dias"],
+  night: ["night", "nights", "noche", "noches"],
+  week: ["week", "weeks", "semana", "semanas"],
+  month: ["month", "months", "mes", "meses"],
+  year: ["year", "years", "ano", "anos"],
+  times: ["time", "times", "vez", "veces"],
+  tablet: ["tablet", "tablets", "pill", "pills", "tableta", "tabletas", "pastilla", "pastillas"],
+  capsule: ["capsule", "capsules", "capsula", "capsulas"],
+  drop: ["drop", "drops", "gota", "gotas"],
+  tsp: ["tsp", "teaspoon", "teaspoons", "cucharadita", "cucharaditas"],
+  tbsp: ["tbsp", "tablespoon", "tablespoons", "cucharada", "cucharadas"],
+  puff: ["puff", "puffs", "inhalacion", "inhalaciones"],
+  unit: ["unit", "units", "unidad", "unidades"],
+  dose: ["dose", "doses", "dosis"],
+})) {
+  for (const alias of aliases) UNIT_ALIASES[alias] = unit;
+}
+
+/** A number (decimal or clock time) and the word, symbol or abbreviation right after it. */
+const QUANTITY =
+  /(\d{1,2}:\d{2}|\d+(?:[.,]\d+)?)(?:\s?(°\s?[cf]?(?![\p{L}])|%|(?:[ap]\.m\.?)|[\p{L}µ]+))?/giu;
+
+/**
+ * Every number in `text` as "value|unit": complete values (decimals included, "38,5" = "38.5")
+ * with their canonical unit, or "" when the next word isn't a known unit. So "2.5 ml" and
+ * "5.2 ml" differ, and so do "5 ml" and "5 mg".
+ */
+export function quantitiesIn(text: string): string[] {
+  return [...text.matchAll(QUANTITY)].map(([, number = "", rawUnit = ""]) => {
+    const value = number.includes(":") ? number : String(Number(number.replace(",", ".")));
+    const word = rawUnit
+      .normalize("NFD")
+      .replace(/\p{Mn}/gu, "")
+      .toLowerCase()
+      .replace(/[\s.]/g, "");
+    return `${value}|${UNIT_ALIASES[word] ?? ""}`;
+  });
+}
 
 export type NotebookCheck =
   | { ok: true; notebook: Notebook }
@@ -161,17 +224,10 @@ export function checkNotebook(output: NotebookModelOutput, notes: readonly Note[
     if (unique.some((i) => i >= notes.length)) {
       return { ok: false as const, problem: "unknown_index" as const };
     }
-    // A note's own day of the month may be restated ("on the 28th"), so it counts as source.
-    // Only the day: allowing the month or year would also let an invented "10 ml" through.
-    const sourceNumbers = new Set(
-      unique.flatMap((i) => {
-        const note = notes[i];
-        if (!note) return [];
-        const day = localDate(note.createdAt).slice(8, 10);
-        return [...numbersIn(note.text), day, String(Number(day))];
-      }),
-    );
-    if (numbersIn(text).some((n) => !sourceNumbers.has(n))) {
+    // Only the cited notes' TEXT is a source. Timestamps aren't: dates are added by code, and
+    // admitting the day of the month let "Gave 28 ml" through on a note dated the 28th.
+    const sourceQuantities = new Set(unique.flatMap((i) => quantitiesIn(notes[i]?.text ?? "")));
+    if (quantitiesIn(text).some((q) => !sourceQuantities.has(q))) {
       return { ok: false as const, problem: "invented_number" as const };
     }
     for (const i of unique) used.add(i);

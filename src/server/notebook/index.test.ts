@@ -10,6 +10,7 @@ import {
   type Note,
   NotebookModelOutputSchema,
   prepareNotebook,
+  quantitiesIn,
 } from "./index";
 
 const notes: Note[] = [
@@ -82,14 +83,67 @@ describe("notebook.checkNotebook (traceability)", () => {
     });
   });
 
-  it("allows restating the cited note's own date", () => {
-    const dated = {
+  const withObservation = (text: string, sourceNoteIndexes: number[]) =>
+    NotebookModelOutputSchema.parse({
       ...good,
-      observations: [
-        { topic: "Sleep", text: "On the 27th she woke up 3 times.", sourceNoteIndexes: [0] },
-      ],
-    };
-    expect(checkNotebook(NotebookModelOutputSchema.parse(dated), notes).ok).toBe(true);
+      observations: [{ topic: "Medicines", text, sourceNoteIndexes }],
+    });
+  const problemOf = (text: string, sourceNoteIndexes: number[]) => {
+    const check = checkNotebook(withObservation(text, sourceNoteIndexes), notes);
+    return check.ok ? null : check.problem;
+  };
+
+  it("regression (Codex review 3): the note's date is not a source number", () => {
+    // Note 1 is dated 2026-10-28 and has no numbers in its text.
+    expect(problemOf("Gave 28 ml", [1])).toBe("invented_number");
+    expect(problemOf("On the 27th she woke up 3 times.", [0])).toBe("invented_number");
+    expect(problemOf("Gave 10 ml", [1])).toBe("invented_number"); // month
+    expect(problemOf("Gave 2026 ml", [1])).toBe("invented_number"); // year
+  });
+
+  it("regression (Codex review 3): complete decimal values are compared, not digit runs", () => {
+    const decimal: Note[] = [{ text: "Gave 2.5 ml at night", createdAt: "2026-10-28T21:00:00Z" }];
+    const check = (text: string) =>
+      checkNotebook(
+        NotebookModelOutputSchema.parse({
+          ...good,
+          observations: [{ topic: "Medicines", text, sourceNoteIndexes: [0] }],
+          questions: [],
+        }),
+        decimal,
+      );
+    expect(check("Gave 5.2 ml").ok).toBe(false);
+    expect(check("Gave 25 ml").ok).toBe(false);
+    expect(check("Gave 2 ml").ok).toBe(false);
+    expect(check("Gave 2.5 ml").ok).toBe(true);
+    expect(check("Gave 2,5 ml").ok).toBe(true); // same value, Spanish decimal comma
+    expect(check("Gave 2.5ml").ok).toBe(true);
+    expect(check("Gave 2.5 milliliters").ok).toBe(true);
+  });
+
+  it("rejects a changed unit even when the value matches", () => {
+    expect(problemOf("Gave 5 mg of the new syrup", [2])).toBe("invented_number");
+    expect(problemOf("Gave 5 tablets", [2])).toBe("invented_number");
+    expect(problemOf("Gave 5 of the new syrup", [2])).toBe("invented_number"); // unit dropped
+    expect(problemOf("Gave 5 ml at 8am", [2])).toBe("invented_number"); // pm → am
+    expect(problemOf("Gave 5 ml at 8 pm", [2])).toBeNull();
+  });
+
+  it("only the CITED notes are a source: a number from an uncited note fails", () => {
+    // "3 times" is in note 0, but this item cites note 2 only.
+    expect(problemOf("Gave 5 ml, woke up 3 times", [2])).toBe("invented_number");
+    expect(problemOf("Gave 5 ml, woke up 3 times", [0, 2])).toBeNull();
+  });
+
+  it("extracts complete values with canonical units", () => {
+    expect(quantitiesIn("38,5 °C at 8:30pm, 2.50 ml, 3 veces, 5 mg")).toEqual([
+      "38.5|deg",
+      "8:30|pm",
+      "2.5|ml",
+      "3|times",
+      "5|mg",
+    ]);
+    expect(quantitiesIn("room 12 and 7")).toEqual(["12|", "7|"]);
   });
 
   it("lists notes no item uses instead of dropping them silently", () => {
