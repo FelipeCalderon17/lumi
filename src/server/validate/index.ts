@@ -1,3 +1,5 @@
+import { type ContentViolation, findContentViolations } from "../content-rules";
+
 /**
  * Citation-integrity validation.
  *
@@ -43,4 +45,16 @@ export function checkCitationIntegrity(
     return { status: "invalid", reason: "unknown_handles", unknownHandles };
   }
   return { status: "valid", handles };
+}
+
+/**
+ * Runtime output check on generated answers: no phone numbers (except 911/988) and no dosages
+ * or dosing frequencies, even next to a valid citation. The KB contains neither, so a match
+ * means the model added it. Tone words are left to the evals: they're a style problem, not a
+ * reason to withhold an answer.
+ */
+export function findUnsafeOutput(text: string): ContentViolation[] {
+  return findContentViolations(text).filter(
+    (v) => v.rule === "phone_number" || v.rule === "dosage",
+  );
 }

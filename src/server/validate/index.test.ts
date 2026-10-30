@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { checkCitationIntegrity, extractCitations } from "./index";
+import { checkCitationIntegrity, extractCitations, findUnsafeOutput } from "./index";
 
 const twelve = new Set(Array.from({ length: 12 }, (_, i) => i + 1));
 
@@ -41,5 +41,16 @@ describe("validate.checkCitationIntegrity", () => {
       reason: "no_citations",
       unknownHandles: [],
     });
+  });
+});
+
+describe("validate.findUnsafeOutput", () => {
+  it("flags phone numbers and dosages, allows 911 and tone words", () => {
+    expect(findUnsafeOutput("Call 555-123-4567 [1]").map((v) => v.rule)).toEqual(["phone_number"]);
+    expect(findUnsafeOutput("Give 5 ml every 4 hours [2]").map((v) => v.rule)).toEqual([
+      "dosage",
+      "dosage",
+    ]);
+    expect(findUnsafeOutput("Call 911 in an emergency [1]. Your journey matters.")).toEqual([]);
   });
 });

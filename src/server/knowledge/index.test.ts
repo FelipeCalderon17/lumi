@@ -1,5 +1,15 @@
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { ArticleFrontmatterSchema, countWords, parseArticleFile } from "./index";
+import { testArticles } from "../test-helpers";
+import {
+  ArticleFrontmatterSchema,
+  buildKnowledgeBase,
+  countWords,
+  loadKnowledgeBase,
+  parseArticleFile,
+} from "./index";
 
 const valid = {
   id: "first-days-at-the-hospital",
@@ -30,8 +40,70 @@ describe("knowledge.ArticleFrontmatterSchema (contract)", () => {
     expect(ArticleFrontmatterSchema.safeParse({ ...valid, risk: "medium" }).success).toBe(false);
     expect(ArticleFrontmatterSchema.safeParse({ ...valid, author: "x" }).success).toBe(false);
   });
+});
 
-  it.todo("assigns stable handles sorted by id");
+describe("knowledge.buildKnowledgeBase", () => {
+  it("assigns stable handles sorted by id, whatever the input order", () => {
+    const articles = testArticles("en", 3);
+    const kb = buildKnowledgeBase("en", [...articles].reverse());
+    expect(kb.articles.map((a) => [a.handle, a.id])).toEqual([
+      [1, "article-01"],
+      [2, "article-02"],
+      [3, "article-03"],
+    ]);
+    expect(kb.byHandle.get(2)?.id).toBe("article-02");
+    expect(kb.byId.get("article-03")?.handle).toBe(3);
+    expect(kb.hash).toBe(buildKnowledgeBase("en", articles).hash);
+  });
+
+  it("changes the hash when any article changes", () => {
+    const articles = testArticles("en", 3);
+    const edited = articles.map((a, i) => (i === 1 ? { ...a, body: `${a.body} More.` } : a));
+    expect(buildKnowledgeBase("en", edited).hash).not.toBe(buildKnowledgeBase("en", articles).hash);
+  });
+
+  it("rejects articles in the wrong language and duplicate ids", () => {
+    expect(() => buildKnowledgeBase("es", testArticles("en", 1))).toThrow(/expected "es"/);
+    const [one] = testArticles("en", 1);
+    if (!one) throw new Error("fixture");
+    expect(() => buildKnowledgeBase("en", [one, one])).toThrow(/duplicate/);
+  });
+});
+
+describe("knowledge.loadKnowledgeBase", () => {
+  const article = (id: string, lang = "en") =>
+    `---\nid: ${id}\nlang: ${lang}\ntitle: Title of ${id}\ncategory: about-lumi\nrisk: standard\nreviewedAt: 2026-10-30\n---\nBody.\n`;
+
+  function kbDir(files: Record<string, string>): string {
+    const root = mkdtempSync(path.join(tmpdir(), "lumi-kb-"));
+    mkdirSync(path.join(root, "en"));
+    for (const [name, text] of Object.entries(files))
+      writeFileSync(path.join(root, "en", name), text);
+    return root;
+  }
+
+  it("loads, validates and handles the articles of one language", async () => {
+    const kb = await loadKnowledgeBase(
+      "en",
+      kbDir({ "b-guide.md": article("b-guide"), "a-guide.md": article("a-guide"), "x.txt": "" }),
+    );
+    expect(kb.articles.map((a) => a.id)).toEqual(["a-guide", "b-guide"]);
+  });
+
+  it("fails loudly on a file whose name doesn't match its id, or invalid frontmatter", async () => {
+    await expect(loadKnowledgeBase("en", kbDir({ "wrong.md": article("right") }))).rejects.toThrow(
+      /id is right/,
+    );
+    await expect(loadKnowledgeBase("en", kbDir({ "a.md": article("a", "fr") }))).rejects.toThrow();
+  });
+
+  it("loads the real KB in both languages with the same ids and handles", async () => {
+    const [en, es] = await Promise.all([loadKnowledgeBase("en"), loadKnowledgeBase("es")]);
+    expect(en.articles.length).toBeGreaterThan(0);
+    expect(es.articles.map((a) => [a.handle, a.id])).toEqual(
+      en.articles.map((a) => [a.handle, a.id]),
+    );
+  });
 });
 
 describe("knowledge.parseArticleFile", () => {
