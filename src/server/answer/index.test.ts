@@ -241,4 +241,29 @@ describe("answer.finalizeAnswer (last gate before reveal)", () => {
     expect(finalizeAnswer("Give 5 ml [1].", kb).ok).toBe(false);
     expect(finalizeAnswer("Call 555-123-4567 [1].", kb).ok).toBe(false);
   });
+
+  it("regression (Codex review 3): withholds spelled-out and written doses", () => {
+    for (const text of [
+      "Give 5 milligrams twice daily [1]",
+      "Dale 5 miligramos cada mañana [1]",
+      "Give one tablet [1]",
+      "Give it every 4 hours [1]",
+      "Dale media pastilla [1]",
+    ]) {
+      expect([text, finalizeAnswer(text, kb)]).toEqual([
+        text,
+        { ok: false, reason: "invalid_output" },
+      ]);
+    }
+  });
+
+  it("does not withhold harmless numbers", () => {
+    for (const text of [
+      "Take 2 snacks for the wait [1]",
+      "Room 911 is on the left [1]",
+      "Take a break every 2 hours [1]",
+    ]) {
+      expect([text, finalizeAnswer(text, kb).ok]).toEqual([text, true]);
+    }
+  });
 });

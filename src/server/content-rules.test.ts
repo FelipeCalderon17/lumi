@@ -19,7 +19,56 @@ describe("content-rules.findContentViolations", () => {
     expect(rules("Give 5 ml")).toEqual(["dosage"]);
     expect(rules("200mg twice")).toEqual(["dosage"]);
     expect(rules("dale 2,5 ml cada 6 horas")).toEqual(["dosage", "dosage"]);
-    expect(rules("every 4 hours")).toEqual(["dosage"]);
+    expect(rules("give it every 4 hours")).toEqual(["dosage"]);
+    expect(rules("Give the syrup twice a day")).toEqual(["dosage"]);
+  });
+
+  it("regression (Codex review 3): spelled-out units, written quantities, frequency with dose", () => {
+    expect(rules("Give 5 milligrams twice daily [1]")).toEqual(["dosage", "dosage"]);
+    expect(rules("Dale 5 miligramos cada mañana [1]")).toEqual(["dosage", "dosage"]);
+    expect(rules("Give one tablet [1]")).toEqual(["dosage"]);
+    for (const text of [
+      "10 micrograms",
+      "2.5 millilitres",
+      "3 mililitros",
+      "5 cc",
+      "4 units",
+      "8 unidades",
+      "2 drops",
+      "3 gotas",
+      "1 teaspoon",
+      "2 cucharaditas",
+      "2 puffs",
+      "2 inhalaciones",
+      "half a tablet",
+      "two capsules",
+      "one dose",
+      "media pastilla",
+      "dos cápsulas",
+      "una pastilla",
+      "una dosis",
+      "tres gotas",
+    ]) {
+      expect([text, rules(text)]).toEqual([text, ["dosage"]]);
+    }
+  });
+
+  it("keeps harmless numbers and frequencies (Codex review 3 can-wait)", () => {
+    for (const text of [
+      "take 2 snacks",
+      "room 911",
+      "We're in room 211",
+      "Está en la habitación 311",
+      "take a break every 2 hours",
+      "every 4 hours",
+      "Trae una tableta con películas",
+      "Visiting hours are twice a day",
+      "dale un abrazo cada mañana",
+    ]) {
+      expect([text, rules(text)]).toEqual([text, []]);
+    }
+    expect(rules("Call 211 for help")).toEqual(["phone_number"]);
+    expect(rules("marca el 311")).toEqual(["phone_number"]);
   });
 
   it("flags claim and tone words as whole words only", () => {
