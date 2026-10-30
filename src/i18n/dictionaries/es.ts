@@ -18,7 +18,7 @@ export const es: Dictionary = {
   },
   emergency: {
     banner:
-      "Si tu hijo o hija necesita atención médica urgente, llama al 911 o a la línea de emergencias de tu hospital ahora.",
+      "En una emergencia, llama al 911 ahora. Si ya estás en el hospital, avísale a una enfermera o presiona el botón de llamada de inmediato.",
     crisisBanner:
       "Si estás en una crisis emocional, llama o envía un mensaje de texto al 988 (988 Suicide & Crisis Lifeline). Hay atención en español.",
   },
@@ -63,13 +63,13 @@ export const es: Dictionary = {
       body: "Prueba a preguntar sobre los días en el hospital, el dinero y el trabajo, la escuela y la familia, o cómo cuidarte a ti.",
     },
     fallback: {
-      title: "Lumi no puede responder en este momento.",
-      body: "Algo falló de nuestro lado. El trabajador social de tu hospital o el equipo de familias de Lumi pueden ayudarte. Si es una emergencia, llama al 911.",
+      title: "Lumi no puede responder ahora.",
+      body: "Para preguntas prácticas, consulta al trabajador social de tu hospital. Para preguntas sobre la salud de tu hijo o hija, comunícate con el equipo médico. En una emergencia, llama al 911.",
       rateLimited: "Hagamos una pausa corta. Puedes volver a preguntar en un minuto.",
     },
     abstained: {
       title: "Todavía no tengo una guía sobre eso.",
-      body: "El trabajador social de tu hospital o el equipo de familias de Lumi pueden ayudarte con esto.",
+      body: "Para preguntas prácticas, el trabajador social de tu hospital puede ayudarte a encontrar con quién hablar.",
     },
   },
   home: {

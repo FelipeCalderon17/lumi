@@ -29,7 +29,7 @@ Nadie conoce a tu hijo o hija como tú. Si sientes que algo no está bien, aunqu
 
 ## En una emergencia, llama al 911
 
-Si crees que la vida de tu hijo o hija está en peligro, o no puedes esperar a comunicarte con el equipo médico, llama al 911 de inmediato. Si estás fuera de Estados Unidos, comunícate con los servicios de emergencia locales.
+Si crees que es una emergencia, llama al 911 de inmediato. Si estás fuera de Estados Unidos, comunícate con los servicios de emergencia locales.
 
 ## Ten esto a mano cuando llames
 

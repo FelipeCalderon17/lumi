@@ -29,7 +29,7 @@ You know your child best. If something feels wrong, even if it isn't on the list
 
 ## In an emergency, call 911
 
-If you think your child's life is in danger, or you can't wait to reach the care team, call 911 right away. Outside the US, contact your local emergency services.
+If you think it's an emergency, call 911 right away. Outside the US, contact your local emergency services.
 
 ## What to have ready when you call
 

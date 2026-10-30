@@ -19,7 +19,7 @@ export const en = {
   },
   emergency: {
     banner:
-      "If your child needs urgent medical help, call 911 or your hospital's emergency line now.",
+      "In an emergency, call 911 now. If you're already at the hospital, tell a nurse or press the call button right away.",
     crisisBanner:
       "If you're in emotional crisis, call or text 988 (988 Suicide & Crisis Lifeline). Spanish is available.",
   },
@@ -70,12 +70,12 @@ export const en = {
     },
     fallback: {
       title: "Lumi can't answer right now.",
-      body: "Something went wrong on our side. Your hospital's social worker or the Lumi family team can help. If it's an emergency, call 911.",
+      body: "For practical questions, ask your hospital's social worker. For questions about your child's health, contact the care team. In an emergency, call 911.",
       rateLimited: "Let's take a short pause. You can ask again in a minute.",
     },
     abstained: {
       title: "I don't have a guide on that yet.",
-      body: "Your hospital's social worker or the Lumi family team can help with this.",
+      body: "For practical questions, your hospital's social worker may help you find the right person to ask.",
     },
   },
   home: {
