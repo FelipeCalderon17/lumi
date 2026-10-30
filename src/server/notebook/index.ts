@@ -6,9 +6,11 @@ import { type LedgerOutcome, recordCallsBestEffort, type UsageLedger } from "../
 import { type Logger, silentLogger } from "../log";
 import {
   failureFromError,
+  incompleteFinish,
   now,
   openAIOptions,
   stripPromptTags,
+  structuredOutputFailure,
   tokenFacts,
   UNKNOWN_TOKENS,
 } from "../models";
@@ -305,17 +307,15 @@ export async function structureNotes(
       abortSignal: signal,
       providerOptions: openAIOptions("notebook"),
     });
-    return {
-      result: checkNotebook(result.output, request.notes),
-      call: call(tokenFacts(result.usage), result.finishReason),
-    };
+    const facts = call(tokenFacts(result.usage), result.finishReason);
+    // Completion check: a schema-valid object is only used if the model finished with "stop".
+    const incomplete = incompleteFinish(result.finishReason);
+    if (incomplete) return { result: { ok: false, problem: incomplete }, call: facts };
+    return { result: checkNotebook(result.output, request.notes), call: facts };
   } catch (error) {
     if (NoObjectGeneratedError.isInstance(error)) {
       return {
-        result: {
-          ok: false,
-          problem: error.finishReason === "length" ? "truncated" : "invalid_output",
-        },
+        result: { ok: false, problem: structuredOutputFailure(error.finishReason) },
         call: call(tokenFacts(error.usage), error.finishReason ?? "none"),
       };
     }

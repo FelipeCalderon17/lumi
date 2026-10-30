@@ -5,9 +5,11 @@ import { type RequestContext, stageSignal } from "../context";
 import { KB_TOPICS } from "../knowledge";
 import {
   failureFromError,
+  incompleteFinish,
   now,
   openAIOptions,
   stripPromptTags,
+  structuredOutputFailure,
   tokenFacts,
   UNKNOWN_TOKENS,
 } from "../models";
@@ -150,18 +152,16 @@ export async function routeQuestion(
       abortSignal: signal,
       providerOptions: openAIOptions("router"),
     });
-    return {
-      result: { ok: true, value: toRoute(result.output) },
-      call: call(tokenFacts(result.usage), result.finishReason),
-    };
+    const facts = call(tokenFacts(result.usage), result.finishReason);
+    // Completion check: a schema-valid object is only used if the model finished with "stop".
+    const incomplete = incompleteFinish(result.finishReason);
+    if (incomplete) return { result: { ok: false, reason: incomplete }, call: facts };
+    return { result: { ok: true, value: toRoute(result.output) }, call: facts };
   } catch (error) {
     if (NoObjectGeneratedError.isInstance(error)) {
       // The provider answered, but not with a schema-valid object (or it was cut off).
       return {
-        result: {
-          ok: false,
-          reason: error.finishReason === "length" ? "truncated" : "invalid_output",
-        },
+        result: { ok: false, reason: structuredOutputFailure(error.finishReason) },
         call: call(tokenFacts(error.usage), error.finishReason ?? "none"),
       };
     }

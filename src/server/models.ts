@@ -2,7 +2,7 @@ import { openai } from "@ai-sdk/openai";
 import type { LanguageModel, LanguageModelUsage, TranscriptionModel } from "ai";
 import { config, type ModelId } from "./config";
 import { isDeadline } from "./context";
-import type { FailureReason, ModelCall } from "./types";
+import type { FailureReason, FinishReason, ModelCall } from "./types";
 
 /**
  * Model access, injected into every model-backed step so tests can pass AI SDK mocks
@@ -57,6 +57,26 @@ export const UNKNOWN_TOKENS: TokenFacts = {
 export function failureFromError(signal: AbortSignal): FailureReason {
   if (signal.aborted) return isDeadline(signal) ? "timeout" : "cancelled";
   return "provider_error";
+}
+
+/**
+ * Structured output is usable only after a clean finish. `Output.object` checks the schema, not
+ * that the model completed: a schema-valid object can still come with "length" or
+ * "content-filter". `null` = finished with "stop"; otherwise why the output must be dropped.
+ */
+export function incompleteFinish(
+  finishReason: FinishReason | undefined,
+): "truncated" | "interrupted" | null {
+  if (finishReason === "stop") return null;
+  return finishReason === "length" ? "truncated" : "interrupted";
+}
+
+/** A schema-invalid object: cut off or interrupted if it didn't finish cleanly, else invalid. */
+export function structuredOutputFailure(
+  finishReason: FinishReason | undefined,
+): "truncated" | "interrupted" | "invalid_output" {
+  if (finishReason === undefined) return "invalid_output";
+  return incompleteFinish(finishReason) ?? "invalid_output";
 }
 
 /**

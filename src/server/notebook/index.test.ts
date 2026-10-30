@@ -281,6 +281,34 @@ describe("notebook.prepareNotebook", () => {
     }
   });
 
+  it("regression (Codex review 3): a schema-valid page without finishReason 'stop' falls back", async () => {
+    for (const [finish, reason] of [
+      ["length", "truncated"],
+      ["content-filter", "interrupted"],
+      ["error", "interrupted"],
+      ["other", "interrupted"],
+    ] as const) {
+      const rows: UsageEntry[] = [];
+      const out = await prepareNotebook(
+        { notes, locale: "en" },
+        testCtx(),
+        deps(jsonModel(good, finish), { rows }),
+      );
+      expect([finish, out]).toMatchObject([
+        finish,
+        { kind: "done", response: { type: "notebook_fallback", reason } },
+      ]);
+      if (out.kind === "done") await out.recorded;
+      expect(rows[0]).toMatchObject({
+        inputTokens: 400,
+        outputTokens: 30,
+        finishReason: finish,
+        failureReason: reason,
+        outcome: "fallback",
+      });
+    }
+  });
+
   it("rejects too many notes, over-long notes and bad dates (after safety)", async () => {
     const many = Array.from({ length: 41 }, () => notes[0] as Note);
     expect(await prepareNotebook({ notes: many, locale: "en" }, testCtx(), deps())).toEqual({

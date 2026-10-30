@@ -108,6 +108,21 @@ describe("router.routeQuestion (mocked model)", () => {
     expect(step.result).toEqual({ ok: false, reason: "truncated" });
   });
 
+  it("regression (Codex review 3): a schema-valid object without finishReason 'stop' is not used", async () => {
+    const valid = { language: "en", intents: ["practical"], topic: "hospital-logistics" };
+    for (const [finish, reason] of [
+      ["length", "truncated"],
+      ["content-filter", "interrupted"],
+      ["error", "interrupted"],
+      ["other", "interrupted"],
+    ] as const) {
+      const step = await routeQuestion(question, testCtx(), { model: jsonModel(valid, finish) });
+      expect([finish, step.result]).toEqual([finish, { ok: false, reason }]);
+      // Usage is kept for the ledger.
+      expect(step.call).toMatchObject({ inputTokens: 400, outputTokens: 30, finishReason: finish });
+    }
+  });
+
   it("reports unknown token usage as null, not 0 (provider error)", async () => {
     const step = await routeQuestion(question, testCtx(), { model: failingModel() });
     expect(step.result).toEqual({ ok: false, reason: "provider_error" });
