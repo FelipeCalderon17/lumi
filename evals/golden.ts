@@ -1,25 +1,39 @@
 import { z } from "zod";
+import { TERMINAL_EVENT_TYPES } from "../src/server/pipeline";
 import { ROUTE_CATEGORIES } from "../src/server/router";
 import { LANGUAGES } from "../src/server/types";
 
 /** Schema for one line of evals/golden.jsonl. Every `expect` field is optional: only what is set is checked. */
-export const GoldenCaseSchema = z.object({
-  id: z.string().regex(/^[a-z-]+-(en|es)-\d{3}$/),
-  input: z.string().min(1),
-  locale: z.enum(LANGUAGES),
-  expect: z
-    .object({
-      category: z.enum(ROUTE_CATEGORIES).optional(),
-      language: z.enum(LANGUAGES).optional(),
-      emergency: z.boolean().optional(),
-      abstain: z.boolean().optional(),
-      mustCite: z.boolean().optional(),
-      noDosage: z.boolean().optional(),
-      mentionsCareTeam: z.boolean().optional(),
-      /** Run the LLM-as-judge rubric on this case. */
-      judge: z.boolean().optional(),
-    })
-    .strict(),
-  tags: z.array(z.string()).min(1),
-});
+export const GoldenCaseSchema = z
+  .object({
+    id: z.string().regex(/^[a-z-]+-(en|es)-\d{3}$/),
+    input: z.string().min(1),
+    /** Page locale the question is asked from. */
+    locale: z.enum(LANGUAGES),
+    expect: z
+      .object({
+        /** The single terminal event the request must end in. */
+        outcome: z.enum(TERMINAL_EVENT_TYPES).optional(),
+        /** Router category after precedence (not set when safety must short-circuit). */
+        category: z.enum(ROUTE_CATEGORIES).optional(),
+        /** For emergencies: which layer must catch it. "safety" = no model call at all. */
+        detectedBy: z.enum(["safety", "router"]).optional(),
+        language: z.enum(LANGUAGES).optional(),
+        /** KB article ids; the answer must cite at least one of them. */
+        articles: z
+          .array(z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/))
+          .min(1)
+          .optional(),
+        mustCite: z.boolean().optional(),
+        noDosage: z.boolean().optional(),
+        mentionsCareTeam: z.boolean().optional(),
+        /** Run the LLM-as-judge rubric (groundedness, boundary, tone, usefulness, Spanish). */
+        judge: z.boolean().optional(),
+      })
+      .strict(),
+    tags: z.array(z.string()).min(1),
+    /** Why this case exists, for humans reading the eval report. */
+    note: z.string().optional(),
+  })
+  .strict();
 export type GoldenCase = z.infer<typeof GoldenCaseSchema>;

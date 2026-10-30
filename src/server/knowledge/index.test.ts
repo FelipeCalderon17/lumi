@@ -2,10 +2,11 @@ import { describe, expect, it } from "vitest";
 import { ArticleFrontmatterSchema } from "./index";
 
 const valid = {
-  id: "parking-and-meals",
+  id: "first-days-at-the-hospital",
   lang: "en",
-  title: "Parking and meals during a hospital stay",
+  title: "Your first days at the hospital: what to bring",
   category: "hospital-logistics",
+  risk: "standard",
   reviewedAt: "2026-10-30",
 };
 
@@ -23,6 +24,12 @@ describe("knowledge.ArticleFrontmatterSchema (contract)", () => {
     );
   });
 
+  it("requires a risk level and rejects unknown keys", () => {
+    const { risk: _risk, ...withoutRisk } = valid;
+    expect(ArticleFrontmatterSchema.safeParse(withoutRisk).success).toBe(false);
+    expect(ArticleFrontmatterSchema.safeParse({ ...valid, risk: "medium" }).success).toBe(false);
+    expect(ArticleFrontmatterSchema.safeParse({ ...valid, author: "x" }).success).toBe(false);
+  });
+
   it.todo("assigns stable handles sorted by id");
-  it.todo("every EN article has an ES article with the same id (parity)");
 });

@@ -1,14 +1,19 @@
 import { NotImplementedError } from "../types";
 
 /**
- * Citation validation: every [n] in an answer must map to a real KB handle.
- * Runs after the stream completes. An answer with no valid citation (and no abstain marker)
- * is replaced by the safe fallback — we never show ungrounded text as if it were grounded.
+ * Citation-integrity validation.
+ *
+ * WHAT IT GUARANTEES: every [n] in an answer maps to a real KB handle, and the answer cites
+ * at least one. An answer that fails is never shown; the parent gets the fallback.
+ *
+ * WHAT IT DOES NOT GUARANTEE: that the cited article actually supports what the sentence says.
+ * A valid handle can sit next to an unsupported claim. That is measured offline by the
+ * LLM-as-judge groundedness check in the evals (docs/EVALS.md), and reduced by keeping
+ * clinical topics off the generated path entirely (medical → fixed template).
  */
 
-export type CitationCheck =
+export type CitationIntegrity =
   | { status: "valid"; handles: readonly number[] }
-  | { status: "abstained" }
   | {
       status: "invalid";
       reason: "no_citations" | "unknown_handles";
@@ -20,10 +25,10 @@ export function extractCitations(_text: string): number[] {
   throw new NotImplementedError("validate.extractCitations");
 }
 
-export function validateCitations(
+export function checkCitationIntegrity(
   _text: string,
   _knownHandles: ReadonlySet<number>,
-): CitationCheck {
+): CitationIntegrity {
   // TODO(phase-2)
-  throw new NotImplementedError("validate.validateCitations");
+  throw new NotImplementedError("validate.checkCitationIntegrity");
 }
