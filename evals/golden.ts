@@ -12,8 +12,13 @@ export const GoldenCaseSchema = z
     locale: z.enum(LANGUAGES),
     expect: z
       .object({
-        /** The single terminal event the request must end in. */
-        outcome: z.enum(TERMINAL_EVENT_TYPES).optional(),
+        /** The terminal event the request must end in. A list = any of these is acceptable
+         * (only for honestly borderline cases, each with a `note`). */
+        outcome: z
+          .union([z.enum(TERMINAL_EVENT_TYPES), z.array(z.enum(TERMINAL_EVENT_TYPES)).min(2)])
+          .optional(),
+        /** For `emergency` outcomes: which kind of fixed copy. */
+        kind: z.enum(["medical_emergency", "self_harm"]).optional(),
         /** Router category after precedence (not set when safety must short-circuit). */
         category: z.enum(ROUTE_CATEGORIES).optional(),
         /** For emergencies: which layer must catch it. "safety" = no model call at all. */
