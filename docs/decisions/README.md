@@ -16,3 +16,4 @@ Short records: Context / Decision / Consequences / Alternatives. A guardrail is 
 | [0010](0010-buffer-validate-reveal.md) | Buffer, validate, reveal; NDJSON transport | Accepted |
 | [0011](0011-medical-fixed-template.md) | Medical questions get a fixed, reviewed template | Accepted |
 | [0012](0012-us-scope-and-crisis-contacts.md) | US scope; fixed crisis contacts (911, 988) | Accepted |
+| [0013](0013-store-tokens-derive-cost.md) | Store tokens, derive cost (no cost column in the ledger) | Accepted |

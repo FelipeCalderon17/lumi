@@ -21,7 +21,9 @@ export type FailureReason =
   /** Instance-wide model-call ceiling. */
   | "capacity"
   /** The client went away (request signal aborted). Nothing is sent; recorded in the ledger. */
-  | "cancelled";
+  | "cancelled"
+  /** A bug on our side (an unexpected exception). Still ends in the calm fallback. */
+  | "internal";
 
 export type StepResult<T> = { ok: true; value: T } | { ok: false; reason: FailureReason };
 
@@ -36,19 +38,29 @@ export type FinishReason =
   | "other"
   | "none";
 
+export const MODEL_STEPS = ["router", "answer", "transcribe", "notebook", "judge"] as const;
+export type ModelStepName = (typeof MODEL_STEPS)[number];
+
 /**
  * Metadata for ONE model call, kept apart from the business outcome so it can be recorded
- * for successes and failures alike. Unknown numbers are `null`, never 0.
+ * for successes and failures alike. These are FACTS from the provider: token counts and
+ * audio duration. No cost: cost is derived when the ledger is read (ADR 0013).
+ * Unknown numbers are `null`, never 0.
  */
 export type ModelCall = {
-  stage: "router" | "answer" | "judge";
+  step: ModelStepName;
   model: ModelId;
+  /** Total input tokens, cached ones included. */
   inputTokens: number | null;
+  /** The part of inputTokens served from the provider's prompt cache. */
   cachedInputTokens: number | null;
+  /** Total output tokens, reasoning tokens included (that's how they're billed). */
   outputTokens: number | null;
+  /** The part of outputTokens spent on reasoning. */
+  reasoningTokens: number | null;
+  /** Transcription only: billed audio duration. `null` for text steps or when unknown. */
+  audioSeconds: number | null;
   latencyMs: number;
-  /** `null` when any token count or price is unknown. */
-  estimatedCostUsd: number | null;
   finishReason: FinishReason;
 };
 
