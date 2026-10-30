@@ -21,7 +21,7 @@ export const en = {
     banner:
       "In an emergency, call 911 now. If you're already at the hospital, tell a nurse or press the call button right away.",
     crisisBanner:
-      "If you're in emotional crisis, call or text 988 (988 Suicide & Crisis Lifeline). Spanish is available.",
+      "If you're in emotional crisis, call or text 988 (988 Suicide & Crisis Lifeline). For Spanish, choose the Spanish option when calling, or text AYUDA to 988.",
   },
   /**
    * Fixed, human-reviewed safety copy (ADR 0003, 0010). Never model-generated.
@@ -42,7 +42,7 @@ export const en = {
       title: "Please reach out for help right now.",
       steps: [
         "If you or someone else is in immediate danger, call 911.",
-        "Call or text 988 to reach the 988 Suicide & Crisis Lifeline, any time, day or night. Spanish is available.",
+        "Call or text 988 to reach the 988 Suicide & Crisis Lifeline, any time, day or night. For Spanish, choose the Spanish option when calling, or text AYUDA to 988.",
         "Outside the US, contact your local emergency services.",
       ],
     },
@@ -50,7 +50,7 @@ export const en = {
       title: "It sounds like things are very heavy right now.",
       body: "You don't have to carry this alone. You can talk to someone tonight.",
       steps: [
-        "Call or text 988 to reach the 988 Suicide & Crisis Lifeline, any time, day or night. Spanish is available.",
+        "Call or text 988 to reach the 988 Suicide & Crisis Lifeline, any time, day or night. For Spanish, choose the Spanish option when calling, or text AYUDA to 988.",
         "If anyone is in immediate danger, call 911.",
         "During the day, your hospital's social worker can help you find ongoing support.",
         "Outside the US, contact your local emergency services.",
@@ -58,7 +58,7 @@ export const en = {
     },
     /** 988 line reused verbatim in the KB self-care article (checked by the KB tests). */
     crisisLine:
-      "If you're in emotional crisis, call or text 988 to reach the 988 Suicide & Crisis Lifeline, any time, day or night. Spanish is available.",
+      "If you're in emotional crisis, call or text 988 to reach the 988 Suicide & Crisis Lifeline, any time, day or night. For Spanish, choose the Spanish option when calling, or text AYUDA to 988.",
     medical: {
       title: "That's a question for your child's care team.",
       body: "Lumi doesn't give medical advice, because your care team knows your child. If it can't wait, call the number your care team gave you for questions after hours. If it's an emergency, call 911.",

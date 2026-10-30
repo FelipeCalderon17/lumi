@@ -38,7 +38,7 @@ Cuando alguien te pregunte "¿En qué te ayudo?", elige una cosa de la lista. Pu
 
 Es normal sentir miedo, enojo, cansancio o como si no sintieras nada. Si esos sentimientos duran mucho tiempo o empiezan a sentirse insoportables, busca al trabajador social del hospital o a tu propio médico.
 
-Si estás en una crisis emocional, llama o envía un mensaje de texto al 988 para comunicarte con la 988 Suicide & Crisis Lifeline, a cualquier hora, de día o de noche. Hay atención en español.
+Si estás en una crisis emocional, llama o envía un mensaje de texto al 988 para comunicarte con la 988 Suicide & Crisis Lifeline, a cualquier hora, de día o de noche. Para recibir atención en español, llama al 988 y elige la opción de español, o envía AYUDA por mensaje de texto al 988.
 
 Si tú u otra persona están en peligro inmediato, llama al 911. Si estás fuera de Estados Unidos, comunícate con los servicios de emergencia locales.
 

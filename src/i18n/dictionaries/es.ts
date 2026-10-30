@@ -20,7 +20,7 @@ export const es: Dictionary = {
     banner:
       "En una emergencia, llama al 911 ahora. Si ya estás en el hospital, avísale a una enfermera o presiona el botón de llamada de inmediato.",
     crisisBanner:
-      "Si estás en una crisis emocional, llama o envía un mensaje de texto al 988 (988 Suicide & Crisis Lifeline). Hay atención en español.",
+      "Si estás en una crisis emocional, llama o envía un mensaje de texto al 988 (988 Suicide & Crisis Lifeline). Para recibir atención en español, llama al 988 y elige la opción de español, o envía AYUDA por mensaje de texto al 988.",
   },
   safety: {
     outsideUs:
@@ -37,7 +37,7 @@ export const es: Dictionary = {
       title: "Por favor, pide ayuda ahora mismo.",
       steps: [
         "Si tú u otra persona están en peligro inmediato, llama al 911.",
-        "Llama o envía un mensaje de texto al 988 para comunicarte con la 988 Suicide & Crisis Lifeline, a cualquier hora, de día o de noche. Hay atención en español.",
+        "Llama o envía un mensaje de texto al 988 para comunicarte con la 988 Suicide & Crisis Lifeline, a cualquier hora, de día o de noche. Para recibir atención en español, llama al 988 y elige la opción de español, o envía AYUDA por mensaje de texto al 988.",
         "Si estás fuera de Estados Unidos, comunícate con los servicios de emergencia locales.",
       ],
     },
@@ -45,14 +45,14 @@ export const es: Dictionary = {
       title: "Parece que estás pasando por un momento muy pesado.",
       body: "No tienes que cargar con esto a solas. Puedes hablar con alguien esta misma noche.",
       steps: [
-        "Llama o envía un mensaje de texto al 988 para comunicarte con la 988 Suicide & Crisis Lifeline, a cualquier hora, de día o de noche. Hay atención en español.",
+        "Llama o envía un mensaje de texto al 988 para comunicarte con la 988 Suicide & Crisis Lifeline, a cualquier hora, de día o de noche. Para recibir atención en español, llama al 988 y elige la opción de español, o envía AYUDA por mensaje de texto al 988.",
         "Si alguien está en peligro inmediato, llama al 911.",
         "Durante el día, el trabajador social de tu hospital puede ayudarte a encontrar apoyo continuo.",
         "Si estás fuera de Estados Unidos, comunícate con los servicios de emergencia locales.",
       ],
     },
     crisisLine:
-      "Si estás en una crisis emocional, llama o envía un mensaje de texto al 988 para comunicarte con la 988 Suicide & Crisis Lifeline, a cualquier hora, de día o de noche. Hay atención en español.",
+      "Si estás en una crisis emocional, llama o envía un mensaje de texto al 988 para comunicarte con la 988 Suicide & Crisis Lifeline, a cualquier hora, de día o de noche. Para recibir atención en español, llama al 988 y elige la opción de español, o envía AYUDA por mensaje de texto al 988.",
     medical: {
       title: "Esa es una pregunta para el equipo médico de tu hijo o hija.",
       body: "Lumi no da consejos médicos, porque tu equipo médico conoce a tu hijo o hija. Si no puede esperar, llama al número que te dio tu equipo médico para preguntas fuera de horario. Si es una emergencia, llama al 911.",

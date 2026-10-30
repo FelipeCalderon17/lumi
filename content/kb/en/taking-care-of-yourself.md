@@ -38,7 +38,7 @@ When someone asks "How can I help?", pick one thing from the list. You can ask o
 
 It's normal to feel scared, angry, numb or exhausted. If those feelings stay for a long time, or start to feel unbearable, reach out to the hospital social worker or your own doctor.
 
-If you're in emotional crisis, call or text 988 to reach the 988 Suicide & Crisis Lifeline, any time, day or night. Spanish is available.
+If you're in emotional crisis, call or text 988 to reach the 988 Suicide & Crisis Lifeline, any time, day or night. For Spanish, choose the Spanish option when calling, or text AYUDA to 988.
 
 If you or anyone else is in immediate danger, call 911. Outside the US, contact your local emergency services.
 
