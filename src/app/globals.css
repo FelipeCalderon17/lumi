@@ -1,0 +1,126 @@
+@import "tailwindcss";
+
+/*
+ * Lumi design tokens — see docs/DESIGN.md for rationale and contrast table.
+ * Two themes: "night" (default when the OS is dark — most 2 a.m. visits) and "dawn".
+ * Components only use semantic tokens (bg, surface, text, glow…), never raw hex.
+ */
+
+:root {
+  /* dawn */
+  --lumi-bg: #fbf6ec;
+  --lumi-surface: #ffffff;
+  --lumi-raised: #f3eada;
+  --lumi-line: #e2d6c0;
+  --lumi-text: #1e1b3a;
+  --lumi-muted: #5a5478;
+  --lumi-glow: #8a5200;
+  --lumi-ember: #b3321f;
+  --lumi-sage: #2e6b55;
+  --lumi-halo: rgb(246 190 79 / 0.28);
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* night */
+    --lumi-bg: #12112a;
+    --lumi-surface: #1c1a3d;
+    --lumi-raised: #272452;
+    --lumi-line: #3a3670;
+    --lumi-text: #f4eedf;
+    --lumi-muted: #b4aed6;
+    --lumi-glow: #f6be4f;
+    --lumi-ember: #ff9a85;
+    --lumi-sage: #8ed7b8;
+    --lumi-halo: rgb(246 190 79 / 0.16);
+    color-scheme: dark;
+  }
+}
+
+@theme inline {
+  /* Drop Tailwind's default palette so nothing off-brand sneaks in. */
+  --color-*: initial;
+  --color-bg: var(--lumi-bg);
+  --color-surface: var(--lumi-surface);
+  --color-raised: var(--lumi-raised);
+  --color-line: var(--lumi-line);
+  --color-text: var(--lumi-text);
+  --color-muted: var(--lumi-muted);
+  --color-glow: var(--lumi-glow);
+  --color-ember: var(--lumi-ember);
+  --color-sage: var(--lumi-sage);
+  /* Fixed in both themes: the lantern fill and the ink that sits on it (9.7:1). */
+  --color-lantern: #f6be4f;
+  --color-on-lantern: #1e1b3a;
+  --color-transparent: transparent;
+
+  --font-display: var(--font-fraunces), "Iowan Old Style", Georgia, serif;
+  --font-body: var(--font-atkinson), system-ui, sans-serif;
+
+  --text-base: 1.125rem;
+  --text-base--line-height: 1.65;
+
+  --radius-soft: 0.875rem;
+  --radius-pill: 999px;
+
+  --ease-lumi: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@layer base {
+  html {
+    background: var(--lumi-bg);
+    color: var(--lumi-text);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body {
+    font-family: var(--font-body);
+    font-size: var(--text-base);
+    line-height: 1.65;
+    min-height: 100dvh;
+    /* A soft lantern halo at the top of every page: the "small light in the dark". */
+    background-image: radial-gradient(60rem 32rem at 18% -10%, var(--lumi-halo), transparent 70%);
+    background-repeat: no-repeat;
+  }
+
+  :focus-visible {
+    outline: 3px solid var(--lumi-glow);
+    outline-offset: 3px;
+    border-radius: 6px;
+  }
+
+  ::selection {
+    background: #f6be4f;
+    color: #1e1b3a;
+  }
+}
+
+@keyframes lumi-flicker {
+  0%,
+  100% {
+    opacity: 0.85;
+    transform: translateY(0);
+  }
+  50% {
+    opacity: 1;
+    transform: translateY(-2px);
+  }
+}
+
+@utility animate-flicker {
+  animation: lumi-flicker 4.5s var(--ease-lumi) infinite;
+}
+
+/* biome-ignore-start lint/complexity/noImportantStyles: the reduced-motion override must beat every component style. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+/* biome-ignore-end lint/complexity/noImportantStyles: see above. */
