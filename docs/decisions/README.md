@@ -17,3 +17,4 @@ Short records: Context / Decision / Consequences / Alternatives. A guardrail is 
 | [0011](0011-medical-fixed-template.md) | Medical questions get a fixed, reviewed template | Accepted |
 | [0012](0012-us-scope-and-crisis-contacts.md) | US scope; fixed crisis contacts (911, 988) | Accepted |
 | [0013](0013-store-tokens-derive-cost.md) | Store tokens, derive cost (no cost column in the ledger) | Accepted |
+| [0014](0014-voice-transcription.md) | Voice to text with `gpt-transcribe`, text only, max 2 minutes, never stored | Accepted |

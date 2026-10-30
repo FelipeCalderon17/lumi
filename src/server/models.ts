@@ -10,8 +10,11 @@ import type { FailureReason, ModelCall } from "./types";
  */
 export interface ModelProvider {
   language(id: ModelId): LanguageModel;
-  transcription(id: ModelId): TranscriptionModel;
+  transcription(id: ModelId): TranscriptionModelV4;
 }
+
+/** A concrete (spec v4) transcription model, so we can wrap it to read the provider's usage. */
+export type TranscriptionModelV4 = Extract<TranscriptionModel, { specificationVersion: "v4" }>;
 
 /**
  * The real provider. `@ai-sdk/openai` reads OPENAI_API_KEY when a call is made, not at import,
