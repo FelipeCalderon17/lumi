@@ -1,4 +1,4 @@
-import type { ModelId, PriceCatalog } from "../config";
+import type { ModelId, ModelPrice, PriceCatalog } from "../config";
 import { TERMINAL_EVENT_TYPES } from "../events";
 import type { FailureReason, ModelCall, ModelStepName } from "../types";
 
@@ -33,10 +33,37 @@ export interface UsageLedger {
   record(entry: UsageEntry): Promise<void>;
 }
 
-/** Read side, for the staff summary. Bounded by a cutoff and a row limit. */
+/**
+ * Read side, for the staff summary. Aggregates EVERY row since `cutoff` in the database (one
+ * row per step × model), so the totals cover the whole window however many calls it holds.
+ * Returns at most `maxGroups + 1` groups, so the caller can tell when it hit that bound.
+ */
 export interface UsageReader {
-  since(cutoff: Date, limit: number): Promise<UsageRow[]>;
+  totalsSince(cutoff: Date, maxGroups: number): Promise<UsageTotals>;
 }
+
+/** Summed token facts for one step × model. Sums skip unknown (NULL) values. */
+export type UsageGroupTotals = {
+  step: ModelStepName;
+  model: ModelId;
+  calls: number;
+  inputTokens: number;
+  /** Σ max(input − cached, 0) over calls where both are known. */
+  uncachedInputTokens: number;
+  cachedInputTokens: number;
+  outputTokens: number;
+  reasoningTokens: number;
+  audioSeconds: number;
+  /** Calls missing input, cached input or output tokens. */
+  callsWithUnknownTokens: number;
+  /** Calls missing the audio duration. */
+  callsWithUnknownAudio: number;
+  /** Input and cached tokens over calls where both are known and input > 0 (cache ratio). */
+  ratioInputTokens: number;
+  ratioCachedTokens: number;
+};
+
+export type UsageTotals = { requests: number; groups: UsageGroupTotals[] };
 
 /** The numeric facts cost is derived from (a ledger row, or an eval run's call). */
 export type UsageFacts = Pick<
@@ -53,8 +80,13 @@ const PER_MILLION = 1_000_000;
  * Estimated USD for one call, from the price catalog in config. "unknown" when the model has
  * no price, or when a token count / duration the price needs is unknown.
  */
+/** Own-property lookup: a ledger model id like "constructor" is unknown, not a prototype key. */
+function priceOf(model: string, catalog: PriceCatalog): ModelPrice | undefined {
+  return Object.hasOwn(catalog, model) ? catalog[model as ModelId] : undefined;
+}
+
 export function estimateCost(row: UsageFacts, catalog: PriceCatalog): CostEstimate {
-  const price = catalog[row.model];
+  const price = priceOf(row.model, catalog);
   if (!price) return "unknown";
   if (price.billing === "audio_duration") {
     if (price.usdPerMinute === null || row.audioSeconds === null) return "unknown";
@@ -91,9 +123,6 @@ export type UsageRow = UsageFacts &
     outcome: LedgerOutcome;
   };
 
-const sumKnown = (values: (number | null)[]) =>
-  values.reduce<number>((total, value) => total + (value ?? 0), 0);
-
 export type UsageGroup = {
   step: ModelStepName;
   model: ModelId;
@@ -120,63 +149,113 @@ export type UsageSummary = {
 };
 
 /**
- * Aggregates ledger rows for the staff view, the evals and the README tables, deriving cost
- * from the catalog at read time. Pure: same rows + same catalog → same summary.
+ * Cost of a whole group, from its summed facts. Cost is linear in tokens, so this equals the
+ * sum of per-call estimateCost; any call with unknown usage makes it "unknown".
  */
-export function summarizeUsage(rows: readonly UsageRow[], catalog: PriceCatalog): UsageSummary {
-  const groups = new Map<string, UsageGroup>();
-  let total: CostEstimate = 0;
-  let cachedKnown = 0;
-  let inputKnown = 0;
+export function estimateGroupCost(group: UsageGroupTotals, catalog: PriceCatalog): CostEstimate {
+  const price = priceOf(group.model, catalog);
+  if (!price) return "unknown";
+  if (price.billing === "audio_duration") {
+    if (price.usdPerMinute === null || group.callsWithUnknownAudio > 0) return "unknown";
+    return (group.audioSeconds / 60) * price.usdPerMinute;
+  }
+  if (
+    group.callsWithUnknownTokens > 0 ||
+    price.inputUsdPerMillion === null ||
+    price.cachedInputUsdPerMillion === null ||
+    price.outputUsdPerMillion === null
+  ) {
+    return "unknown";
+  }
+  return (
+    (group.uncachedInputTokens * price.inputUsdPerMillion +
+      group.cachedInputTokens * price.cachedInputUsdPerMillion +
+      group.outputTokens * price.outputUsdPerMillion) /
+    PER_MILLION
+  );
+}
 
+/**
+ * Summary from aggregated totals (the staff view: SQL does the sums), deriving cost from the
+ * catalog at read time. Pure: same totals + same catalog → same summary.
+ */
+export function summarizeTotals(totals: UsageTotals, catalog: PriceCatalog): UsageSummary {
+  const groups = totals.groups.map((g): UsageGroup => {
+    const cost = estimateGroupCost(g, catalog);
+    const audioBilled = priceOf(g.model, catalog)?.billing === "audio_duration";
+    return {
+      step: g.step,
+      model: g.model,
+      calls: g.calls,
+      inputTokens: g.inputTokens,
+      cachedInputTokens: g.cachedInputTokens,
+      outputTokens: g.outputTokens,
+      reasoningTokens: g.reasoningTokens,
+      audioSeconds: g.audioSeconds,
+      callsWithUnknownUsage: audioBilled ? g.callsWithUnknownAudio : g.callsWithUnknownTokens,
+      estimatedUsd: cost,
+    };
+  });
+  const total = groups.reduce<CostEstimate>((sum, g) => addCosts(sum, g.estimatedUsd), 0);
+  const ratioInput = totals.groups.reduce((sum, g) => sum + g.ratioInputTokens, 0);
+  const ratioCached = totals.groups.reduce((sum, g) => sum + g.ratioCachedTokens, 0);
+  const { requests } = totals;
+  return {
+    requests,
+    groups: groups.sort((a, b) => `${a.step}|${a.model}`.localeCompare(`${b.step}|${b.model}`)),
+    cachedInputRatio: ratioInput > 0 ? ratioCached / ratioInput : null,
+    estimatedUsd: groups.length === 0 ? 0 : total,
+    estimatedUsdPer1000Requests:
+      total === "unknown" ? "unknown" : requests === 0 ? 0 : (total / requests) * 1_000,
+  };
+}
+
+/** The same sums the SQL reader computes, done in memory (evals, smoke runs, tests). */
+export function totalsFromRows(rows: readonly UsageRow[]): UsageTotals {
+  const groups = new Map<string, UsageGroupTotals>();
   for (const row of rows) {
     const key = `${row.step}|${row.model}`;
-    const group = groups.get(key) ?? {
+    const g = groups.get(key) ?? {
       step: row.step,
       model: row.model,
       calls: 0,
       inputTokens: 0,
+      uncachedInputTokens: 0,
       cachedInputTokens: 0,
       outputTokens: 0,
       reasoningTokens: 0,
       audioSeconds: 0,
-      callsWithUnknownUsage: 0,
-      estimatedUsd: 0,
+      callsWithUnknownTokens: 0,
+      callsWithUnknownAudio: 0,
+      ratioInputTokens: 0,
+      ratioCachedTokens: 0,
     };
-    groups.set(key, group);
-    const cost = estimateCost(row, catalog);
-    const tokenBilled = catalog[row.model]?.billing !== "audio_duration";
-    const unknownUsage = tokenBilled
-      ? row.inputTokens === null || row.cachedInputTokens === null || row.outputTokens === null
-      : row.audioSeconds === null;
-
-    group.calls += 1;
-    group.inputTokens += sumKnown([row.inputTokens]);
-    group.cachedInputTokens += sumKnown([row.cachedInputTokens]);
-    group.outputTokens += sumKnown([row.outputTokens]);
-    group.reasoningTokens += sumKnown([row.reasoningTokens]);
-    group.audioSeconds += sumKnown([row.audioSeconds]);
-    if (unknownUsage) group.callsWithUnknownUsage += 1;
-    group.estimatedUsd = addCosts(group.estimatedUsd, cost);
-    total = addCosts(total, cost);
-
-    if (row.inputTokens !== null && row.cachedInputTokens !== null && row.inputTokens > 0) {
-      inputKnown += row.inputTokens;
-      cachedKnown += row.cachedInputTokens;
+    groups.set(key, g);
+    const { inputTokens, cachedInputTokens, outputTokens } = row;
+    g.calls += 1;
+    g.inputTokens += inputTokens ?? 0;
+    g.cachedInputTokens += cachedInputTokens ?? 0;
+    g.outputTokens += outputTokens ?? 0;
+    g.reasoningTokens += row.reasoningTokens ?? 0;
+    g.audioSeconds += row.audioSeconds ?? 0;
+    if (inputTokens !== null && cachedInputTokens !== null) {
+      g.uncachedInputTokens += Math.max(inputTokens - cachedInputTokens, 0);
+      if (inputTokens > 0) {
+        g.ratioInputTokens += inputTokens;
+        g.ratioCachedTokens += cachedInputTokens;
+      }
     }
+    if (inputTokens === null || cachedInputTokens === null || outputTokens === null) {
+      g.callsWithUnknownTokens += 1;
+    }
+    if (row.audioSeconds === null) g.callsWithUnknownAudio += 1;
   }
+  return { requests: new Set(rows.map((r) => r.requestId)).size, groups: [...groups.values()] };
+}
 
-  const requests = new Set(rows.map((row) => row.requestId)).size;
-  return {
-    requests,
-    groups: [...groups.values()].sort((a, b) =>
-      `${a.step}|${a.model}`.localeCompare(`${b.step}|${b.model}`),
-    ),
-    cachedInputRatio: inputKnown > 0 ? cachedKnown / inputKnown : null,
-    estimatedUsd: rows.length === 0 ? 0 : total,
-    estimatedUsdPer1000Requests:
-      total === "unknown" ? "unknown" : requests === 0 ? 0 : (total / requests) * 1_000,
-  };
+/** Aggregates in-memory ledger rows (evals, smoke runs). Same maths as the staff view. */
+export function summarizeUsage(rows: readonly UsageRow[], catalog: PriceCatalog): UsageSummary {
+  return summarizeTotals(totalsFromRows(rows), catalog);
 }
 
 /**

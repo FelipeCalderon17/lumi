@@ -221,8 +221,11 @@ export const config = {
     minSecretLength: 32,
     /** The staff usage summary covers this many days of ledger rows. */
     usageWindowDays: 30,
-    /** Upper bound on ledger rows read for the summary (keeps the query bounded). */
-    usageMaxRows: 20_000,
+    /**
+     * The summary is aggregated in SQL over the WHOLE window (no row limit). Its only bound is
+     * the number of step × model groups returned; above it the summary says `complete: false`.
+     */
+    usageMaxGroups: 100,
   },
 
   evals: {

@@ -5,9 +5,12 @@ import {
   addCosts,
   createNoopLedger,
   estimateCost,
+  estimateGroupCost,
   recordBestEffort,
   recordCallsBestEffort,
+  summarizeTotals,
   summarizeUsage,
+  totalsFromRows,
   type UsageEntry,
   type UsageLedger,
   type UsageRow,
@@ -60,6 +63,16 @@ describe("ledger.estimateCost", () => {
     const row = { model: "gpt-transcribe" as const, ...facts, audioSeconds: 90 };
     expect(estimateCost(row, priced)).toBeCloseTo(0.009, 10);
     expect(estimateCost({ ...row, audioSeconds: null }, priced)).toBe("unknown");
+  });
+});
+
+describe("ledger price lookup (Codex review 3 can-wait)", () => {
+  it("a model id that is an Object.prototype key is unknown, not NaN", () => {
+    for (const model of ["constructor", "toString", "__proto__", "hasOwnProperty"]) {
+      expect(estimateCost({ model: model as "gpt-6-luna", ...facts }, modelCatalog)).toBe(
+        "unknown",
+      );
+    }
   });
 });
 
@@ -116,6 +129,34 @@ describe("ledger.summarizeUsage", () => {
     expect(summary.groups.find((g) => g.model === "gpt-6.1-terra")?.estimatedUsd).toBe("unknown");
     expect(summary.estimatedUsd).toBe("unknown");
     expect(summary.estimatedUsdPer1000Requests).toBe("unknown");
+  });
+
+  it("aggregated totals cost exactly the sum of per-call estimates (SQL path = row path)", () => {
+    const rows = [
+      row({ step: "router", inputTokens: 500, cachedInputTokens: 0, outputTokens: 40 }),
+      row({}),
+      row({ requestId: "r2", inputTokens: 3_000, cachedInputTokens: 2_500, outputTokens: 90 }),
+      row({ requestId: "r3", inputTokens: 100, cachedInputTokens: 300, outputTokens: 5 }),
+    ];
+    const perCall = rows.reduce((sum, r) => sum + (estimateCost(r, modelCatalog) as number), 0);
+    const summary = summarizeTotals(totalsFromRows(rows), modelCatalog);
+    expect(summary.estimatedUsd).toBeCloseTo(perCall, 12);
+    expect(summary).toEqual(summarizeUsage(rows, modelCatalog));
+  });
+
+  it("estimateGroupCost: unknown usage in any call, or an unknown model, is unknown", () => {
+    const [group] = totalsFromRows([row({}), row({ outputTokens: null })]).groups;
+    if (!group) throw new Error("no group");
+    expect(estimateGroupCost(group, modelCatalog)).toBe("unknown");
+    expect(estimateGroupCost({ ...group, callsWithUnknownTokens: 0 }, modelCatalog)).toEqual(
+      expect.any(Number),
+    );
+    expect(
+      estimateGroupCost(
+        { ...group, callsWithUnknownTokens: 0, model: "retired-model" as "gpt-6-luna" },
+        modelCatalog,
+      ),
+    ).toBe("unknown");
   });
 
   it("an empty ledger costs nothing and has no cache ratio", () => {
