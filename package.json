@@ -2,7 +2,7 @@
   "name": "lumi",
   "version": "0.0.0",
   "private": true,
-  "description": "Lumi — a bilingual family support prototype for a fictional children's cancer foundation.",
+  "description": "Lumi \u2014 a bilingual family support prototype for a fictional children's cancer foundation.",
   "type": "module",
   "packageManager": "pnpm@10.17.1",
   "engines": {
@@ -18,7 +18,8 @@
     "test": "vitest run",
     "test:kb": "vitest run src/server/knowledge evals",
     "eval": "node evals/run.ts",
-    "db:generate": "drizzle-kit generate"
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate"
   },
   "dependencies": {
     "@ai-sdk/openai": "^4.0.106",

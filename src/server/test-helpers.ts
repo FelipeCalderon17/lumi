@@ -5,6 +5,7 @@
 import { simulateReadableStream } from "ai";
 import { MockLanguageModelV4 } from "ai/test";
 import type { RequestContext } from "./context";
+import type { GapRecord, GapStore } from "./gaps";
 import { type Article, buildKnowledgeBase, type KnowledgeBase } from "./knowledge";
 import type { Language } from "./types";
 
@@ -144,4 +145,45 @@ export function testCtx(overrides: Partial<RequestContext> = {}): RequestContext
     signal: new AbortController().signal,
     ...overrides,
   };
+}
+
+type StoredGap = GapRecord & { deleteTokenHash: string };
+
+/** An in-memory GapStore with the same semantics as the Drizzle one. */
+export function memoryGapStore(now: () => Date = () => new Date()) {
+  const rows: StoredGap[] = [];
+  let next = 1;
+  const store: GapStore = {
+    async insert(row) {
+      const id = `00000000-0000-4000-8000-${String(next++).padStart(12, "0")}`;
+      rows.push({ ...row, id, createdAt: now() });
+      return { id };
+    },
+    async listRecent(limit) {
+      return [...rows]
+        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+        .slice(0, limit)
+        .map(({ deleteTokenHash: _hash, ...record }) => record);
+    },
+    async delete(id) {
+      const index = rows.findIndex((r) => r.id === id);
+      if (index === -1) return false;
+      rows.splice(index, 1);
+      return true;
+    },
+    async deleteWithTokenHash(id, hash) {
+      const index = rows.findIndex((r) => r.id === id && r.deleteTokenHash === hash);
+      if (index === -1) return false;
+      rows.splice(index, 1);
+      return true;
+    },
+    async purgeOlderThan(cutoff) {
+      const before = rows.length;
+      for (let i = rows.length - 1; i >= 0; i--) {
+        if ((rows[i] as StoredGap).createdAt < cutoff) rows.splice(i, 1);
+      }
+      return before - rows.length;
+    },
+  };
+  return { store, rows };
 }

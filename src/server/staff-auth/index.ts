@@ -1,4 +1,5 @@
-import { NotImplementedError } from "../types";
+import { createHash, createHmac, timingSafeEqual } from "node:crypto";
+import { config } from "../config";
 
 /**
  * Staff access to the gaps view (ADR 0008).
@@ -18,21 +19,61 @@ export type StaffAuthConfig =
   | { enabled: true; passcode: string; sessionSecret: string }
   | { enabled: false; reason: "missing_passcode" | "missing_or_weak_secret" };
 
-export function readStaffAuthConfig(_env: Record<string, string | undefined>): StaffAuthConfig {
-  // TODO(phase-3)
-  throw new NotImplementedError("staffAuth.readStaffAuthConfig");
+export function readStaffAuthConfig(env: Record<string, string | undefined>): StaffAuthConfig {
+  const passcode = env.STAFF_PASSCODE?.trim() ?? "";
+  const sessionSecret = env.STAFF_SESSION_SECRET?.trim() ?? "";
+  if (passcode === "") return { enabled: false, reason: "missing_passcode" };
+  if (sessionSecret.length < config.staff.minSecretLength) {
+    return { enabled: false, reason: "missing_or_weak_secret" };
+  }
+  return { enabled: true, passcode, sessionSecret };
 }
 
-export function issueSessionToken(_secret: string, _nowMs: number, _ttlMs: number): string {
-  // TODO(phase-3)
-  throw new NotImplementedError("staffAuth.issueSessionToken");
+/** Constant-time comparison of any two strings (hashing first makes the lengths equal). */
+export function passcodeMatches(submitted: string, expected: string): boolean {
+  const a = createHash("sha256").update(submitted).digest();
+  const b = createHash("sha256").update(expected).digest();
+  return timingSafeEqual(a, b);
+}
+
+function sign(secret: string, expiresAtMs: number): string {
+  return createHmac("sha256", secret).update(String(expiresAtMs)).digest("base64url");
+}
+
+export function issueSessionToken(secret: string, nowMs: number, ttlMs: number): string {
+  const expiresAtMs = nowMs + ttlMs;
+  return `${expiresAtMs}.${sign(secret, expiresAtMs)}`;
 }
 
 export function verifySessionToken(
-  _token: string | undefined,
-  _secret: string,
-  _nowMs: number,
+  token: string | undefined,
+  secret: string,
+  nowMs: number,
 ): boolean {
-  // TODO(phase-3): parse, check expiry, timingSafeEqual on the HMAC.
-  throw new NotImplementedError("staffAuth.verifySessionToken");
+  if (!token) return false;
+  const match = /^(\d{1,16})\.([A-Za-z0-9_-]{43})$/.exec(token);
+  if (!match) return false;
+  const [, expiresRaw = "", signature = ""] = match;
+  const expiresAtMs = Number(expiresRaw);
+  if (!Number.isSafeInteger(expiresAtMs) || expiresAtMs <= nowMs) return false;
+  const expected = Buffer.from(sign(secret, expiresAtMs));
+  const given = Buffer.from(signature);
+  return given.length === expected.length && timingSafeEqual(given, expected);
+}
+
+export type StaffSessionCheck =
+  | { ok: true }
+  | { ok: false; status: 401 | 503; error: "unauthorized" | "staff_disabled" };
+
+/** The one check every staff route runs first. Disabled config → 503, always. */
+export function checkStaffSession(
+  auth: StaffAuthConfig,
+  token: string | undefined,
+  nowMs: number = Date.now(),
+): StaffSessionCheck {
+  if (!auth.enabled) return { ok: false, status: 503, error: "staff_disabled" };
+  if (!verifySessionToken(token, auth.sessionSecret, nowMs)) {
+    return { ok: false, status: 401, error: "unauthorized" };
+  }
+  return { ok: true };
 }

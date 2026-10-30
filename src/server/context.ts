@@ -25,3 +25,16 @@ export function isDeadline(signal: AbortSignal): boolean {
     signal.aborted && signal.reason instanceof DOMException && signal.reason.name === "TimeoutError"
   );
 }
+
+/** Rejects with a TimeoutError if `promise` hasn't settled within `ms`. For DB calls. */
+export async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new DOMException("deadline", "TimeoutError")), ms);
+  });
+  try {
+    return await Promise.race([promise, timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
+}

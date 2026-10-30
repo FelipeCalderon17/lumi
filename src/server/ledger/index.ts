@@ -33,6 +33,11 @@ export interface UsageLedger {
   record(entry: UsageEntry): Promise<void>;
 }
 
+/** Read side, for the staff summary. Bounded by a cutoff and a row limit. */
+export interface UsageReader {
+  since(cutoff: Date, limit: number): Promise<UsageRow[]>;
+}
+
 /** The numeric facts cost is derived from (a ledger row, or an eval run's call). */
 export type UsageFacts = Pick<
   ModelCall,

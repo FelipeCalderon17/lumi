@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { en } from "@/i18n/dictionaries/en";
 import { es } from "@/i18n/dictionaries/es";
 import { ABSTAIN_MARKER } from "../answer";
+import { config } from "../config";
 import { findContentViolations } from "../content-rules";
 import { LANGUAGES } from "../types";
 import { type Article, countWords, MEDICAL_REDIRECT_ARTICLE_ID, parseArticleFile } from "./index";
@@ -101,6 +102,20 @@ describe("KB content", () => {
     for (const { article } of all) {
       if (MUST_BE_HIGH_RISK.includes(article.id))
         expect([article.id, article.risk]).toEqual([article.id, "high"]);
+    }
+  });
+
+  it("the gap retention stated in how-lumi-can-help matches config.gaps.retentionDays", () => {
+    // The article repeats the processing and retention disclosure (ADR 0005); if config changes,
+    // the article must change with it.
+    const stated = {
+      en: /deleted after (\d+) days/,
+      es: /se borra a los (\d+) días/,
+    } as const;
+    for (const lang of LANGUAGES) {
+      const article = kb[lang].find((e) => e.article.id === "how-lumi-can-help")?.article;
+      const days = article ? stated[lang].exec(article.body)?.[1] : undefined;
+      expect([lang, Number(days)]).toEqual([lang, config.gaps.retentionDays]);
     }
   });
 });

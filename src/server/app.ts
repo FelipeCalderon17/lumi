@@ -1,11 +1,15 @@
 import { randomBytes } from "node:crypto";
+import { createDb } from "../db/client";
+import { createDbGapStore, createDbLedger, createDbUsageReader } from "../db/stores";
 import { config } from "./config";
+import type { GapStore } from "./gaps";
 import { getKnowledgeBase } from "./knowledge";
-import { createNoopLedger, type UsageLedger } from "./ledger";
+import { createNoopLedger, type UsageLedger, type UsageReader } from "./ledger";
 import { consoleLogger, type Logger } from "./log";
 import { createOpenAIProvider, type ModelProvider } from "./models";
 import type { ChatDeps } from "./pipeline";
 import { createRateLimiter, type RateLimiter } from "./rate-limit";
+import { readStaffAuthConfig, type StaffAuthConfig } from "./staff-auth";
 
 /**
  * Composition root: builds the real dependencies once per process and hands them to the route
@@ -14,6 +18,10 @@ import { createRateLimiter, type RateLimiter } from "./rate-limit";
 export type ServerDeps = {
   models: ModelProvider;
   ledger: UsageLedger;
+  /** `null` without DATABASE_URL: gap save answers "not available in this demo". */
+  gapStore: GapStore | null;
+  usageReader: UsageReader | null;
+  staffAuth: StaffAuthConfig;
   limiters: Record<
     "chat" | "gaps" | "staffLogin" | "transcribe" | "notebook" | "modelCalls",
     RateLimiter
@@ -28,9 +36,14 @@ function limiter(opts: { windowMs: number; max: number }): RateLimiter {
   return createRateLimiter({ ...opts, maxKeys: config.rateLimit.maxTrackedKeys });
 }
 
-export function createServerDeps(): ServerDeps {
+export function createServerDeps(
+  env: Record<string, string | undefined> = process.env,
+): ServerDeps {
   const models = createOpenAIProvider();
-  const ledger = createNoopLedger();
+  // No DATABASE_URL → the chat still works; the ledger becomes a no-op (with one warning) and
+  // gaps are unavailable. postgres.js connects lazily, so this never blocks startup.
+  const db = env.DATABASE_URL ? createDb(env.DATABASE_URL) : null;
+  const ledger = db ? createDbLedger(db) : createNoopLedger();
   const limiters = {
     chat: limiter(config.rateLimit.chat),
     gaps: limiter(config.rateLimit.gaps),
@@ -43,6 +56,9 @@ export function createServerDeps(): ServerDeps {
   return {
     models,
     ledger,
+    gapStore: db ? createDbGapStore(db) : null,
+    usageReader: db ? createDbUsageReader(db) : null,
+    staffAuth: readStaffAuthConfig(env),
     limiters,
     rateLimitSalt: randomBytes(16).toString("hex"),
     log,
