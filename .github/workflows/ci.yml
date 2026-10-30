@@ -6,6 +6,7 @@ on:
   pull_request:
 
 # No secrets, no evals: evals call a paid API and run locally via `pnpm eval` (ADR 0007).
+# The build must succeed without any environment variables.
 jobs:
   check:
     runs-on: ubuntu-latest
@@ -20,3 +21,4 @@ jobs:
       - run: pnpm exec biome ci .
       - run: pnpm typecheck
       - run: pnpm test
+      - run: pnpm build
