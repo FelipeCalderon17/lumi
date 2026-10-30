@@ -123,7 +123,7 @@ export const en = {
   staff: {
     gapsTitle: "Unanswered questions",
     gapsLede:
-      "Questions Lumi couldn't answer, shared by parents who chose to. No names or conversations are stored. Use them to decide which guides to write next.",
+      "Questions Lumi couldn't answer, shared by parents who chose to. Saved questions may contain names or identifying details. No conversation history is stored. Use them to decide which guides to write next.",
     placeholder: "This view will be protected by a staff passcode.",
   },
   footer: {

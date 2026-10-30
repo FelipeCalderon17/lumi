@@ -117,7 +117,7 @@ export const es: Dictionary = {
   staff: {
     gapsTitle: "Preguntas sin respuesta",
     gapsLede:
-      "Preguntas que Lumi no pudo responder, compartidas por familias que decidieron hacerlo. No se guardan nombres ni conversaciones. Sirven para decidir qué guías escribir.",
+      "Preguntas que Lumi no pudo responder, compartidas por familias que decidieron hacerlo. Las preguntas guardadas pueden contener nombres o datos que identifiquen a una familia. No se guarda el historial de conversación. Sirven para decidir qué guías escribir.",
     placeholder: "Esta vista estará protegida con una clave para el equipo.",
   },
   footer: {
