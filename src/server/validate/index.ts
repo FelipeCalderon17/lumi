@@ -1,5 +1,3 @@
-import { NotImplementedError } from "../types";
-
 /**
  * Citation-integrity validation.
  *
@@ -20,15 +18,29 @@ export type CitationIntegrity =
       unknownHandles: readonly number[];
     };
 
-export function extractCitations(_text: string): number[] {
-  // TODO(phase-2): parse [n] and [n, m] markers.
-  throw new NotImplementedError("validate.extractCitations");
+/** `[3]` or grouped `[1, 3]`. Anything else in brackets is not a citation. */
+const CITATION = /\[(\d+(?:\s*,\s*\d+)*)\]/g;
+
+/** Every cited handle, in order of first appearance, without duplicates. */
+export function extractCitations(text: string): number[] {
+  const seen = new Set<number>();
+  for (const match of text.matchAll(CITATION)) {
+    for (const part of (match[1] ?? "").split(",")) seen.add(Number.parseInt(part.trim(), 10));
+  }
+  return [...seen];
 }
 
 export function checkCitationIntegrity(
-  _text: string,
-  _knownHandles: ReadonlySet<number>,
+  text: string,
+  knownHandles: ReadonlySet<number>,
 ): CitationIntegrity {
-  // TODO(phase-2)
-  throw new NotImplementedError("validate.checkCitationIntegrity");
+  const handles = extractCitations(text);
+  if (handles.length === 0) {
+    return { status: "invalid", reason: "no_citations", unknownHandles: [] };
+  }
+  const unknownHandles = handles.filter((handle) => !knownHandles.has(handle));
+  if (unknownHandles.length > 0) {
+    return { status: "invalid", reason: "unknown_handles", unknownHandles };
+  }
+  return { status: "valid", handles };
 }
