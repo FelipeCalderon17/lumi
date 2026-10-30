@@ -1,6 +1,12 @@
 import { getServerDeps } from "@/server/app";
 import { config } from "@/server/config";
-import { NDJSON_HEADERS, ndjsonStream, readJsonBounded, requestContextFrom } from "@/server/http";
+import {
+  bodyErrorResponse,
+  NDJSON_HEADERS,
+  ndjsonStream,
+  readJsonBounded,
+  requestContextFrom,
+} from "@/server/http";
 import { ChatRequestShapeSchema, startChat } from "@/server/pipeline";
 
 /**
@@ -10,7 +16,7 @@ import { ChatRequestShapeSchema, startChat } from "@/server/pipeline";
 export async function POST(request: Request): Promise<Response> {
   const deps = getServerDeps();
   const body = await readJsonBounded(request, config.limits.maxRequestBytes);
-  if (!body.ok) return Response.json({ error: "too_large" }, { status: 413 });
+  if (!body.ok) return bodyErrorResponse(body.reason);
 
   const parsed = ChatRequestShapeSchema.safeParse(body.json);
   if (!parsed.success) return Response.json({ error: "invalid_request" }, { status: 400 });

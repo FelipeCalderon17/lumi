@@ -2,6 +2,7 @@ import { z } from "zod";
 import { getServerDeps } from "@/server/app";
 import { config } from "@/server/config";
 import {
+  bodyErrorResponse,
   PRIVATE_NO_STORE,
   readJsonBounded,
   requestContextFrom,
@@ -23,7 +24,7 @@ export async function POST(request: Request): Promise<Response> {
     return Response.json({ error: "rate_limited" }, { status: 429, headers: PRIVATE_NO_STORE });
   }
   const body = await readJsonBounded(request, config.limits.maxRequestBytes);
-  if (!body.ok) return Response.json({ error: "too_large" }, { status: 413 });
+  if (!body.ok) return bodyErrorResponse(body.reason, PRIVATE_NO_STORE);
   const parsed = LoginSchema.safeParse(body.json);
   if (!parsed.success || !passcodeMatches(parsed.data.passcode, auth.passcode)) {
     deps.log({ requestId: ctx.requestId, event: "staff_login", outcome: "rejected" });

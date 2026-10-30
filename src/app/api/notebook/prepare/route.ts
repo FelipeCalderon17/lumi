@@ -1,6 +1,6 @@
 import { getServerDeps } from "@/server/app";
 import { config } from "@/server/config";
-import { readJsonBounded, requestContextFrom } from "@/server/http";
+import { bodyErrorResponse, readJsonBounded, requestContextFrom } from "@/server/http";
 import { NotebookRequestShapeSchema, prepareNotebook } from "@/server/notebook";
 
 /**
@@ -10,7 +10,7 @@ import { NotebookRequestShapeSchema, prepareNotebook } from "@/server/notebook";
 export async function POST(request: Request): Promise<Response> {
   const deps = getServerDeps();
   const body = await readJsonBounded(request, config.limits.notebook.maxRequestBytes);
-  if (!body.ok) return Response.json({ error: "too_large" }, { status: 413 });
+  if (!body.ok) return bodyErrorResponse(body.reason);
   const shape = NotebookRequestShapeSchema.safeParse(body.json);
   if (!shape.success) return Response.json({ error: "invalid_request" }, { status: 400 });
 

@@ -1,6 +1,6 @@
 import { getServerDeps } from "@/server/app";
 import { config } from "@/server/config";
-import { readBytesBounded, requestContextFrom } from "@/server/http";
+import { bodyErrorResponse, readBytesBounded, requestContextFrom } from "@/server/http";
 import { handleTranscription, TranscribeQuerySchema } from "@/server/transcribe";
 
 /**
@@ -15,8 +15,11 @@ export async function POST(request: Request): Promise<Response> {
   );
   if (!query.success) return Response.json({ error: "invalid_request" }, { status: 400 });
 
-  const body = await readBytesBounded(request.body, config.limits.audio.maxBytes);
-  if (!body.ok) return Response.json({ error: "too_large" }, { status: 413 });
+  const body = await readBytesBounded(request.body, config.limits.audio.maxBytes, {
+    signal: request.signal,
+    deadlineMs: config.timeouts.audioBodyReadMs,
+  });
+  if (!body.ok) return bodyErrorResponse(body.reason);
 
   const ctx = requestContextFrom(request, deps.rateLimitSalt);
   const { httpStatus, body: result } = await handleTranscription(

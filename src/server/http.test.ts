@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { ChatEvent } from "./events";
 import {
+  bodyErrorResponse,
   ndjsonStream,
   readBodyBounded,
   readBytesBounded,
   readCookie,
+  readJsonBounded,
   requestContextFrom,
   sessionCookie,
 } from "./http";
@@ -55,6 +57,120 @@ describe("http.readBytesBounded", () => {
   it("returns the exact bytes when they fit", async () => {
     const read = await readBytesBounded(streamOf("ab", "c"), 10);
     expect(read.ok && new TextDecoder().decode(read.bytes)).toBe("abc");
+  });
+});
+
+/** A body that sends `first`, then never sends more or closes. `cancel()` may never settle. */
+function stalledStream(first: string, opts: { hangingCancel?: boolean } = {}) {
+  let cancelCalled = false;
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(new TextEncoder().encode(first));
+    },
+    cancel() {
+      cancelCalled = true;
+      return opts.hangingCancel ? new Promise<void>(() => {}) : undefined;
+    },
+  });
+  return { stream, cancelled: () => cancelCalled };
+}
+
+const elapsed = async <T>(work: Promise<T>) => {
+  const started = performance.now();
+  const value = await work;
+  return { value, ms: performance.now() - started };
+};
+
+describe("http.readBytesBounded (bounded in time, Codex review 3)", () => {
+  it("a stalled stream → timeout at the read deadline, and the stream is cancelled", async () => {
+    const { stream, cancelled } = stalledStream("{");
+    const { value, ms } = await elapsed(readBytesBounded(stream, 100, { deadlineMs: 30 }));
+    expect(value).toEqual({ ok: false, reason: "timeout" });
+    expect(ms).toBeLessThan(500);
+    expect(cancelled()).toBe(true);
+  });
+
+  it("the request signal aborting → aborted, without waiting for the deadline", async () => {
+    const { stream } = stalledStream("{");
+    const client = new AbortController();
+    setTimeout(() => client.abort(), 10);
+    const { value, ms } = await elapsed(
+      readBytesBounded(stream, 100, { signal: client.signal, deadlineMs: 10_000 }),
+    );
+    expect(value).toEqual({ ok: false, reason: "aborted" });
+    expect(ms).toBeLessThan(500);
+  });
+
+  it("an already-aborted signal → aborted", async () => {
+    expect(
+      await readBytesBounded(stalledStream("{").stream, 100, { signal: AbortSignal.abort() }),
+    ).toEqual({ ok: false, reason: "aborted" });
+  });
+
+  it("an errored stream → stream_error", async () => {
+    const errored = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode("{"));
+        setTimeout(() => controller.error(new Error("socket reset")), 5);
+      },
+    });
+    expect(await readBytesBounded(errored, 100)).toEqual({ ok: false, reason: "stream_error" });
+    const locked = streamOf("x");
+    locked.getReader();
+    expect(await readBytesBounded(locked, 100)).toEqual({ ok: false, reason: "stream_error" });
+  });
+
+  it("oversized body whose cancel() never settles → too_large, after at most cancelWaitMs", async () => {
+    const { stream, cancelled } = stalledStream("x".repeat(200), { hangingCancel: true });
+    const { value, ms } = await elapsed(readBytesBounded(stream, 100, { cancelWaitMs: 20 }));
+    expect(value).toEqual({ ok: false, reason: "too_large" });
+    expect(cancelled()).toBe(true);
+    expect(ms).toBeLessThan(500);
+  });
+
+  it("stalled body whose cancel() never settles still returns", async () => {
+    const { stream } = stalledStream("{", { hangingCancel: true });
+    const { value, ms } = await elapsed(
+      readBytesBounded(stream, 100, { deadlineMs: 20, cancelWaitMs: 20 }),
+    );
+    expect(value).toEqual({ ok: false, reason: "timeout" });
+    expect(ms).toBeLessThan(500);
+  });
+
+  it("readJsonBounded uses the request's own signal", async () => {
+    const client = new AbortController();
+    const request = new Request("http://x/api/chat", {
+      method: "POST",
+      body: stalledStream("{").stream,
+      // @ts-expect-error Node's fetch needs duplex for a streaming body; not in the DOM types.
+      duplex: "half",
+      signal: client.signal,
+    });
+    setTimeout(() => client.abort(), 10);
+    expect(await readJsonBounded(request, 100, { deadlineMs: 10_000 })).toEqual({
+      ok: false,
+      reason: "aborted",
+    });
+  });
+});
+
+describe("http.bodyErrorResponse", () => {
+  it("maps each read failure to a controlled, uncached response", async () => {
+    for (const [reason, status, error] of [
+      ["too_large", 413, "too_large"],
+      ["timeout", 408, "body_timeout"],
+      ["aborted", 400, "aborted"],
+      ["stream_error", 400, "invalid_body"],
+    ] as const) {
+      const response = bodyErrorResponse(reason);
+      expect([reason, response.status, await response.json()]).toEqual([reason, status, { error }]);
+      expect(response.headers.get("cache-control")).toBe("no-store");
+    }
+    expect(
+      bodyErrorResponse("too_large", { "Cache-Control": "private, no-store" }).headers.get(
+        "cache-control",
+      ),
+    ).toBe("private, no-store");
   });
 });
 

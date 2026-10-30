@@ -137,6 +137,12 @@ export const config = {
     notebookMs: 30_000,
     /** One transcription call for up to maxAudioSeconds of audio. */
     transcribeMs: 30_000,
+    /** Reading a JSON request body (≤ 160 KB). A body still arriving after this → 408. */
+    bodyReadMs: 10_000,
+    /** Reading an audio upload (≤ 4 MB, possibly on a slow mobile connection). */
+    audioBodyReadMs: 30_000,
+    /** How long we wait for a body stream's cancel() when giving up on it; never longer. */
+    bodyCancelMs: 250,
   },
 
   limits: {
