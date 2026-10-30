@@ -14,7 +14,7 @@ Parents often have their hands full, or find it easier to say a worry out loud t
   - `gpt-4o-transcribe` is the fallback choice if the live check shows worse Spanish. `whisper-1` is older and weaker on noisy phone audio. Diarization isn't needed for one speaker.
   - Price is unknown (`usdPerMinute: null`), so its cost shows as "unknown" until Felipe verifies it.
 - **Limits** (`config.limits.audio`):
-  - **Max 2 minutes.** The server can't trust the client, so it checks three times: the body read stops at `maxBytes` (4 MB, about 2 minutes at 256 kbps); a declared `durationMs` over 2 minutes is refused before any model call; and if the provider measures more than 2 minutes (+2 s tolerance), the text is discarded.
+  - **Max 2 minutes.** The server can't trust the client, so it checks three times: the body read stops at `maxBytes` (4 MB, about 2 minutes at 256 kbps); a declared `durationMs` over 2 minutes is refused before any model call; and if the provider measures more than 2 minutes (+2 s tolerance), **or reports no duration at all**, the text is discarded (`failed`, reason `unverified_duration`; the ledger keeps the call with `audio_seconds` null). Only the provider's duration is trusted; the client's is a pre-check.
   - Media type allowlist plus a container signature check (WebM EBML header, MP4 `ftyp` box), so arbitrary files aren't forwarded.
   - Its own rate limit (`config.rateLimit.transcribe`, 30/hour per client) plus the instance-wide model-call ceiling.
 - **Privacy:** audio is held in memory for one request. It's never written to disk, stored or logged. AI SDK telemetry stays off. The ledger records numbers only: `audio_seconds`, tokens when the provider reports them, latency, outcome.
@@ -24,7 +24,7 @@ Parents often have their hands full, or find it easier to say a worry out loud t
 - Voice is a convenience, not a separate path: same safety checks, same limits on what reaches the model.
 - One more paid call type. It's capped per client and per instance, and its cost is visible in the staff view once the price is known.
 - The 2-minute limit cuts off long voice memos. That's on purpose: a short note is easier to edit and safer to send.
-- `durationMs` is client-reported. A client that lies can still only send `maxBytes`, and the provider's measured duration catches the rest.
+- `durationMs` is client-reported. A client that lies can still only send `maxBytes`, and the provider's measured duration catches the rest. If a provider or model change ever stops reporting duration, every transcription fails closed until that's fixed (visible in the ledger as `unverified_duration`).
 
 ## Alternatives
 - **Browser speech recognition (Web Speech API).** Free and on-device in some browsers, but quality varies, Spanish support is uneven, and in Chrome the audio goes to Google, which is worse to explain.

@@ -100,9 +100,42 @@ describe("transcribe.transcribeAudio (mocked model)", () => {
     expect(call).toMatchObject({ audioSeconds: 9, inputTokens: null, outputTokens: null });
   });
 
-  it("unknown duration and usage → null, never 0", async () => {
-    const { call } = await transcribeAudio(WEBM, testCtx(), { model: model() });
-    expect(call).toMatchObject({ audioSeconds: null, inputTokens: null, cachedInputTokens: null });
+  it("regression (Codex review 3): no trusted duration → controlled failure; ledger facts kept as null", async () => {
+    const { result, call } = await transcribeAudio(WEBM, testCtx(), { model: model() });
+    expect(result).toEqual({ status: "failed", reason: "unverified_duration" });
+    expect(JSON.stringify(result)).not.toContain("parking"); // the text is discarded
+    expect(call).toMatchObject({
+      audioSeconds: null,
+      inputTokens: null,
+      cachedInputTokens: null,
+      finishReason: "stop",
+    });
+  });
+
+  it("a short client-declared duration doesn't stand in for the provider's", async () => {
+    const rows: UsageEntry[] = [];
+    const out = await handleTranscription(
+      { audio: WEBM, contentType: "audio/webm", durationMs: 3_000 },
+      testCtx(),
+      {
+        model: model({ usage: { type: "tokens", input_tokens: 70, output_tokens: 8 } }),
+        limiters: {
+          transcribe: createRateLimiter({ windowMs: 60_000, max: 5, maxKeys: 10 }),
+          modelCalls: createRateLimiter({ windowMs: 60_000, max: 5, maxKeys: 1 }),
+        },
+        ledger: { record: async (entry: UsageEntry) => void rows.push(entry) },
+      },
+    );
+    expect(out.body).toEqual({ status: "failed", reason: "unverified_duration" });
+    await out.recorded;
+    expect(rows).toEqual([
+      expect.objectContaining({
+        audioSeconds: null,
+        inputTokens: 70,
+        failureReason: "unverified_duration",
+        outcome: "fallback",
+      }),
+    ]);
   });
 
   it("discards the text when the provider measures more than 2 minutes", async () => {
@@ -114,7 +147,11 @@ describe("transcribe.transcribeAudio (mocked model)", () => {
 
   it("silence → empty", async () => {
     expect(
-      (await transcribeAudio(WEBM, testCtx(), { model: model({ text: "  " }) })).result,
+      (
+        await transcribeAudio(WEBM, testCtx(), {
+          model: model({ text: "  ", durationInSeconds: 2 }),
+        })
+      ).result,
     ).toEqual({ status: "empty" });
   });
 
@@ -140,7 +177,9 @@ describe("transcribe.transcribeAudio (mocked model)", () => {
   });
 
   it("never puts the audio in the call metadata", async () => {
-    const { call } = await transcribeAudio(WEBM, testCtx(), { model: model() });
+    const { call } = await transcribeAudio(WEBM, testCtx(), {
+      model: model({ durationInSeconds: 2 }),
+    });
     expect(Object.keys(call ?? {})).not.toContain("audio");
   });
 });

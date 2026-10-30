@@ -18,7 +18,9 @@ import { LANGUAGES } from "../types";
  *   1. bytes: the body read stops at config.limits.audio.maxBytes (sized for 2 minutes);
  *   2. declared length: the client sends the recording's duration; over 2 minutes is refused
  *      before any model call;
- *   3. measured length: if the provider reports more than 2 minutes, the text is discarded.
+ *   3. measured length: the provider's own duration is the only trusted one. If it reports
+ *      more than 2 minutes, or reports no duration at all, the text is discarded (controlled
+ *      failure). The client's duration is a pre-check only, never a substitute.
  */
 
 export const TranscribeQuerySchema = z.object({
@@ -169,10 +171,12 @@ export async function transcribeAudio(
         : null;
     const facts = call(audioSeconds, tokens, true);
 
-    if (
-      audioSeconds !== null &&
-      audioSeconds > config.limits.audio.maxSeconds + TOLERANCE_SECONDS
-    ) {
+    // No trusted duration → we can't verify the limit, so the text isn't used. The ledger
+    // still records the call, with audioSeconds null (unknown).
+    if (audioSeconds === null) {
+      return { result: { status: "failed", reason: "unverified_duration" }, call: facts };
+    }
+    if (audioSeconds > config.limits.audio.maxSeconds + TOLERANCE_SECONDS) {
       return { result: { status: "too_long" }, call: facts };
     }
     const text = transcript.text.trim();

@@ -12,6 +12,8 @@ export type FailureReason =
   | "timeout"
   | "provider_error"
   | "invalid_output"
+  /** Transcription: the provider reported no duration, so the 2-minute limit can't be verified. */
+  | "unverified_duration"
   /** finishReason "length": the answer was cut off by maxOutputTokens. Never shown. */
   | "truncated"
   /** finishReason "interrupted" / "error" / "other", or a stream that ended without a finish. */
