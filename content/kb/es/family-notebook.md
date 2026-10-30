@@ -48,7 +48,7 @@ Durante el tratamiento hay muchos nombres, fechas, papeles e indicaciones. Un cu
 - Lleva el cuaderno a todas las consultas.
 - Toma fotos de los papeles importantes como respaldo.
 - Si otra persona lleva a tu hijo o hija a una cita, dale el cuaderno.
-- Algunos hospitales tienen un portal en línea para pacientes, con fechas y mensajes. Pregúntale al equipo médico cómo usarlo. No reemplaza tu cuaderno.
+- Algunos hospitales tienen un portal en línea para pacientes, con fechas de estudios y mensajes. Pregúntale al equipo médico cómo usarlo. No reemplaza tu cuaderno.
 
 ## A quién preguntar
 

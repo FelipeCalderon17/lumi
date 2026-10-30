@@ -27,7 +27,7 @@ A veces el médico de tu hijo o hija tiene que llenar los formularios del permis
 
 ## Qué decirles a tu jefe y a tus compañeros
 
-Tú decides cuánto compartir. Puede bastar con decir: "Uno de mis hijos está recibiendo tratamiento médico y es posible que necesite ausentarme sin mucho aviso". No tienes que dar detalles.
+Tú decides cuánto compartir. Puede bastar con decir: "Uno de mis hijos está recibiendo tratamiento médico y es posible que necesite ausentarme sin mucho aviso". Puedes dar una explicación breve a tus compañeros. Pregúntale a Recursos Humanos qué información y formularios necesitas para pedir el permiso y cómo entregarlos de forma privada.
 
 ## Repartan la carga
 

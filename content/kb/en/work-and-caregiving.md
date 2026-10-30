@@ -27,7 +27,7 @@ Leave forms sometimes need to be filled in by your child's doctor. Give the form
 
 ## What to tell your manager and coworkers
 
-You decide how much to share. It can be enough to say: "My child is having medical treatment, and I may need time off at short notice." You don't have to share details.
+You decide how much to share. It can be enough to say: "My child is having medical treatment, and I may need time off at short notice." You can keep conversations with coworkers brief. Ask HR what information and forms are needed for a leave request, and how to submit them privately.
 
 ## Share the load
 

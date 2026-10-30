@@ -7,7 +7,7 @@ risk: high
 reviewedAt: 2026-10-30
 ---
 
-Los niños suelen sobrellevar mejor las cosas cuando escuchan la verdad con palabras que pueden entender. No necesitas palabras perfectas. Necesitas palabras sencillas y sinceras, dichas con cariño, y repetidas cuantas veces haga falta.
+Empieza con palabras sencillas y sinceras. Pídele al equipo médico ayuda para explicar lo que está pasando. No necesitas palabras perfectas. Necesitas palabras sencillas y sinceras, dichas con cariño, y repetidas cuantas veces haga falta.
 
 ## Antes de hablar
 
@@ -38,8 +38,8 @@ Los niños suelen sobrellevar mejor las cosas cuando escuchan la verdad con pala
 
 - **No prometas lo que no puedes saber.** En vez de "no te va a doler", prueba con "si te duele, me dices y se lo decimos a la enfermera".
 - **Está bien decir "no sé".** Puedes agregar: "Vamos a preguntarle juntos al equipo médico".
-- **Todos los sentimientos están bien.** El enojo, el miedo, el silencio y las bromas son formas normales de sobrellevarlo.
-- **Sigan hablando.** Muchas conversaciones cortas ayudan más que una sola conversación larga.
+- **Todos los sentimientos están bien.** Dale espacio para expresar lo que siente o quedarse en silencio. Si te preocupa cómo lo está llevando, pide apoyo al equipo médico.
+- **Sigan hablando.** Deja espacio para más preguntas y conversaciones cortas.
 
 ## A quién preguntar
 

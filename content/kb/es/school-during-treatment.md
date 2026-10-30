@@ -3,7 +3,7 @@ id: school-during-treatment
 lang: es
 title: La escuela durante el tratamiento
 category: family-and-school
-risk: standard
+risk: high
 reviewedAt: 2026-10-30
 ---
 
@@ -35,7 +35,7 @@ Algunos hospitales tienen maestros o programas escolares para niños en tratamie
 - Pregúntale al equipo médico cuándo puede volver y si hay alguna regla, como evitar lugares con mucha gente o ciertas actividades.
 - Comparte esas reglas con la escuela por escrito.
 - Habla con tu hijo o hija sobre lo que podrían preguntarle sus amigos, y practiquen juntos respuestas sencillas.
-- Volver primero a medio tiempo suele ser más fácil.
+- Pregúntales al equipo médico y a la escuela si una jornada escolar más corta sería adecuada para tu hijo o hija.
 
 ## Los hermanos
 

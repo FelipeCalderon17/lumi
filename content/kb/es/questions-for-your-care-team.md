@@ -43,7 +43,7 @@ El equipo médico de tu hijo o hija es el lugar indicado para cualquier pregunta
 - Está bien pedir que hablen más despacio, que repitan algo o que usen palabras más sencillas.
 - Repite lo que entendiste: "Entonces, lo que me dice es…". Así se aclaran malentendidos.
 - Pide por escrito la información importante.
-- Si prefieres hablar en español, pide un intérprete. La mayoría de los hospitales pueden conseguir uno.
+- Si prefieres hablar en español o en otro idioma, pide un intérprete. La mayoría de los hospitales pueden conseguir uno.
 
 ## Después de la consulta
 

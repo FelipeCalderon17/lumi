@@ -3,7 +3,7 @@ id: first-days-at-the-hospital
 lang: en
 title: "Your first days at the hospital: what to bring"
 category: hospital-logistics
-risk: standard
+risk: high
 reviewedAt: 2026-10-30
 ---
 

@@ -3,7 +3,7 @@ id: school-during-treatment
 lang: en
 title: School during treatment
 category: family-and-school
-risk: standard
+risk: high
 reviewedAt: 2026-10-30
 ---
 
@@ -35,7 +35,7 @@ Some hospitals have teachers or school programs for children in treatment. Ask t
 - Ask your child's care team when it's okay to go back, and whether there are any rules, like avoiding crowds or certain activities.
 - Share those rules with the school in writing.
 - Talk with your child about what friends might ask, and practice simple answers together.
-- Going back part-time at first is often easier.
+- Ask your child's care team and school whether a shorter school day would fit your child's needs.
 
 ## Brothers and sisters
 

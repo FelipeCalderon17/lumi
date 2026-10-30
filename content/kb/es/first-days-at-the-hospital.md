@@ -3,7 +3,7 @@ id: first-days-at-the-hospital
 lang: es
 title: "Tus primeros días en el hospital: qué llevar"
 category: hospital-logistics
-risk: standard
+risk: high
 reviewedAt: 2026-10-30
 ---
 

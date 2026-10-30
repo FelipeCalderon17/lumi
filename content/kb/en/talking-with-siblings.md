@@ -3,7 +3,7 @@ id: talking-with-siblings
 lang: en
 title: Talking with your other children
 category: family-and-school
-risk: standard
+risk: high
 reviewedAt: 2026-10-30
 ---
 
@@ -40,7 +40,7 @@ A short note to their teacher or school counselor helps. Then the school can und
 
 ## When they may need more help
 
-If you notice changes that last, like trouble sleeping, pulling away from friends, or falling behind at school, talk with the school counselor or the hospital social worker. Asking for help is part of caring for them.
+If you're worried about how another child is coping, contact their healthcare professional. The school counselor or hospital social worker can help you find support. Asking for help is part of caring for them.
 
 ## Who to ask
 

@@ -3,7 +3,7 @@ id: talking-with-siblings
 lang: es
 title: Cómo hablar con tus otros hijos
 category: family-and-school
-risk: standard
+risk: high
 reviewedAt: 2026-10-30
 ---
 
@@ -40,7 +40,7 @@ Una nota breve a su maestro o al consejero escolar ayuda. Así la escuela puede 
 
 ## Cuándo pueden necesitar más ayuda
 
-Si notas cambios que duran, como problemas para dormir, alejarse de sus amigos o atrasarse en la escuela, habla con el consejero escolar o con el trabajador social del hospital. Pedir ayuda también es cuidarlos.
+Si te preocupa cómo lo está llevando alguno de tus otros hijos, consulta con su profesional de salud. El consejero escolar o el trabajador social del hospital pueden ayudarte a encontrar apoyo. Pedir ayuda también es cuidarlos.
 
 ## A quién preguntar
 

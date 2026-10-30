@@ -3,7 +3,7 @@ id: how-lumi-can-help
 lang: es
 title: Cómo puede ayudarte Lumi
 category: about-lumi
-risk: standard
+risk: high
 reviewedAt: 2026-10-30
 ---
 

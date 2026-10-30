@@ -7,7 +7,7 @@ risk: high
 reviewedAt: 2026-10-30
 ---
 
-Children usually cope better when they hear the truth in words they can understand. You don't need perfect words. You need honest, simple ones, said with love, more than once.
+Start with simple, honest words. Ask the care team for help explaining what is happening to your child. You don't need perfect words. You need honest, simple ones, said with love, more than once.
 
 ## Before you talk
 
@@ -38,8 +38,8 @@ Children usually cope better when they hear the truth in words they can understa
 
 - **Don't promise what you can't know.** Instead of "it won't hurt", try "if it hurts, tell me, and we'll tell the nurse".
 - **It's okay to say "I don't know".** You can add: "Let's ask the care team together."
-- **Let feelings be okay.** Anger, fear, silence and jokes are all normal ways to cope.
-- **Keep talking.** One big talk is less helpful than many small ones.
+- **Let feelings be okay.** Give your child room to express feelings or stay quiet. If you're worried about how they're coping, ask the care team for support.
+- **Keep talking.** Leave room for more questions and short conversations.
 
 ## Who to ask
 

@@ -37,17 +37,17 @@ Spanish articles are written in Spanish (not machine-translated at runtime) — 
 
 | id | Category | Risk |
 |---|---|---|
-| `first-days-at-the-hospital` | hospital-logistics | standard |
+| `first-days-at-the-hospital` | hospital-logistics | **high** |
 | `getting-there-and-staying-nearby` | hospital-logistics | standard |
 | `talking-with-your-child` | family-and-school | **high** |
-| `talking-with-siblings` | family-and-school | standard |
-| `school-during-treatment` | family-and-school | standard |
+| `talking-with-siblings` | family-and-school | **high** |
+| `school-during-treatment` | family-and-school | **high** |
 | `questions-for-your-care-team` | talking-with-the-care-team | **high** (medical template target) |
 | `when-to-call-your-care-team` | talking-with-the-care-team | **high** |
 | `family-notebook` | talking-with-the-care-team | **high** |
 | `paying-for-care` | money-and-work | standard |
 | `work-and-caregiving` | money-and-work | standard |
 | `taking-care-of-yourself` | caring-for-yourself | **high** (contains the 988 line) |
-| `how-lumi-can-help` | about-lumi | standard |
+| `how-lumi-can-help` | about-lumi | **high** |
 
 We add articles only when the golden set or the gaps view shows a real need.

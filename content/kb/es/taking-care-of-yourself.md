@@ -36,7 +36,7 @@ Cuando alguien te pregunte "¿En qué te ayudo?", elige una cosa de la lista. Pu
 
 ## Cuando es demasiado
 
-Es normal sentir miedo, enojo, cansancio o como si no sintieras nada. Si esos sentimientos duran mucho tiempo o empiezan a sentirse insoportables, busca al trabajador social del hospital o a tu propio médico.
+Es normal sentir miedo, enojo, cansancio o como si no sintieras nada. Puedes pedir apoyo al trabajador social del hospital o a tu propio médico cuando lo necesites.
 
 Si estás en una crisis emocional, llama o envía un mensaje de texto al 988 para comunicarte con la 988 Suicide & Crisis Lifeline, a cualquier hora, de día o de noche. Para recibir atención en español, llama al 988 y elige la opción de español, o envía AYUDA por mensaje de texto al 988.
 

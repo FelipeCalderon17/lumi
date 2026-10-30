@@ -36,7 +36,7 @@ When someone asks "How can I help?", pick one thing from the list. You can ask o
 
 ## When it's too much
 
-It's normal to feel scared, angry, numb or exhausted. If those feelings stay for a long time, or start to feel unbearable, reach out to the hospital social worker or your own doctor.
+It's normal to feel scared, angry, numb or exhausted. You can ask the hospital social worker or your own doctor for support whenever you need it.
 
 If you're in emotional crisis, call or text 988 to reach the 988 Suicide & Crisis Lifeline, any time, day or night. For Spanish, choose the Spanish option when calling, or text AYUDA to 988.
 
