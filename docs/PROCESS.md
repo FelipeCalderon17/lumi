@@ -180,3 +180,31 @@ Nothing was rejected outright.
 **Free HTTP check on the production build** (`next start`, no model reached): mixed-intent emergency → NDJSON `emergency` (safety) with `no-store`; a 1,500-character Spanish self-harm message → `emergency` before the length check; too long → 400; 9 KB body → 413; bad JSON → 400; WAV upload → 415; declared 200 s recording → 400; gap save without a database → `unavailable`; staff list without a session → 401 `private, no-store`; a notebook note about a seizure → `emergency` with `noteIndex`. Server logs held request ids, outcomes and rule ids only.
 
 **Checks.** `pnpm lint` ✓, `pnpm typecheck` ✓, `pnpm test` ✓ (24 files, 378 tests, 0 todo), `pnpm test:kb` ✓ (4 files, 127 tests), `pnpm build` ✓ (no warnings).
+
+## Entry 5 — KB fixes from Codex review round 2 (2026-10-30)
+
+A fixes-only round: the reviewer's findings plus Felipe's decisions on them, nothing else. No server logic, pricing, notebook, phone guardrails or UI changed. Exact replacement text was used unless noted.
+
+| Finding | Status | Notes |
+|---|---|---|
+| M1 Emergency wording | Applied | `emergency.banner` (EN/ES) and the 911 paragraph of `when-to-call-your-care-team`. Outside-US sentences kept. |
+| M2 Part-time return to school | Applied | `school-during-treatment` EN/ES. |
+| M3 Fallback points to a fictitious team | Adapted | Bodies replaced. The given fallback text begins with "Lumi can't answer right now.", which is already the fallback **title**, so the body starts at the second sentence to avoid showing it twice. The ES title became "Lumi no puede responder ahora." so title + body read exactly as the reviewer wrote. A dictionary test now checks that neither body names the family team. |
+| M4 Privacy and retention disclosure | Applied | `gaps.disclosure` EN/ES and `how-lumi-can-help` EN/ES. The disclosure is a literal string, not built from config; the existing test still checks it contains `config.gaps.retentionDays`. The KB retention test's regex was updated to the new sentence and still compares the number to config. ADR 0005's quoted note updated to match. |
+| S1 Four more high-risk articles | Applied | `first-days-at-the-hospital`, `talking-with-siblings`, `school-during-treatment`, `how-lumi-can-help` → `risk: high` in EN and ES; `content/kb/README.md` table updated. **Felipe: these four now need your personal review.** |
+| S2 `talking-with-your-child` | Applied | Lines 10, 41, 42 in EN and ES. |
+| S3 Don't wait for problems to "last" | Applied | `talking-with-siblings` and `taking-care-of-yourself` EN/ES. |
+| S4 ES parity | Applied | Interpreter "o en otro idioma"; notebook "fechas de estudios". |
+| S5 Work and privacy | Applied | `work-and-caregiving` EN/ES. |
+| S6 Naming OpenAI (Felipe's decision) | Applied | The exception sentence is in CONTENT-GUIDELINES (§ Truthfulness and § Automated checks) and ADR 0005. `AI_PROCESSOR_NAME` in `content-rules.ts`; tests allow "OpenAI" only in `help.processingNotice` and in `how-lumi-can-help` (EN/ES). 911/988 were already enforced. |
+| N1 Actionable 988 Spanish access | Applied | ES: `emergency.crisisBanner`, `safety.selfHarm`, `safety.crisis`, `safety.crisisLine` and the self-care article. EN endings changed the same way. `crisisLine` and the KB line stay identical (KB test passes). |
+| Golden: practical-es-006 | Adapted | The schema has no conditional expectations, and changing it would go beyond a fix. The case keeps `["answer","medical"]` with `articles: [when-to-call-your-care-team]` and `mustCite`, and its note plus EVALS.md now state the rule: `articles`/`mustCite` apply only to `answer`; the `medical` template always links `questions-for-your-care-team`. The Phase 4 runner must implement that rule. |
+| Golden: not-in-kb-en-001 | Applied | Note says a generic "ask the unit about its rules" answer is insufficient. |
+| Golden: unsupported-claim-es-001 | Applied | Note replaced verbatim. |
+| Golden: new EN+ES cases | Applied | Inpatient emergency, outside-US emergency, missing after-hours number, who to ask when Lumi can't help, contagion / prognosis / nutrition → `medical`, eligibility claims (school, insurance, leave, financial help) that must fail groundedness. |
+| Golden: fallback without fictitious staff | Adapted | A golden case can't force a fallback (it comes from failures, not input). Covered two ways: the dictionary test on the fixed fallback/abstained copy, and `fallback-contacts` cases ("If Lumi isn't working, who should I ask?") whose notes forbid presenting the placeholder family team as a contact. |
+| Golden: high-risk coverage | Applied | Added practical cases so every `risk: high` article has one in EN and ES; `golden.test.ts` now enforces it. Existing practical cases on newly high-risk articles got the `high-risk-article` tag. |
+
+The golden set is now **65 cases (34 EN / 31 ES)**, up from 40. Every new emergency input was checked against the deterministic safety rules (the existing golden-vs-safety test passes for all 65).
+
+**Checks.** `pnpm lint` ✓, `pnpm typecheck` ✓, `pnpm test` ✓ (24 files, 410 tests), `pnpm test:kb` ✓ (4 files, 129 tests), `pnpm build` ✓.
