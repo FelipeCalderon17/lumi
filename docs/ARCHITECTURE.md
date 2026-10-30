@@ -73,7 +73,7 @@ All thin adapters over `src/server`, with the same rules: bounded body read, Zod
 | `POST /api/transcribe` | `transcribe/` | Voice → text with `gpt-transcribe` ([ADR 0014](decisions/0014-voice-transcription.md)). webm/mp4/m4a, max 2 minutes (bytes, declared duration and provider-measured duration), container signature check. Returns text only; audio stays in memory for the request. |
 | `POST /api/notebook/prepare` | `notebook/` | The parent's on-device notes → a structured page: observations by topic + questions for the care team, each citing its source notes. Response: `{ safetyNotices, result }`. Safety check on every note first; a match adds a notice (fixed emergency steps shown first) but never blocks the page ([ADR 0003](decisions/0003-deterministic-safety-precheck.md)). Code checks the source indexes and that every number+unit in an item appears, same value and unit, in a cited note's text (timestamps aren't a source); dates come from the notes. Any failure → the raw notes grouped by date (`result.type: "notebook_fallback"`). Stateless. |
 | `POST /api/gaps`, `DELETE /api/gaps/[id]` | `gaps/` | Consented gap save (redacted, 30-day retention, one-time delete token) and parent delete. Save statuses: `saved` / `uncertain` (both with `id` + `deleteToken`; the id and token are created before the insert, and an `uncertain` save can be deleted or retried idempotently with `retry: { id, deleteToken }`) / `failed` (nothing written) / `unavailable` (no database). |
-| `POST /api/staff/login`, `/logout`; `GET /api/staff/gaps`; `DELETE /api/staff/gaps/[id]` | `staff-auth/`, `staff.ts` | Passcode → HMAC session cookie; every request verified; fails closed. The list shows gaps and usage with **derived** cost. |
+| `POST /api/staff/login`, `/logout`; `GET /api/staff/gaps`; `DELETE /api/staff/gaps/[id]` | `staff-auth/`, `staff.ts` | Passcode → HMAC session cookie; every request verified; fails closed. The list shows gaps and usage with **derived** cost, aggregated in SQL over the whole 30-day window (`complete: false` + a reason if the step × model group bound is hit). |
 
 Event names on the chat stream are the Phase 0 contract, confirmed as final by Felipe after Codex review 3: `abstained` is the "no answer" outcome and `fallback` (with a `reason`) covers every error, so there's no `no_answer` or `error` event.
 
@@ -138,13 +138,16 @@ The UI never shows a blank screen or a raw error. Every failure becomes a termin
 | Client disconnects | all | `ctx.signal` | Nothing (they left). Model call cancelled; ledger `cancelled`. |
 | Stream ends without a terminal event | client | NDJSON reader | Fallback. |
 | KB fails to load / invalid frontmatter | knowledge | Zod + KB tests in CI | Build/test fails, so it doesn't reach production. |
-| Database down | gaps, ledger | driver error / timeout | Chat unaffected. Ledger write skipped after `ledgerWriteMs`; gap save says "couldn't save, try later". |
+| Database down | gaps, ledger | driver error / timeout | Chat unaffected. Ledger write skipped after `ledgerWriteMs`. Gap save: `failed` if nothing was written ("couldn't save, try later"); `uncertain` if the insert may still commit (the parent gets the id + delete token to delete or retry idempotently). Postgres `statement_timeout` (`dbStatementMs`) cancels statements the app stopped waiting for. |
+| Router / notebook object with a non-`stop` finish | completion check | `incompleteFinish` | Not used even if schema-valid: `length` → truncated, anything else → interrupted. Usage still recorded. |
+| Transcription without a provider duration | transcribe | `audioSeconds === null` | Text discarded: `failed(unverified_duration)`. Ledger keeps the call with `audio_seconds` null. |
+| Stalled, aborted, errored or oversized body | all POST routes | read deadline, request signal, byte cap | 408 / 400 / 400 / 413 via `bodyErrorResponse`. A body stream's `cancel()` is awaited at most `bodyCancelMs`. |
 
 Retries: **one layer only**, `config.retry.maxRetries` passed to the AI SDK. No retry loops of our own, since stacked retries multiply cost and latency.
 
 ## Abuse controls
 
-- **Bounded body.** `readBodyBounded` reads the request stream and stops past `maxRequestBytes` (8 KB). `Content-Length` isn't trusted, and nothing over the cap is parsed.
+- **Bounded body.** `readBodyBounded` reads the request stream and stops past `maxRequestBytes` (8 KB). `Content-Length` isn't trusted, and nothing over the cap is parsed. Reads are bounded in time too: `bodyReadMs` (audio: `audioBodyReadMs`), the request's AbortSignal, and at most `bodyCancelMs` waiting for a stream's `cancel()`.
 - **Trusted client IP.** On Railway, the edge proxy appends the address it received the connection from to `X-Forwarded-For`. Anything to the left of that entry was sent by the client and can be forged. So we take the **right-most** entry (`config.clientIp.trustedProxyHops = 1`, `clientIpFromForwardedFor`). If the header is missing, the request goes into a shared "unknown" bucket rather than being unlimited. The hop count is config, because a CDN in front of Railway would add a hop. *To verify on first deploy:* log the header's entry count (never the IPs) once and confirm it's 1.
 - **Separate limiters** (`config.rateLimit`): chat per client, gap submissions per client, staff login per client, and an instance-wide model-call ceiling. Fixed windows in memory; expired entries are swept and the table is capped at `maxTrackedKeys`.
 - **Rate-limit keys** are a salted hash of the trusted IP, held in memory, never persisted or logged.
