@@ -19,7 +19,7 @@ La página "Pregúntale a Lumi" responde preguntas prácticas en español o en i
 - Si Lumi no tiene una guía sobre algo, te lo dice y te sugiere a quién preguntar.
 - Para todo lo relacionado con la salud de tu hijo o hija, Lumi te va a indicar que hables con el equipo médico.
 - Lumi no guarda tu conversación. Para buscar una respuesta, tu pregunta se envía a OpenAI, la empresa que opera el modelo de inteligencia artificial. Por favor, no incluyas nombres ni datos que identifiquen a tu familia.
-- Si Lumi no puede responder, puedes elegir enviar tu pregunta al equipo de Lumi para que escriban una guía nueva. Vas a ver exactamente lo que se guarda y puedes editarlo antes. El equipo puede leerlo, y se borra a los 30 días.
+- Si Lumi no puede responder, puedes elegir enviar tu pregunta al equipo de Lumi para que escriban una guía nueva. Vas a ver exactamente lo que se guarda y puedes editarlo antes. El equipo puede leerlo, y las preguntas de más de 30 días se borran cuando alguien guarda otra pregunta o el equipo abre la lista.
 
 ## El equipo de familias de Lumi
 

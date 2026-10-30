@@ -19,7 +19,7 @@ The "Ask Lumi" page answers practical questions in English or Spanish, any time 
 - If Lumi doesn't have a guide on something, it says so and suggests who to ask.
 - For anything about your child's health, Lumi will point you to your care team.
 - Lumi doesn't save your conversation. To find an answer, your question is sent to OpenAI, the company that runs the AI model. Please don't include names or details that identify your family.
-- If Lumi can't answer, you can choose to send your question to the Lumi team so they can write a new guide. You'll see exactly what is saved and can edit it first. The team can read it, and it's deleted after 30 days.
+- If Lumi can't answer, you can choose to send your question to the Lumi team so they can write a new guide. You'll see exactly what is saved and can edit it first. The team can read it, and questions older than 30 days are deleted when someone saves a question or staff opens the list.
 
 ## The Lumi family team
 

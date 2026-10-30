@@ -106,7 +106,7 @@ export const es: Dictionary = {
     offer: "¿Quieres enviar esta pregunta al equipo de Lumi para que escriban una guía?",
     previewLabel: "Esto es lo que guardaríamos. Puedes editarlo y quitar cualquier dato personal:",
     disclosure:
-      "El equipo de Lumi puede leer lo que guardes. Se conserva 30 días y luego se borra. No guardamos tu nombre, tu conversación ni los datos de tu dispositivo.",
+      "El equipo de Lumi puede leer la pregunta que decidas guardar. Antes de hacerlo, quita nombres y datos que identifiquen a tu familia. Guardamos la pregunta editada, su idioma, tema y fecha de envío. Las preguntas de más de 30 días se borran cuando alguien guarda otra pregunta o el equipo abre la lista.",
     save: "Guardar esta pregunta",
     cancel: "No, gracias",
     saved: "Gracias. El equipo verá tu pregunta.",

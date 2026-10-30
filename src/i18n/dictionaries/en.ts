@@ -112,7 +112,7 @@ export const en = {
     offer: "Would you like to send this question to the Lumi team so they can write a guide?",
     previewLabel: "This is what we'd save. You can edit it, and remove anything personal:",
     disclosure:
-      "Lumi staff can read what you save. It's kept for 30 days and then deleted. We don't save your name, your conversation or your device details.",
+      "Lumi staff can read the question you choose to save, so remove names and identifying details first. We save the edited question, its language, topic and submission date. Questions older than 30 days are deleted when someone saves a question or staff opens the list.",
     save: "Save this question",
     cancel: "No, thanks",
     saved: "Thank you. The team will see your question.",

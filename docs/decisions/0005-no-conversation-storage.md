@@ -9,7 +9,7 @@ An earlier version said gaps were saved "without your name". That overstated it:
 
 ## Decision
 - No accounts and no stored conversations. Questions are sent to OpenAI to route and answer them. The help page discloses this **before** the parent asks.
-- After an abstain, the parent is offered: "Would you like to send this question to the Lumi team so they can write a guide?" On yes they see an **editable, minimal preview** of the text that will be stored (contact details removed best-effort), with the note: *"Lumi staff can read what you save. It's kept for 30 days and then deleted."*
+- After an abstain, the parent is offered: "Would you like to send this question to the Lumi team so they can write a guide?" On yes they see an **editable, minimal preview** of the text that will be stored (contact details removed best-effort), with the note: *"Lumi staff can read the question you choose to save, so remove names and identifying details first. We save the edited question, its language, topic and submission date. Questions older than 30 days are deleted when someone saves a question or staff opens the list."* The note describes the lazy purge below as it really works, rather than promising deletion on day 30.
 - Only on an explicit save do we store: the **edited** text, its language, a **router-assigned topic label** (for triage) and a timestamp. No name, IP, user agent or conversation.
 - **Retention:** rows older than `config.gaps.retentionDays` (30) are purged on every save and every staff list, so no scheduler is needed.
 - **Delete path:** staff can delete any row. On save, the parent gets a one-time delete token (only its SHA-256 hash is stored) and can delete their question from the same tab.

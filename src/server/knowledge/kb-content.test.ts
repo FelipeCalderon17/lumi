@@ -109,8 +109,8 @@ describe("KB content", () => {
     // The article repeats the processing and retention disclosure (ADR 0005); if config changes,
     // the article must change with it.
     const stated = {
-      en: /deleted after (\d+) days/,
-      es: /se borra a los (\d+) días/,
+      en: /older than (\d+) days are deleted/,
+      es: /de más de (\d+) días se borran/,
     } as const;
     for (const lang of LANGUAGES) {
       const article = kb[lang].find((e) => e.article.id === "how-lumi-can-help")?.article;
