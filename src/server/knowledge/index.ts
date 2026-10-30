@@ -115,29 +115,33 @@ export function buildKnowledgeBase(
   };
 }
 
-/** content/kb, resolved from the working directory (the app root under `next start`). */
-export function defaultKbDir(): string {
-  return path.join(process.cwd(), "content", "kb");
-}
-
 /**
  * Reads content/kb/<lang>/*.md, validates every file (a broken article throws: it must fail
  * the boot or the build, not reach a parent) and assigns handles.
+ *
+ * Paths are written out as `process.cwd()/content/kb/…` so the bundler can see they stay
+ * inside content/kb and traces only that folder. `kbDir` is for tests (temporary folders).
  */
 export async function loadKnowledgeBase(
   language: Language,
-  kbDir: string = defaultKbDir(),
+  kbDir?: string,
 ): Promise<KnowledgeBase> {
-  const dir = path.join(kbDir, language);
-  const files = (await readdir(dir)).filter((file) => file.endsWith(".md")).sort();
+  const list = kbDir
+    ? () => readdir(path.join(/*turbopackIgnore: true*/ kbDir, language))
+    : () => readdir(path.join(process.cwd(), "content", "kb", language));
+  const read = kbDir
+    ? (file: string) => readFile(path.join(/*turbopackIgnore: true*/ kbDir, language, file), "utf8")
+    : (file: string) => readFile(path.join(process.cwd(), "content", "kb", language, file), "utf8");
+
+  const files = (await list()).filter((file) => file.endsWith(".md")).sort();
   const articles = await Promise.all(
     files.map(async (file) => {
-      const article = parseArticleFile(await readFile(path.join(dir, file), "utf8"));
+      const article = parseArticleFile(await read(file));
       if (`${article.id}.md` !== file) throw new Error(`${language}/${file}: id is ${article.id}`);
       return article;
     }),
   );
-  if (articles.length === 0) throw new Error(`no articles in ${dir}`);
+  if (articles.length === 0) throw new Error(`no articles in content/kb/${language}`);
   return buildKnowledgeBase(language, articles);
 }
 

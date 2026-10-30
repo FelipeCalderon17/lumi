@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { readBodyBounded } from "./http";
+import type { ChatEvent } from "./events";
+import {
+  ndjsonStream,
+  readBodyBounded,
+  readBytesBounded,
+  readCookie,
+  requestContextFrom,
+  sessionCookie,
+} from "./http";
 
 function streamOf(...parts: string[]): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
@@ -40,5 +48,95 @@ describe("http.readBodyBounded", () => {
 
   it("treats a missing body as empty", async () => {
     await expect(readBodyBounded(null, 100)).resolves.toEqual({ ok: true, text: "" });
+  });
+});
+
+describe("http.readBytesBounded", () => {
+  it("returns the exact bytes when they fit", async () => {
+    const read = await readBytesBounded(streamOf("ab", "c"), 10);
+    expect(read.ok && new TextDecoder().decode(read.bytes)).toBe("abc");
+  });
+});
+
+async function readAll(stream: ReadableStream<Uint8Array>): Promise<string> {
+  let text = "";
+  const decoder = new TextDecoder();
+  for await (const chunk of stream) text += decoder.decode(chunk, { stream: true });
+  return text;
+}
+
+describe("http.ndjsonStream", () => {
+  it("sends progress and the terminal event, closes, but keeps draining (ledger work)", async () => {
+    let drained = false;
+    async function* events(): AsyncGenerator<ChatEvent> {
+      yield { type: "progress", stage: "reading_guides" };
+      yield { type: "crisis", language: "en" };
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      drained = true;
+    }
+    const text = await readAll(ndjsonStream(events()));
+    expect(text).toBe(
+      '{"type":"progress","stage":"reading_guides"}\n{"type":"crisis","language":"en"}\n',
+    );
+    expect(drained).toBe(false);
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    expect(drained).toBe(true);
+  });
+
+  it("closes without a terminal event if the iterator ends early (client shows fallback)", async () => {
+    async function* events(): AsyncGenerator<ChatEvent> {
+      yield { type: "progress", stage: "reading_guides" };
+    }
+    expect(await readAll(ndjsonStream(events()))).toBe(
+      '{"type":"progress","stage":"reading_guides"}\n',
+    );
+  });
+
+  it("calls onCancel when the client cancels the stream", async () => {
+    let cancelled = false;
+    async function* events(): AsyncGenerator<ChatEvent> {
+      yield { type: "progress", stage: "reading_guides" };
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    const stream = ndjsonStream(events(), () => {
+      cancelled = true;
+    });
+    await stream.cancel();
+    expect(cancelled).toBe(true);
+  });
+});
+
+describe("http cookies", () => {
+  it("reads one cookie by name", () => {
+    expect(readCookie("a=1; lumi_staff=tok%2Ben; b=2", "lumi_staff")).toBe("tok+en");
+    expect(readCookie("a=1", "lumi_staff")).toBeUndefined();
+    expect(readCookie(null, "lumi_staff")).toBeUndefined();
+  });
+
+  it("builds a strict, httpOnly, secure session cookie", () => {
+    expect(sessionCookie("lumi_staff", "v", 8 * 3_600_000)).toBe(
+      "lumi_staff=v; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=28800",
+    );
+  });
+});
+
+describe("http.requestContextFrom", () => {
+  it("hashes the right-most forwarded IP and links the request signal", () => {
+    const controller = new AbortController();
+    const request = new Request("http://x/api/chat", {
+      method: "POST",
+      headers: { "x-forwarded-for": "1.1.1.1, 203.0.113.9" },
+    });
+    const ctx = requestContextFrom(request, "salt", controller.signal);
+    expect(ctx.requestId).toMatch(/^[0-9a-f-]{36}$/);
+    expect(ctx.rateLimitKey).not.toContain("203.0.113.9");
+    expect(ctx.signal.aborted).toBe(false);
+    controller.abort();
+    expect(ctx.signal.aborted).toBe(true);
+  });
+
+  it("puts requests without the header in the shared unknown bucket", () => {
+    const ctx = requestContextFrom(new Request("http://x"), "salt");
+    expect(ctx.rateLimitKey).toBe("unknown");
   });
 });
