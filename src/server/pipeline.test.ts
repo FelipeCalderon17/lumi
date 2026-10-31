@@ -330,6 +330,40 @@ describe("pipeline.runPipeline (routing and answers)", () => {
   });
 });
 
+describe("pipeline: dosage gate on the final answer (Codex re-review 3)", () => {
+  it("withholds every reproduced dose behind fallback(invalid_output)", async () => {
+    for (const text of [
+      "Dale una tableta de paracetamol [1].",
+      "Give twenty milligrams [1].",
+      "Dale veinte miligramos [1].",
+      "Dale una unidad [1].",
+      "Give 1 g [1].",
+      "Take medicine twice a week [1].",
+      "Dale el medicamento cada 30 minutos [1].",
+    ]) {
+      const { deps } = setup({ answer: streamingModel([text]) });
+      const events = await collect(startChat(ask("What should I pack?"), testCtx(), deps));
+      expect([text, last(events)]).toEqual([
+        text,
+        { type: "fallback", reason: "invalid_output", language: "en" },
+      ]);
+      expect(JSON.stringify(events)).not.toContain(text);
+    }
+  });
+
+  it("still answers the harmless counterexamples", async () => {
+    for (const text of [
+      "Take 2 snacks [1].",
+      "Go to room 211 [1].",
+      "Take a break every 2 hours [1].",
+    ]) {
+      const { deps } = setup({ answer: streamingModel([text]) });
+      const events = await collect(startChat(ask("What should I pack?"), testCtx(), deps));
+      expect([text, last(events)]).toMatchObject([text, { type: "answer", text }]);
+    }
+  });
+});
+
 describe("pipeline.runPipeline (failures)", () => {
   it("provider error (mocked) → fallback(provider_error), ledger row with finishReason none", async () => {
     const { deps, rows } = setup({ router: failingModel() });
