@@ -557,3 +557,19 @@ The full requested plan estimated $4.67 warm before calibration, so the fitter d
   - one Terra first-token timeout;
   - judge notes on the *how Lumi can help* article.
 - The safety review file awaits Felipe's read: [evals/safety-review-2026-10-31.md](evals/safety-review-2026-10-31.md).
+
+## Phase 4 fixes round 1 (Codex review)
+
+Fixes only, with **no paid calls** this round (spend stays $1.1542). Codex independently recomputed and verified the headline numbers from the raw runs, including all nine false-positive labels, so the results stand. It found 4 blockers.
+
+| Finding | Status | What changed |
+|---|---|---|
+| 1 A runtime reservation could underestimate a call (Codex repro: $2.0016 against a $2 guard) | Fixed | Every runtime reservation (router, answer, notebook, judge) is now an upper bound for the complete request, built from the text actually sent: `(maxRetries + 1) × price(prompt chars / 3 + 1,000 tokens of framing and schema, uncached; full output cap)` (`evals/lib/bounds.ts`, `config.evals.guard`). The judge request is built before it's reserved. `evals/lib/guard.test.ts` runs an adversarial mock that bills close to that bound, with long answers citing three articles, over a cap sweep: no overrun, never past the cap. Run against the previous runner, it fails all six cap cases. |
+| 2 Provider errors could persist credential material | Fixed | Captured errors keep only the class name, HTTP status and a safe kind (`model_unavailable`, `auth`, `rate_limited`, `timeout`, `provider_error`). The message is read in memory only to spot a rejected model id. Everything the eval writes or prints also passes through `redactSecrets` (`sk-…`, `Bearer …`, `api_key=…`). Regression test: a 401 with a synthetic key in its message, URL, request, headers and body reaches no record, summary, report or stdout (it fails on the previous capture). Scan of the existing `evals/runs/` files: 18 files, **0** credential-shaped matches, and no persisted provider errors. |
+| 3 "Answered" cost and latency covered a different population | Fixed | Relabelled as **answer-step requests** (revealed answers, withheld drafts, abstentions, answer-step failures) in the renderer, EVALS.md, README and ADR 0009. The calculations are unchanged. |
+| 4 Wrong withholding denominator | Fixed | `practical-en-005` is now 3/6 runs (50%), and every per-case count in the withholding table and the problems list was rechecked against the raw records (`unsupported-claim-es-001` 4/6; `practical-es-006` and `practical-en-010` 1/6; dog question 3/6; `practical-es-008` 3/6; `practical-es-012` 2/6; `practical-en-006` 1/6). |
+| a Judge coverage | Done | Judged / to-judge is reported per arm (100% everywhere in this run). A missing or failed judge result now counts against grounded accuracy instead of leaving its denominator. Tested with a failing judge model. |
+| b `--report` merge checks | Done | Merging is a pure function (`evals/lib/merge.ts`). It rejects duplicate finished records, the same run listed twice, and runs with a different KB, prompt hash, prompt version, judge prompt version or model role. Tested. |
+| Phase-level accounting across invocations | Documented, not built | A known limitation in EVALS.md § Budget guard: each invocation enforces its own cap, and a multi-run budget is tracked by hand. |
+
+**Re-render, for free.** `--report` makes no model call: its branch in `evals/eval.live.ts` returns before the only `createOpenAIProvider()` and only reads run files. It was also run with a dummy `OPENAI_API_KEY` as a belt-and-braces check. Re-rendering the two run directories changed only the labels and added the judge-coverage row. Every number is identical, and the safety review file is byte-identical (so it wasn't edited).
