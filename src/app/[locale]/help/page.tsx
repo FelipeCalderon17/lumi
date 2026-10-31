@@ -20,7 +20,7 @@ export default async function HelpPage({ params }: PageProps<"/[locale]/help">) 
         <h1 className="text-5xl leading-tight sm:text-6xl">{t.help.title}</h1>
         <p className="mt-4 text-[1.15rem] text-muted">{t.help.lede}</p>
       </div>
-      {/* The chat card, the boundaries note and the quick-start chips (side column on large screens). */}
+      {/* The chat card, then the quick-start chips and the boundaries note (one column). */}
       <AskLumi locale={locale} t={t} />
     </section>
   );
