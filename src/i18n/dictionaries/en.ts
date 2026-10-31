@@ -120,6 +120,22 @@ export const en = {
     deleted: "Deleted.",
     failed: "We couldn't save it right now. Please try again later.",
   },
+  notebook: {
+    /** Topic labels for the notebook page (ADR 0015): the model only picks the key. */
+    topics: {
+      questions: "Questions for the care team",
+      eating: "Eating and drinking",
+      sleep: "Sleep",
+      pain_discomfort: "Pain and discomfort",
+      mood_behavior: "Mood and behavior",
+      energy_activity: "Energy and activity",
+      medicines_treatment: "Medicines and treatment",
+      school_social: "School, family and friends",
+      other: "Other notes",
+    },
+    organizedNote: "Lumi sorted your notes by topic. Every note is shown in your own words.",
+    fallbackNote: "We couldn't sort your notes by topic right now, so here they are by date.",
+  },
   staff: {
     gapsTitle: "Unanswered questions",
     gapsLede:

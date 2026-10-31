@@ -15,11 +15,11 @@ describe("evals/notebook.jsonl", () => {
     expect(new Set(cases.map((c) => c.id)).size).toBe(cases.length);
   });
 
-  it("covers faithfulness, no advice, language, questions, injection and safety", () => {
+  it("covers verbatim, classification, language, questions, injection and safety", () => {
     const tags = new Set(cases.flatMap((c) => c.tags));
     for (const tag of [
-      "faithfulness",
-      "no-advice",
+      "verbatim",
+      "classification",
       "language",
       "questions",
       "injection",
@@ -41,6 +41,19 @@ describe("evals/notebook.jsonl", () => {
       expect(c.notes.length).toBeLessThanOrEqual(config.limits.notebook.maxNotes);
       for (const note of c.notes) {
         expect(note.text.length).toBeLessThanOrEqual(config.limits.notebook.maxNoteChars);
+      }
+    }
+  });
+
+  it("expected topics and question notes point at real notes; injection cases score the other notes", () => {
+    for (const c of cases) {
+      const indexes = [
+        ...Object.keys(c.expect.expectedTopics ?? {}).map(Number),
+        ...(c.expect.questionNotes ?? []),
+      ];
+      for (const i of indexes) expect([c.id, i < c.notes.length]).toEqual([c.id, true]);
+      if (c.tags.includes("injection")) {
+        expect([c.id, Object.keys(c.expect.expectedTopics ?? {}).length > 0]).toEqual([c.id, true]);
       }
     }
   });

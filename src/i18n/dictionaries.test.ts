@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { config } from "@/server/config";
 import { AI_PROCESSOR_NAME, findContentViolations } from "@/server/content-rules";
+import { NOTEBOOK_TOPICS } from "@/server/notebook";
 import { en } from "./dictionaries/en";
 import { es } from "./dictionaries/es";
 
@@ -58,6 +59,10 @@ describe.each([
       .filter(([, s]) => AI_PROCESSOR_NAME.test(s))
       .map(([path]) => path);
     expect(naming).toEqual(["help.processingNotice"]);
+  });
+
+  it("has a label for every notebook topic and nothing else (labels never come from the model)", () => {
+    expect(Object.keys(dict.notebook.topics).sort()).toEqual([...NOTEBOOK_TOPICS].sort());
   });
 
   it("the gap disclosure states the configured retention period", () => {

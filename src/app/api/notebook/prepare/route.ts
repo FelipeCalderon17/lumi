@@ -7,7 +7,7 @@ import { prepareNotebook } from "@/server/notebook";
 const HEADERS = { "Cache-Control": "private, no-store" };
 
 /**
- * "Prepare for my appointment": the parent's on-device notes → a structured, printable page.
+ * "Prepare for my appointment": the parent's on-device notes, sorted by topic, verbatim.
  * Stateless: the notes are processed for this request and never stored (ADR 0005).
  * Every 400 has the same envelope, `{ error, safetyNotices }`; the server scans every note it
  * can recover for emergencies before validating anything else.

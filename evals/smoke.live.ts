@@ -105,7 +105,7 @@ it.skipIf(!live)("live smoke: pipeline, notebook and transcription", async () =>
   if (notebook.kind === "done") await notebook.recorded;
   raw.push({ id: "notebook", notebook });
   console.log(
-    `notebook         → ${notebook.kind === "done" ? notebook.response.result.type : notebook.kind}`,
+    `notebook         → ${notebook.kind === "done" ? notebook.response.result.kind : notebook.kind}`,
   );
 
   for (const lang of ["en", "es"]) {

@@ -4,7 +4,10 @@ import { jsonModel } from "@/server/test-helpers";
 const allow = { check: () => ({ allowed: true }) };
 vi.mock("@/server/app", () => ({
   getServerDeps: () => ({
-    models: { language: () => jsonModel({ language: "es", observations: [], questions: [] }) },
+    models: {
+      language: () =>
+        jsonModel({ assignments: [{ index: 0, topic: "energy_activity", isQuestion: false }] }),
+    },
     ledger: { record: async () => {} },
     limiters: { notebook: allow, modelCalls: allow },
     rateLimitSalt: "test-salt",
@@ -70,7 +73,7 @@ describe("POST /api/notebook/prepare: every 400 has one envelope (Codex re-revie
     expect(await response.json()).toEqual({ error: "too_large", safetyNotices: [] });
   });
 
-  it("a valid request is private, no-store too", async () => {
+  it("a valid request is private, no-store too, and returns the notes verbatim by topic", async () => {
     const response = await post(
       JSON.stringify({
         notes: [{ text: "Tired", createdAt: "2026-10-27T23:10:00-05:00" }],
@@ -79,5 +82,17 @@ describe("POST /api/notebook/prepare: every 400 has one envelope (Codex re-revie
     );
     expect(response.status).toBe(200);
     expect(response.headers.get("Cache-Control")).toBe("private, no-store");
+    expect(await response.json()).toEqual({
+      safetyNotices: [],
+      result: {
+        kind: "organized",
+        groups: [
+          {
+            topic: "energy_activity",
+            notes: [{ index: 0, text: "Tired", createdAt: "2026-10-27T23:10:00-05:00" }],
+          },
+        ],
+      },
+    });
   });
 });

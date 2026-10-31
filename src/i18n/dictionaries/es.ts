@@ -114,6 +114,21 @@ export const es: Dictionary = {
     deleted: "Borrada.",
     failed: "No pudimos guardarla en este momento. Inténtalo más tarde.",
   },
+  notebook: {
+    topics: {
+      questions: "Preguntas para el equipo médico",
+      eating: "Comida y bebida",
+      sleep: "Sueño",
+      pain_discomfort: "Dolor y molestias",
+      mood_behavior: "Ánimo y comportamiento",
+      energy_activity: "Energía y actividad",
+      medicines_treatment: "Medicamentos y tratamiento",
+      school_social: "Escuela, familia y amigos",
+      other: "Otras notas",
+    },
+    organizedNote: "Lumi ordenó tus notas por tema. Cada nota aparece con tus propias palabras.",
+    fallbackNote: "Ahora no pudimos ordenar tus notas por tema, así que aquí están por fecha.",
+  },
   staff: {
     gapsTitle: "Preguntas sin respuesta",
     gapsLede:
