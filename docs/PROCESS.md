@@ -364,3 +364,15 @@ The last Phase 2 round. Felipe's framing: Lumi is a **functional demo**, not a p
 - `pnpm test` flaked once (2 pipeline tests got `timeout` instead of `invalid_output`: the 50 ms first-token budget in the test setup under parallel load, as logged in round 4). Three reruns were green.
 
 **Checks.** Node 24.19.0. `pnpm lint` ✓, `pnpm typecheck` ✓, `pnpm test` ✓ (28 files, 587 tests, up from 552), `pnpm test:kb` ✓ (5 files, 156 tests, up from 132), `pnpm build` ✓. All exit codes 0.
+
+## Demo-breakage fixes (Codex demo-standard verification)
+
+A small fixes-only round: two demo-breakage items and one wording fix. The provenance layer is unchanged. No paid calls (Felipe's orchestrator runs the live smoke), no push.
+
+| Finding | Status | Notes |
+|---|---|---|
+| 1 Grounded paraphrases withheld | Applied | The answer policy gets a new rule 6 ("Numbers and timing"): use only numbers from the cited article, written the same way; reuse its exact timing words ("every day", "bedtime", "antes de dormir") instead of paraphrasing ("daily", "before bed"); add no amounts, frequencies or times it doesn't state. The style rule now asks for "-" bullets, never numbered lists. The policy text is still static, so the cached prefix stays byte-identical per language. `ANSWER_POLICY_VERSION` 1 → 2. A unit test checks the rules are in the policy (EN and ES). |
+| 2 Flaky pipeline tests | Applied | Ordinary pipeline tests get 5,000 ms deadlines; only the timeout tests pass short ones. The "<40 ms" ledger check is now an ordering check: a controllable ledger promise shows the terminal event arrives before the write settles (resolve and reject), and a separate test shows a hanging write is abandoned at `ledgerWriteMs`. Scanning the other tests turned up two more: the `ndjsonStream` drain test (real 20 ms vs 40 ms timers) now uses a controllable promise, and the answer stall test's first-token budget goes from 1,000 to 5,000 ms. The remaining short deadlines are all in timeout tests, with upper bounds of 500 ms or more (10–25× headroom). |
+| 3 Doc wording | Applied | README and ADR 0015: "An unsourced number is withheld regardless of formatting." replaces "a dose number can never be sourced". |
+
+**Checks.** Node 24.19.0. `pnpm test` 3 runs in a row: ✓ ✓ ✓ (28 files, 589 tests each). `pnpm lint` ✓, `pnpm typecheck` ✓, `pnpm test:kb` ✓ (5 files, 156 tests), `pnpm build` ✓. All exit codes 0.
