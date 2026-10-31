@@ -64,7 +64,28 @@ describe("answer.buildSystemPrefix (prompt layout)", () => {
       );
       expect(policy).toContain(`Start each bullet with "-"; never use a numbered list.`);
     }
-    expect(ANSWER_POLICY_VERSION).toBe(2);
+    expect(ANSWER_POLICY_VERSION).toBe(3);
+  });
+
+  it("tells the model to abstain when no article covers the specific topic (no-guide rule, v3)", () => {
+    for (const language of ["en", "es"] as const) {
+      const prefix = buildSystemPrefix(testKb(language));
+      const policy = prefix.slice(0, prefix.indexOf("\n\n<reference_data>\n"));
+      expect(policy).toContain(
+        "An article must address the specific thing asked, not just the general area",
+      );
+      expect(policy).toContain(
+        `if no article covers that specific topic (for example pets visiting, or one hospital's own rules or services), reply ${ABSTAIN_MARKER}`,
+      );
+      expect(policy).toContain(
+        "Never answer from general knowledge plus a loosely related citation",
+      );
+      // The existing abstain and no-stretch rules are still there, unchanged.
+      expect(policy).toContain(
+        `If the articles don't answer the question, reply with exactly ${ABSTAIN_MARKER} and nothing else.`,
+      );
+      expect(policy).toContain("don't stretch an article to cover something it doesn't say");
+    }
   });
 
   it("asks for the reply language of the KB", () => {
