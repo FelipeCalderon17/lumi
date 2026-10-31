@@ -10,6 +10,7 @@ import {
   requestContextFrom,
   sessionCookie,
 } from "./http";
+import { rateLimitKeyFor } from "./rate-limit";
 
 function streamOf(...parts: string[]): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
@@ -304,15 +305,17 @@ describe("http cookies", () => {
 });
 
 describe("http.requestContextFrom", () => {
-  it("hashes the right-most forwarded IP and links the request signal", () => {
+  it("hashes the client entry of a Railway-shaped header and links the request signal", () => {
     const controller = new AbortController();
+    // Railway delivers `client, edge-egress`; the client is second from the right.
     const request = new Request("http://x/api/chat", {
       method: "POST",
-      headers: { "x-forwarded-for": "1.1.1.1, 203.0.113.9" },
+      headers: { "x-forwarded-for": "198.51.100.2, 203.0.113.9" },
     });
     const ctx = requestContextFrom(request, "salt", controller.signal);
     expect(ctx.requestId).toMatch(/^[0-9a-f-]{36}$/);
-    expect(ctx.rateLimitKey).not.toContain("203.0.113.9");
+    expect(ctx.rateLimitKey).toBe(rateLimitKeyFor("198.51.100.2", "salt"));
+    expect(ctx.rateLimitKey).not.toContain("198.51.100.2");
     expect(ctx.signal.aborted).toBe(false);
     controller.abort();
     expect(ctx.signal.aborted).toBe(true);

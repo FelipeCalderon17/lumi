@@ -59,10 +59,11 @@ export function createRateLimiter(opts: {
 }
 
 /**
- * The client IP as seen by our trusted proxy. Railway's edge appends the peer address to
- * X-Forwarded-For, so with `trustedHops = 1` the right-most entry is the client and anything
- * to its left was supplied by the client (spoofable). Returns null if the header is missing or
- * has fewer entries than trusted hops; callers then use a shared "unknown" bucket.
+ * The client IP as seen by our trusted proxies: the entry `trustedHops` from the right of
+ * X-Forwarded-For. Anything further left could have been supplied by the client (spoofable).
+ * On Railway the app receives `client, edge-egress`, so `trustedHops = 2` (see config). Returns
+ * null if the header is missing or has fewer entries than trusted hops; callers then use a
+ * shared "unknown" bucket.
  */
 export function clientIpFromForwardedFor(
   header: string | null,

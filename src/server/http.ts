@@ -183,7 +183,7 @@ export function bodyErrorResponse(
 
 /**
  * RequestContext for one request: a random id, a salted hash of the trusted client IP
- * (right-most X-Forwarded-For entry), and a signal that aborts when the client goes away.
+ * (X-Forwarded-For entry `trustedProxyHops` from the right), and a signal that aborts when the client goes away.
  */
 export function requestContextFrom(
   request: Request,

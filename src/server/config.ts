@@ -198,12 +198,13 @@ export const config = {
   },
 
   /**
-   * Client IP for rate-limit keys. Railway's edge proxy appends the address it saw to
-   * X-Forwarded-For, so the right-most entry is the only one we can trust; everything to its
-   * left is client-controlled. See docs/ARCHITECTURE.md § Abuse controls.
+   * Client IP for rate-limit keys. Measured on the first Railway deploy (2026-10-31): the edge
+   * replaces any client-sent X-Forwarded-For and the app receives exactly two entries,
+   * `client, edge-egress`. The right-most is a rotating pool of edge addresses, so the trusted
+   * client entry is second from the right. See docs/ARCHITECTURE.md § Abuse controls.
    */
   clientIp: {
-    trustedProxyHops: 1,
+    trustedProxyHops: 2,
   },
 
   /**
