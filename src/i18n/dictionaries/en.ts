@@ -316,6 +316,7 @@ export const en = {
       "about-lumi": "About Lumi",
     },
     reviewed: "Reviewed {date}",
+    relatedTitle: "More on this topic",
     allGuides: "All guides",
     askAbout: "Still have a question? Ask Lumi",
     notMedical:

@@ -311,6 +311,7 @@ export const es: Dictionary = {
       "about-lumi": "Sobre Lumi",
     },
     reviewed: "Revisada el {date}",
+    relatedTitle: "Más sobre este tema",
     allGuides: "Todas las guías",
     askAbout: "¿Te queda una pregunta? Pregúntale a Lumi",
     notMedical:
