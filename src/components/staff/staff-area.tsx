@@ -4,7 +4,7 @@ import { useCallback, useEffect, useId, useState } from "react";
 import type { Dictionary, Locale } from "@/i18n";
 import { fill } from "@/i18n/format";
 import { signOutStaff } from "@/lib/staff-session";
-import type { CostEstimate } from "@/server/ledger";
+import type { CostEstimate, UsageGroup } from "@/server/ledger";
 import type { StaffOverview } from "@/server/staff";
 
 /** The staff overview as it arrives over JSON (dates are strings). */
@@ -189,6 +189,28 @@ function usd(value: CostEstimate, unknown: string): string {
       }).format(value);
 }
 
+/**
+ * "At least $X": a LOWER bound, never the full cost (ADR 0013). The amount stays prominent; the
+ * words around it are smaller. A bound of $0 says nothing, so it reads "unknown" instead.
+ */
+function AtLeast({ template, amount }: { template: string; amount: string }) {
+  const [before = "", after = ""] = template.split("{amount}");
+  return (
+    <>
+      {before && <span className="font-sans text-base text-muted">{before}</span>}
+      {amount}
+      {after && <span className="font-sans text-base text-muted">{after}</span>}
+    </>
+  );
+}
+
+/** Exact cost, else a labelled lower bound when there is a positive one, else "unknown". */
+function costValue(exact: CostEstimate, known: CostEstimate, s: Dictionary["staff"]) {
+  if (exact !== "unknown") return usd(exact, s.unknown);
+  if (known === "unknown" || known <= 0) return s.unknown;
+  return <AtLeast template={s.atLeast} amount={usd(known, s.unknown)} />;
+}
+
 function Dashboard({
   locale,
   t,
@@ -250,6 +272,39 @@ function Dashboard({
   };
 
   const usage = overview.usage;
+  const count = (n: number, one: string, many: string) =>
+    n === 1 ? one : fill(many, { n: number.format(n) });
+  const unknownCalls = (n: number) => count(n, s.unknownCallsOne, s.unknownCalls);
+  const unpricedCalls = (n: number) => count(n, s.unpricedCallsOne, s.unpricedCalls);
+
+  /** Table cell: "≥ $X" (spoken as "At least $X") with what it leaves out underneath. */
+  const groupCost = (g: UsageGroup) => {
+    if (g.estimatedUsd !== "unknown") return usd(g.estimatedUsd, s.unknown);
+    if (g.knownUsd === "unknown") {
+      return (
+        <>
+          {s.unknown}
+          <span className="block text-[0.82rem] text-muted">{s.noPrice}</span>
+        </>
+      );
+    }
+    const label = fill(s.atLeast, { amount: usd(g.knownUsd, s.unknown) });
+    return (
+      <>
+        {g.knownUsd > 0 ? (
+          <span title={label}>
+            <span aria-hidden="true">≥ {usd(g.knownUsd, s.unknown)}</span>
+            <span className="sr-only">{label}</span>
+          </span>
+        ) : (
+          s.unknown
+        )}
+        <span className="block whitespace-nowrap text-[0.82rem] text-muted">
+          {unknownCalls(g.callsWithUnknownUsage)}
+        </span>
+      </>
+    );
+  };
 
   return (
     <div className="mt-8 space-y-14">
@@ -377,20 +432,43 @@ function Dashboard({
               {usage.complete ? s.complete : s.incomplete}
             </p>
             <dl className="mt-6 grid gap-px overflow-hidden rounded-soft border border-line bg-line sm:grid-cols-4">
-              {[
-                [s.requests, number.format(usage.summary.requests)],
-                [s.estimatedCost, usd(usage.summary.estimatedUsd, s.unknown)],
-                [s.per1000, usd(usage.summary.estimatedUsdPer1000Requests, s.unknown)],
+              {(
                 [
-                  s.cachedShare,
-                  usage.summary.cachedInputRatio === null
-                    ? s.unknown
-                    : `${Math.round(usage.summary.cachedInputRatio * 100)}%`,
-                ],
-              ].map(([label, value]) => (
+                  [s.requests, number.format(usage.summary.requests)],
+                  [
+                    s.estimatedCost,
+                    costValue(usage.summary.estimatedUsd, usage.summary.knownUsd, s),
+                    [
+                      usage.summary.callsWithUnknownUsage > 0 &&
+                        unknownCalls(usage.summary.callsWithUnknownUsage),
+                      usage.summary.callsWithUnknownPrice > 0 &&
+                        unpricedCalls(usage.summary.callsWithUnknownPrice),
+                    ],
+                  ],
+                  [
+                    s.per1000,
+                    costValue(
+                      usage.summary.estimatedUsdPer1000Requests,
+                      usage.summary.knownUsdPer1000Requests,
+                      s,
+                    ),
+                  ],
+                  [
+                    s.cachedShare,
+                    usage.summary.cachedInputRatio === null
+                      ? s.unknown
+                      : `${Math.round(usage.summary.cachedInputRatio * 100)}%`,
+                  ],
+                ] as [string, React.ReactNode, (string | false)[]?][]
+              ).map(([label, value, notes = []]) => (
                 <div key={label} className="bg-surface p-5">
                   <dt className="text-[0.9rem] text-muted">{label}</dt>
                   <dd className="mt-1 font-display text-3xl">{value}</dd>
+                  {notes.filter(Boolean).map((note) => (
+                    <dd key={String(note)} className="mt-1 text-[0.85rem] text-muted">
+                      {note}
+                    </dd>
+                  ))}
                 </div>
               ))}
             </dl>
@@ -427,7 +505,7 @@ function Dashboard({
                         <td className="px-4 py-3 tabular-nums">
                           {number.format(Math.round(g.audioSeconds))}
                         </td>
-                        <td className="px-4 py-3 tabular-nums">{usd(g.estimatedUsd, s.unknown)}</td>
+                        <td className="px-4 py-3 tabular-nums">{groupCost(g)}</td>
                       </tr>
                     ))}
                   </tbody>

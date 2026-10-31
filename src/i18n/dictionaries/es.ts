@@ -514,11 +514,17 @@ export const es: Dictionary = {
     per1000: "Por cada mil solicitudes",
     cachedShare: "Entrada en caché",
     unknown: "desconocido",
+    atLeast: "Al menos {amount}",
+    unknownCallsOne: "1 llamada sin datos de uso",
+    unknownCalls: "{n} llamadas sin datos de uso",
+    unpricedCallsOne: "1 llamada sin precio en el catálogo",
+    unpricedCalls: "{n} llamadas sin precio en el catálogo",
+    noPrice: "sin precio en el catálogo",
     complete: "Completo: se cuentan todas las llamadas al modelo de este periodo.",
     incomplete:
       "Parcial: hay más grupos de paso y modelo de los que muestra el resumen, así que estos totales están incompletos.",
     derivedNote:
-      "El costo se calcula con el catálogo de precios de hoy; no se guarda. La factura del proveedor es la fuente de verdad.",
+      "El costo se calcula con el catálogo de precios de hoy; no se guarda. La factura del proveedor es la fuente de verdad. Las llamadas de las que el proveedor no informó el uso (por ejemplo, por tiempo de espera agotado) se cuentan aparte.",
     step: "Paso",
     model: "Modelo",
     calls: "Llamadas",

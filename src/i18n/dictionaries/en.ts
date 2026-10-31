@@ -518,11 +518,17 @@ export const en = {
     per1000: "Per thousand requests",
     cachedShare: "Cached input",
     unknown: "unknown",
+    atLeast: "At least {amount}",
+    unknownCallsOne: "1 call with unknown usage",
+    unknownCalls: "{n} calls with unknown usage",
+    unpricedCallsOne: "1 call with no price in the catalog",
+    unpricedCalls: "{n} calls with no price in the catalog",
+    noPrice: "no price in the catalog",
     complete: "Complete: every model call in this window is counted.",
     incomplete:
       "Partial: there are more step and model groups than the summary shows, so these totals are incomplete.",
     derivedNote:
-      "Cost is derived from today's price catalog, not stored. The provider's invoice is the source of truth.",
+      "Cost is derived from today's price catalog, not stored. The provider's invoice is the source of truth. Calls the provider didn't report usage for (e.g. timeouts) are counted separately.",
     step: "Step",
     model: "Model",
     calls: "Calls",
