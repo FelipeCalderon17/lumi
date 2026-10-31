@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { AI_PROCESSOR_NAME, findContentViolations, normalizeForDosage } from "./content-rules";
+import {
+  AI_PROCESSOR_NAME,
+  findContentViolations,
+  findUnsourcedNumbers,
+  normalizeForDosage,
+  numberProvenanceKeys,
+} from "./content-rules";
 
 const rules = (text: string) => findContentViolations(text).map((v) => v.rule);
 
@@ -451,7 +457,6 @@ describe("content-rules.findContentViolations", () => {
       "Give II",
       "Give Ⅱ",
       "Take a break, then 5",
-      "Use what was prescribed daily",
       "Take a fifth",
       "Give quadruple",
       "Toma un quinto",
@@ -474,6 +479,91 @@ describe("content-rules.findContentViolations", () => {
     }
     expect(rules("Room: 211")).toContain("phone_number");
     expect(rules("Room 211")).toEqual([]);
+  });
+
+  it("Codex verification: phone checks read normalized digits and separators", () => {
+    for (const text of [
+      "Call ５５５－１２３－４５６７ [1]",
+      "Call ٥٥٥-١٢٣-٤٥٦٧ [1]",
+      "Call ۵۵۵-۱۲۳-۴۵۶۷ [1]",
+      "Call 555-१२३-4567 [1]",
+      "Call 555‐123‐4567 [1]",
+      "Llama al ２１１ [1]",
+      "Llama al ٢١١ [1]",
+    ]) {
+      expect([text, rules(text)]).toEqual([text, ["phone_number"]]);
+    }
+    for (const text of [
+      "Call ９１１ now.",
+      "Text ٩٨٨.",
+      "Go to room ２１１.",
+      "Habitación ３１１.",
+    ]) {
+      expect([text, rules(text)]).toEqual([text, []]);
+    }
+  });
+
+  it("Codex verification: a quote exempts a label value only if it has no number or frequency", () => {
+    for (const text of [
+      'Paracetamol: "half the usual amount"',
+      'Paracetamol: "500 to control pain"',
+      "Paracetamol: «media de lo habitual»",
+      "Paracetamol: “twice a day, with water”",
+    ]) {
+      expect([text, withheld(text)]).toEqual([text, true]);
+    }
+    for (const text of [
+      'Puede bastar con decir: "Uno de mis hijos está recibiendo tratamiento médico".',
+      'You could say: "One of my kids is in treatment."',
+      'Try: "I don\'t know, but we can ask together."',
+    ]) {
+      expect([text, rules(text)]).toEqual([text, []]);
+    }
+  });
+
+  it("Codex verification: a frequency after a neuter relative object counts", () => {
+    for (const text of [
+      "Use what was prescribed daily",
+      "Usa lo que te recetaron diariamente",
+      "Use whatever was prescribed every morning",
+      "Usa todo lo que te dieron cada día",
+    ]) {
+      expect([text, withheld(text)]).toEqual([text, true]);
+    }
+    // Right after the verb it's still the relative clause's; "al día" after mantener/ponerse is
+    // "up to date" (KB lines).
+    for (const text of [
+      "anything you use every day",
+      "Usa lo que de verdad vayas a mantener al día.",
+      "un plan con la escuela le ayuda a ponerse al día",
+    ]) {
+      expect([text, rules(text)]).toEqual([text, []]);
+    }
+  });
+
+  it("number provenance keys: normalized numbers and frequency/schedule phrases", () => {
+    const keys = (text: string) => [...numberProvenanceKeys(text)].sort();
+    expect(keys("Give ٢, ２, two, II or Ⅱ [1]")).toEqual(["2"]);
+    expect(keys("half, media, medio, mitad, ½ and 1/2")).toEqual(["1/2"]);
+    expect(keys("a third, un tercio, a quarter, un cuarto")).toEqual(["1", "1/3", "1/4"]);
+    expect(keys("double, doble, twice; triple")).toEqual(["2x", "3x"]);
+    expect(keys("veinte, cien, mil, thousand, hundred")).toEqual(["100", "1000", "20"]);
+    expect(keys("1,000 and 1.000 and 1,5")).toEqual(["1.5", "1000"]);
+    expect(keys("once")).toEqual(["11"]);
+    expect(keys("Call 911 or 988 [1] [2, 3]")).toEqual([]);
+    expect(keys("I can help")).toEqual([]); // bare "I" is the pronoun
+    expect(keys("every two hours")).toEqual(keys("every 2\nhours"));
+    expect(keys("Use it at\nbedtime.")).toEqual(["at bedtime"]);
+    expect(keys("- daily\n- por la\nnoche")).toEqual(["daily", "por la noche"]);
+  });
+
+  it("number provenance: unsourced keys are those no cited text contains", () => {
+    expect(findUnsourcedNumbers("Kept for 30 days [1]", ["Kept for thirty days."])).toEqual([]);
+    expect(findUnsourcedNumbers("Give 500 at bedtime [1]", ["Bring a charger."])).toEqual([
+      "500",
+      "at bedtime",
+    ]);
+    expect(findUnsourcedNumbers("Bring a charger [1]", [])).toEqual([]);
   });
 
   it("flags claim and tone words as whole words only", () => {

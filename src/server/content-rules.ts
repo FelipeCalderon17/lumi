@@ -54,10 +54,9 @@ const N11 =
  *      frequency or schedule ("Use insulin daily", "Usa insulina diariamente"), and a
  *      frequency or schedule BEFORE them counts as for any verb ("At bedtime, use it"). Right
  *      after the verb, the frequency belongs to a relative clause ("anything you use every
- *      day", "lo que uses a diario": KB lines). With a neuter relative as the object ("use
- *      what…", "usa lo que…") a later FREQUENCY is still taken as the inner verb's ("Usa lo
- *      que de verdad vayas a mantener al día"), but a SCHEDULE never is ("Use what was
- *      prescribed at bedtime").
+ *      day", "lo que uses a diario": KB lines). Anything later counts, also after a neuter
+ *      relative object ("Use whatever was prescribed every morning"); "mantener al día" (up to
+ *      date) isn't a frequency (Codex verification).
  *   e. LIST SCOPE: a short heading line (up to 4 words, or ending in a colon) and the next
  *      LIST_SCOPE_LINES lines that are list items (- • * 1. 1)) or bare lines are one scope: an
  *      item that starts with a quantity, frequency or schedule is withheld ("Paracetamol\n-
@@ -158,11 +157,9 @@ const UNIT_OR_FORM_WORD = new RegExp(`^(?:${DOSE_UNITS}|${DOSE_FORMS})$`, "u");
 const SERVICE_NUMBERS = new Set<string>(["911", "988"]);
 const COMPOUND_OBJECT_WORD = new RegExp(`^(?:${COMPOUND_OBJECT})$`, "u");
 const HOSPITAL_UNIT_WORD = new RegExp(`^(?:${HOSPITAL_UNIT})$`, "u");
-/**
- * Neuter relatives as the object of use/usa ("use whatever…", "usa lo que…"): a frequency after
- * them is the inner verb's. Not "la que"/"the one that", which can stand for a medicine.
- */
-const NEUTER_RELATIVE = /^(?:what|whatever|anything|everything|lo que|todo lo|cualquier cosa)$/u;
+/** "al día" after these is "up to date", not a frequency: "mantener al día", "ponerse al día". */
+const UP_TO_DATE_VERB =
+  /^(?:mantener(?:se|lo|la|los|las)?|mantenga[ns]?|poner(?:se|te|le)?|ponga[ns]?|estar|estes?|esten?)$/u;
 
 /**
  * Medication context for backstop a: generic medication words, dose forms and the dose units
@@ -282,11 +279,18 @@ const WORD = /(?:(?<![\p{L}\p{N}])[-+−](?=\p{N}))?[\p{L}\p{N}½¼¾⅓⅔]+(?:
  * beside it ("Tylenol - 5"; not "555-123" or "twenty-five").
  */
 const LABEL_SEPARATOR = /[:—–|,]|\s-|-\s/u;
+/** Separators that only ever introduce a value: whatever follows the value doesn't matter. */
+const STRONG_SEPARATOR = /(?:[:—–|]|\s-|-\s)/u;
 /**
- * Separators that only ever introduce a value: whatever follows the value doesn't matter. Not
- * when a quote opens after it: 'decir: "Uno de mis hijos…"' quotes words, not a value (KB line).
+ * A quote after the separator quotes words, not a value ('decir: "Uno de mis hijos…"', a KB
+ * line), but only if the quoted text has no number, frequency or schedule (Codex verification:
+ * 'Paracetamol: "half the usual amount"'). "one of"/"uno de" is a partitive, not a count.
  */
-const STRONG_SEPARATOR = /^[^"“”«'‘’]*(?:[:—–|]|\s-|-\s)[^"“”«'‘’]*$/u;
+const QUOTE = /["“”«»'‘’]/u;
+const PARTITIVE = /(?<![\p{L}\p{N}])(?:one|uno|una|un)\s+(?:of|de)(?![\p{L}\p{N}])/giu;
+function quotesWordsOnly(quoted: string): boolean {
+  return numberProvenanceKeys(quoted.replace(PARTITIVE, " ")).size === 0;
+}
 /** Where a label starts: the start of the sentence, or after one of these. */
 const CLAUSE_BOUNDARY = LABEL_SEPARATOR;
 /** A condition or comment after a value: "half as needed", "500 si hace falta", "half, then…". */
@@ -318,16 +322,24 @@ function asciiDigit(digit: string): string {
 }
 
 /**
- * What every dosage check reads (Codex re-review 6, F3): NFKC (fullwidth "２", "ｍｇ", "½" →
- * "1⁄2"), every Unicode decimal digit to ASCII ("٢" → "2"), the fraction slash to "/", and dotted
- * abbreviations joined.
+ * What the phone, dosage and provenance checks read: NFKC (fullwidth "２", "－", "ｍｇ", "½" →
+ * "1⁄2"), every Unicode decimal digit to ASCII ("٢" → "2"), the fraction slash to "/" and the
+ * other Unicode hyphens and dashes used as separators to "-".
  */
-export function normalizeForDosage(text: string): string {
+export function normalizeText(text: string): string {
   return text
     .normalize("NFKC")
     .replace(/\p{Nd}/gu, asciiDigit)
     .replace(/⁄/gu, "/")
-    .replace(DOTTED_ABBREVIATION, (m) => m.replace(/[.\s]/gu, ""));
+    .replace(/[‐‑‒−﹣]/gu, "-");
+}
+
+/**
+ * What every dosage check reads (Codex re-review 6, F3): `normalizeText`, then dotted
+ * abbreviations joined.
+ */
+export function normalizeForDosage(text: string): string {
+  return normalizeText(text).replace(DOTTED_ABBREVIATION, (m) => m.replace(/[.\s]/gu, ""));
 }
 
 /**
@@ -401,7 +413,8 @@ function frequencyEnd(words: readonly DoseWord[], i: number): number {
     if (after !== undefined && PERIOD.test(after)) return i + 2;
     return PERIOD.test(words[i + 3]?.word ?? "") ? i + 3 : -1;
   }
-  // "a day", "al día", "per day", "por día".
+  // "a day", "al día", "per day", "por día"; not "mantener al día" (up to date).
+  if (w === "al" && UP_TO_DATE_VERB.test(words[i - 1]?.word ?? "")) return -1;
   return (w === "a" || w === "al" || w === "per" || w === "por") &&
     /^(?:day|dia|night|noche)$/u.test(next)
     ? i + 1
@@ -584,17 +597,13 @@ function dosageMatches(text: string): string[] {
         isQuantityAt(words, j) || isFrequencyAt(words, j, false) || scheduleEnd(words, j) !== -1;
       if (use) {
         // A frequency or schedule right after use/usa belongs to a relative clause ("anything
-        // you use every day"): skip past it. When the object is a neuter relative ("usa lo que
-        // vayas a mantener al día"), a later frequency is the inner verb's; a schedule after
-        // it still counts ("Use what was prescribed at bedtime").
+        // you use every day"): skip past it. Anything later counts, also after a neuter
+        // relative object ("Use whatever was prescribed every morning").
         const end = Math.max(frequencyEnd(words, i + 1), scheduleEnd(words, i + 1));
-        const [w1, w2] = [words[i + 1]?.word ?? "", words[i + 2]?.word ?? ""];
-        const relative = NEUTER_RELATIVE.test(w1) || NEUTER_RELATIVE.test(`${w1} ${w2}`);
         const from = end !== -1 && sameSentence(i, end) ? end + 1 : i + 1;
         hit = (j) =>
           isQuantityAt(words, j) ||
-          (j >= from &&
-            (scheduleEnd(words, j) !== -1 || (!relative && isFrequencyAt(words, j, true))));
+          (j >= from && (scheduleEnd(words, j) !== -1 || isFrequencyAt(words, j, true)));
       }
       if (!found(i, after(i, hit))) {
         // Before the verb, in the same sentence: "Every 8 hours, give it", "At bedtime, use it".
@@ -635,7 +644,10 @@ function dosageMatches(text: string): string[] {
       if (label.length > (separated ? LABEL_WORDS_WITH_SEPARATOR : LABEL_WORDS_WITHOUT_SEPARATOR))
         continue;
       // A strong separator and a value that starts with a signal: whatever follows.
-      if (STRONG_SEPARATOR.test(gap(m)) && at.signal(first)) {
+      const quoted =
+        QUOTE.test(gap(m)) &&
+        quotesWordsOnly(sentence.slice(ws[m]?.start ?? 0).split(QUOTE)[0] ?? "");
+      if (STRONG_SEPARATOR.test(gap(m)) && !quoted && at.signal(first)) {
         matches.push(`${ws[labelStart]?.word} … ${ws[m]?.word}`);
         continue;
       }
@@ -684,6 +696,164 @@ function dosageMatches(text: string): string[] {
   return matches;
 }
 
+/*
+ * Number provenance (ADR 0015, layer 4, Codex verification): every NUMBER and every FREQUENCY or
+ * SCHEDULE in a generated answer must also appear in an article it cites. The KB has no doses,
+ * so a dose number can never pass, whatever the formatting around it. The comparison is on sets
+ * of normalized tokens, so lists, quotes, line breaks and punctuation don't matter. Benign
+ * numbers the cited guide doesn't contain are withheld too: the accepted false positive, tracked
+ * in EVALS.md. Citation markers and the service numbers 911 and 988 don't count.
+ */
+
+/** Roman numerals II–XII as standalone uppercase tokens. Bare "I" is the EN pronoun, not 1. */
+const ROMAN_NUMERALS = new Map(
+  ["II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII"].map((r, i) => [
+    r,
+    String(i + 2),
+  ]),
+);
+/**
+ * Written numbers, fractions and multiples, EN + ES, folded. "once" is 11 in both languages: in
+ * EN that's a false positive ("once you arrive" needs "once" in the cited guide), accepted.
+ */
+const NUMBER_WORDS = new Map<string, string>(
+  Object.entries({
+    zero: "0",
+    one: "1",
+    two: "2",
+    three: "3",
+    four: "4",
+    five: "5",
+    six: "6",
+    seven: "7",
+    eight: "8",
+    nine: "9",
+    ten: "10",
+    eleven: "11",
+    twelve: "12",
+    dozen: "12",
+    thirteen: "13",
+    fourteen: "14",
+    fifteen: "15",
+    sixteen: "16",
+    seventeen: "17",
+    eighteen: "18",
+    nineteen: "19",
+    twenty: "20",
+    thirty: "30",
+    forty: "40",
+    fifty: "50",
+    sixty: "60",
+    seventy: "70",
+    eighty: "80",
+    ninety: "90",
+    hundred: "100",
+    thousand: "1000",
+    cero: "0",
+    un: "1",
+    uno: "1",
+    una: "1",
+    dos: "2",
+    tres: "3",
+    cuatro: "4",
+    cinco: "5",
+    seis: "6",
+    siete: "7",
+    ocho: "8",
+    nueve: "9",
+    diez: "10",
+    once: "11",
+    doce: "12",
+    docena: "12",
+    trece: "13",
+    catorce: "14",
+    quince: "15",
+    dieciseis: "16",
+    diecisiete: "17",
+    dieciocho: "18",
+    diecinueve: "19",
+    veinte: "20",
+    treinta: "30",
+    cuarenta: "40",
+    cincuenta: "50",
+    sesenta: "60",
+    setenta: "70",
+    ochenta: "80",
+    noventa: "90",
+    cien: "100",
+    ciento: "100",
+    mil: "1000",
+    half: "1/2",
+    halves: "1/2",
+    media: "1/2",
+    medio: "1/2",
+    mitad: "1/2",
+    third: "1/3",
+    thirds: "1/3",
+    tercio: "1/3",
+    tercios: "1/3",
+    quarter: "1/4",
+    quarters: "1/4",
+    cuarto: "1/4",
+    cuartos: "1/4",
+    double: "2x",
+    doble: "2x",
+    twice: "2x",
+    triple: "3x",
+    thrice: "3x",
+  }),
+);
+const DIGIT_NUMBER = /\d+(?:[.,:/]\d+)*/g;
+
+/** "1,000" and "1.000" → "1000", "1,5" → "1.5", "08:00" → "8:00". */
+function canonicalNumber(digits: string): string {
+  return digits
+    .replace(/[.,](?=\d{3}(?!\d))/g, "")
+    .replace(",", ".")
+    .replace(/^0+(?=\d)/, "");
+}
+
+/** The number values in one word: digits, a Roman numeral, or a written number. */
+function wordNumbers(raw: string): string[] {
+  const roman = ROMAN_NUMERALS.get(raw);
+  if (roman) return [roman];
+  const written = NUMBER_WORDS.get(fold(raw));
+  if (written) return [written];
+  return (raw.match(DIGIT_NUMBER) ?? []).map(canonicalNumber);
+}
+
+/**
+ * The normalized number tokens and frequency/schedule phrase keys of a text. Words are read
+ * across sentence and line breaks ("at\nbedtime" is "at bedtime"), and numbers inside a phrase
+ * are normalized ("every two hours" and "every 2 hours" are one key).
+ */
+export function numberProvenanceKeys(text: string): Set<string> {
+  const clean = normalizeText(text).replace(CITATION_MARKER, " ");
+  const raws = [...clean.matchAll(WORD)].map((m) => m[0]);
+  const words: DoseWord[] = raws.map((raw) => ({ word: fold(raw), sentence: 0, start: 0, end: 0 }));
+  const keys = new Set<string>();
+  for (const raw of raws) {
+    for (const n of wordNumbers(raw)) if (!SERVICE_NUMBERS.has(n)) keys.add(n);
+  }
+  const phraseKey = (from: number, to: number) =>
+    words
+      .slice(from, to + 1)
+      .map((w, k) => wordNumbers(raws[from + k] ?? "")[0] ?? w.word)
+      .join(" ");
+  for (let i = 0; i < words.length; i++) {
+    for (const end of [frequencyEnd(words, i), scheduleEnd(words, i)]) {
+      if (end !== -1) keys.add(phraseKey(i, end));
+    }
+  }
+  return keys;
+}
+
+/** The answer's number and frequency/schedule keys that none of the cited articles contains. */
+export function findUnsourcedNumbers(answer: string, sources: readonly string[]): string[] {
+  const allowed = new Set(sources.flatMap((source) => [...numberProvenanceKeys(source)]));
+  return [...numberProvenanceKeys(answer)].filter((key) => !allowed.has(key));
+}
+
 /** Medical-claim and tone words the guidelines ban, EN + ES. Whole words, case-insensitive. */
 const BANNED_WORDS =
   /\b(?:cure[sd]?|curing|guarantee[sd]?|cura|curar|curación|garantiza(?:r|do|da|mos)?|garantía|journey|warriors?|guerrer[oa]s?|everything happens for a reason|todo pasa por algo)\b/giu;
@@ -692,10 +862,12 @@ export type ContentViolation = { rule: "phone_number" | "dosage" | "banned_word"
 
 export function findContentViolations(text: string): ContentViolation[] {
   const violations: ContentViolation[] = [];
-  for (const m of text.matchAll(PHONE_LIKE)) {
+  // On normalized text: "５５５－１２３－４５６７" and "٥٥٥-١٢٣-٤٥٦٧" are read as "555-123-4567".
+  const normalized = normalizeText(text);
+  for (const m of normalized.matchAll(PHONE_LIKE)) {
     violations.push({ rule: "phone_number", match: m[0].trim() });
   }
-  for (const m of text.matchAll(N11)) violations.push({ rule: "phone_number", match: m[0] });
+  for (const m of normalized.matchAll(N11)) violations.push({ rule: "phone_number", match: m[0] });
   for (const match of dosageMatches(text)) violations.push({ rule: "dosage", match });
   for (const m of text.matchAll(BANNED_WORDS))
     violations.push({ rule: "banned_word", match: m[0] });
