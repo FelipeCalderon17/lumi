@@ -69,6 +69,8 @@ export type ChatRecord = {
   withholding: Withholding | null;
   judge: JudgeRecord | null;
   judgeSkipped: SkipReason | null;
+  /** What the plan asked the judge to do for this run (absent in records written before it). */
+  judgeMode?: JudgeMode | "none";
   costUsd: CostEstimate;
   providerError: Capture["error"];
 };
@@ -163,6 +165,7 @@ function skippedChat(unit: ChatUnit, reason: SkipReason): ChatRecord {
     withholding: null,
     judge: null,
     judgeSkipped: null,
+    judgeMode: unit.judge,
     costUsd: 0,
     providerError: null,
   };

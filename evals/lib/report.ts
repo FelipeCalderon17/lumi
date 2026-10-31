@@ -81,6 +81,8 @@ export type ArmSummary = {
   groundedAccuracy: Rate;
   abstention: { notInKb: Rate; answerable: Rate; overall: Rate };
   judge: {
+    /** Revealed answers the plan asked to judge that got a verdict (errors, skips = gaps). */
+    coverage: Rate;
     groundedness: Rate;
     groundednessDrafts: Rate;
     rubric: Rate;
@@ -97,7 +99,11 @@ export type ArmSummary = {
     lowScores: { caseId: string; run: number; criterion: string; score: number; reason: string }[];
     costUsd: CostEstimate;
   };
-  latency: { router: Dist; answer: Dist; totalAnswered: Dist; totalAll: Dist };
+  /**
+   * "Answer-step requests" = requests that reached the answer model: revealed answers, drafts an
+   * output check withheld, abstentions and answer-step failures (e.g. a timeout).
+   */
+  latency: { router: Dist; answer: Dist; totalAnswerStep: Dist; totalAll: Dist };
   tokens: {
     input: number;
     cached: number;
@@ -117,7 +123,7 @@ export type ArmSummary = {
     /** Calls left out of every cost here because the provider reported no usage. */
     unknownUsageCalls: number;
     perConversation: CostEstimate;
-    perAnswered: { actual: CostEstimate; cold: CostEstimate; warm: CostEstimate; n: number };
+    perAnswerStep: { actual: CostEstimate; cold: CostEstimate; warm: CostEstimate; n: number };
   };
   reliability: {
     fallbacks: Record<string, number>;
@@ -192,6 +198,7 @@ export function summarizeArm(
   const groundedness = rate(0, 0);
   const groundednessDrafts = rate(0, 0);
   const rubric = rate(0, 0);
+  const judgeCoverage = rate(0, 0);
   const scores = {
     boundary: [] as number[],
     tone: [] as number[],
@@ -252,6 +259,9 @@ export function summarizeArm(
 
     // Judge.
     const j = r.judge;
+    // Records written before judgeMode existed came from judge=all runs.
+    const judgeExpected = terminal?.type === "answer" && (r.judgeMode ?? "groundedness") !== "none";
+    if (judgeExpected) add(judgeCoverage, j?.target === "answer" && j.verdict !== null);
     if (r.judgeSkipped === "budget") judgeSkipped += 1;
     if (j) {
       judgeCost = addCosts(judgeCost, estimateCost(j.call, catalog));
@@ -298,6 +308,9 @@ export function summarizeArm(
             (n) => r.checks.find((x) => x.name === n)?.pass ?? true,
           );
           add(grounded, outcomeOk && det && j.verdict?.unsupportedClaims.length === 0);
+        } else if (judgeExpected) {
+          // A missing or failed judge result counts against, never out of, the denominator.
+          add(grounded, false);
         }
       } else {
         add(grounded, outcomeOk);
@@ -354,7 +367,7 @@ export function summarizeArm(
   );
   const routerRows = rows.filter((x) => x.row.step === "router").map((x) => x.row);
   const answerRows = rows.filter((x) => x.row.step === "answer").map((x) => x.row);
-  const answered = done.filter((r) => r.rows.some((x) => x.step === "answer"));
+  const answerStep = done.filter((r) => r.rows.some((x) => x.step === "answer"));
 
   // Warm cost: each call's input cached up to the most this step/model/language was seen cached.
   const maxCached = new Map<string, number>();
@@ -362,19 +375,19 @@ export function summarizeArm(
     const key = `${row.step}|${row.model}|${language}`;
     maxCached.set(key, Math.max(maxCached.get(key) ?? 0, row.cachedInputTokens ?? 0));
   }
-  const answeredRows = answered.flatMap((r) =>
+  const answerStepRows = answerStep.flatMap((r) =>
     r.rows.map((row) => ({ row, language: r.route?.language ?? r.locale })),
   );
-  const actualAnswered = costOf(
-    answeredRows.map((x) => x.row),
+  const actualAnswerStep = costOf(
+    answerStepRows.map((x) => x.row),
     catalog,
   );
-  const coldAnswered = costOf(
-    answeredRows.map((x) => x.row),
+  const coldAnswerStep = costOf(
+    answerStepRows.map((x) => x.row),
     catalog,
     () => 0,
   );
-  const warmAnswered = answeredRows.reduce<CostEstimate>((sum, { row, language }) => {
+  const warmAnswerStep = answerStepRows.reduce<CostEstimate>((sum, { row, language }) => {
     const cached = maxCached.get(`${row.step}|${row.model}|${language}`) ?? 0;
     return addCosts(
       sum,
@@ -410,6 +423,7 @@ export function summarizeArm(
       overall: rate(notInKb.pass + answerable.pass, notInKb.total + answerable.total),
     },
     judge: {
+      coverage: judgeCoverage,
       groundedness,
       groundednessDrafts,
       rubric,
@@ -429,7 +443,7 @@ export function summarizeArm(
     latency: {
       router: dist(routerRows.map((r) => r.latencyMs)),
       answer: dist(answerRows.map((r) => r.latencyMs)),
-      totalAnswered: dist(answered.map((r) => r.latency.totalMs)),
+      totalAnswerStep: dist(answerStep.map((r) => r.latency.totalMs)),
       totalAll: dist(done.filter((r) => r.rows.length > 0).map((r) => r.latency.totalMs)),
     },
     tokens: {
@@ -468,11 +482,11 @@ export function summarizeArm(
       actualUsd: actual,
       unknownUsageCalls: rows.filter((x) => !knownUsage(x.row)).length,
       perConversation: divide(actual, done.length),
-      perAnswered: {
-        actual: divide(actualAnswered, answered.length),
-        cold: divide(coldAnswered, answered.length),
-        warm: divide(warmAnswered, answered.length),
-        n: answered.length,
+      perAnswerStep: {
+        actual: divide(actualAnswerStep, answerStep.length),
+        cold: divide(coldAnswerStep, answerStep.length),
+        warm: divide(warmAnswerStep, answerStep.length),
+        n: answerStep.length,
       },
     },
     reliability: { fallbacks, providerErrors, unstableCases },

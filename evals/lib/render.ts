@@ -127,6 +127,10 @@ export function renderResults(
         ["· not-in-KB abstains", ...arms.map((a) => short(a.abstention.notInKb))],
         ["· answerable doesn't abstain", ...arms.map((a) => short(a.abstention.answerable))],
         [
+          "Judge coverage (revealed answers judged / to judge)",
+          ...arms.map((a) => pctShort(a.judge.coverage)),
+        ],
+        [
           "Judge: groundedness (no unsupported claim)",
           ...arms.map((a) => pctShort(a.judge.groundedness)),
         ],
@@ -145,23 +149,23 @@ export function renderResults(
         ["Latency p50 / p95: router", ...arms.map((a) => distMs(a.latency.router))],
         ["Latency p50 / p95: answer", ...arms.map((a) => distMs(a.latency.answer))],
         [
-          "Latency p50 / p95: total (answered)",
-          ...arms.map((a) => distMs(a.latency.totalAnswered)),
+          "Latency p50 / p95: total (answer-step requests)",
+          ...arms.map((a) => distMs(a.latency.totalAnswerStep)),
         ],
         [
-          "Cost per answered conversation (router + answer): actual",
-          ...arms.map((a) => usd(a.cost.perAnswered.actual, 5)),
+          "Cost per answer-step request (router + answer): actual",
+          ...arms.map((a) => usd(a.cost.perAnswerStep.actual, 5)),
         ],
         [
           "· cold / warm cache",
           ...arms.map(
-            (a) => `${usd(a.cost.perAnswered.cold, 5)} / ${usd(a.cost.perAnswered.warm, 5)}`,
+            (a) => `${usd(a.cost.perAnswerStep.cold, 5)} / ${usd(a.cost.perAnswerStep.warm, 5)}`,
           ),
         ],
         [
-          "Per 1,000 answered conversations: cold / warm",
+          "Per 1,000 answer-step requests: cold / warm",
           ...arms.map(
-            (a) => `${per1000(a.cost.perAnswered.cold)} / ${per1000(a.cost.perAnswered.warm)}`,
+            (a) => `${per1000(a.cost.perAnswerStep.cold)} / ${per1000(a.cost.perAnswerStep.warm)}`,
           ),
         ],
         [

@@ -19,6 +19,7 @@ import { createOpenAIProvider } from "../src/server/models";
 import { type GoldenCase, GoldenCaseSchema } from "./golden";
 import { createBudgetGuard } from "./lib/budget";
 import { JUDGE_PROMPT_VERSION } from "./lib/judge";
+import { mergeRuns } from "./lib/merge";
 import { parseEvalArgs } from "./lib/options";
 import { buildPlan, estimatePlan, fitPlanToBudget, promptSizes } from "./lib/plan";
 import { redactSecrets } from "./lib/redact";
@@ -101,26 +102,29 @@ it.skipIf(!enabled)(
     const cases = new Map<string, GoldenCase>(golden.map((c) => [c.id, c]));
 
     if (opts.report) {
-      // No calls: merge earlier runs over the same frozen inputs into one report.
-      const metas: Meta[] = [];
-      const records: RunRecord[] = [];
-      for (const name of opts.report) {
+      // No calls: no provider is created on this path. It only reads what earlier runs wrote
+      // and merges them (evals/lib/merge.ts), refusing runs that aren't comparable.
+      const runs = opts.report.map((name) => {
         const runDir = new URL(`./runs/${name}/`, import.meta.url);
         const summary = JSON.parse(readFileSync(new URL("summary.json", runDir), "utf8"));
-        metas.push(...(summary.metas ?? [summary.meta]));
-        records.push(...readJsonl(`./runs/${name}/results.jsonl`, (v) => v as RunRecord));
-      }
-      const current = fingerprint(kbs);
-      const frozen = (m: Meta) =>
-        m.fingerprint.prompts === current.prompts &&
-        m.fingerprint.kb.en === current.kb.en &&
-        m.fingerprint.kb.es === current.kb.es;
-      if (!metas.every(frozen))
-        throw new Error("--report: runs differ in KB or prompts; can't merge");
+        return {
+          name,
+          metas: (summary.metas ?? [summary.meta]) as Meta[],
+          records: readJsonl(`./runs/${name}/results.jsonl`, (v) => v as RunRecord),
+        };
+      });
+      const merged = mergeRuns(runs, {
+        fingerprint: fingerprint(kbs),
+        judgePromptVersion: JUDGE_PROMPT_VERSION,
+        judgeModel: config.models.judge,
+        routerModel: config.models.router,
+        notebookModel: config.models.notebook,
+      });
+      if (!merged.ok) throw new Error(`--report: ${merged.error}`);
       const stamp = `${new Date().toISOString().replace(/[:.]/g, "-")}-report`;
       const dir = new URL(`./runs/${stamp}/`, import.meta.url);
       mkdirSync(dir, { recursive: true });
-      writeReport(dir, metas, records, cases);
+      writeReport(dir, merged.metas, merged.records, cases);
       say(`\nReport (no model call): evals/runs/${stamp}/results.md, safety-review.md`);
       return;
     }

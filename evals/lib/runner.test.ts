@@ -9,6 +9,7 @@ import type { GoldenCase } from "../golden";
 import type { NotebookCase } from "../notebook";
 import { createBudgetGuard } from "./budget";
 import { rubricPass, runJudge, toVerdict } from "./judge";
+import { mergeRuns } from "./merge";
 import { DEFAULT_OPTIONS, type EvalOptions } from "./options";
 import { buildPlan, fitPlanToBudget, type Plan, promptSizes } from "./plan";
 import { renderResults, renderSafetyReview } from "./render";
@@ -318,6 +319,7 @@ describe("executePlan (mocked models, real pipeline)", () => {
     expect(arm.abstention.notInKb).toEqual({ pass: 1, total: 1 });
     expect(arm.abstention.answerable).toEqual({ pass: 2, total: 2 });
     expect(arm.judge.groundedness).toEqual({ pass: 1, total: 1 });
+    expect(arm.judge.coverage).toEqual({ pass: 1, total: 1 });
     expect(arm.judge.groundednessDrafts).toEqual({ pass: 0, total: 1 });
     expect(arm.judge.means.usefulness).toBe(2);
     expect(arm.judge.lowScores).toHaveLength(1);
@@ -328,11 +330,11 @@ describe("executePlan (mocked models, real pipeline)", () => {
     });
     expect(arm.failures.map((f) => f.caseId)).toEqual(["practical-en-002"]);
     expect(arm.groundedAccuracy).toEqual({ pass: 1, total: 2 });
-    expect(arm.latency.totalAnswered.n).toBe(3);
+    expect(arm.latency.totalAnswerStep.n).toBe(3);
     expect(arm.outputCaps.find((c) => c.step === "answer")?.truncated).toBe(0);
-    expect(arm.cost.perAnswered.cold).not.toBe("unknown");
+    expect(arm.cost.perAnswerStep.cold).not.toBe("unknown");
     // Warm = the observed cache applied to every call, so it's between actual and cold here.
-    const { cold, warm } = arm.cost.perAnswered;
+    const { cold, warm } = arm.cost.perAnswerStep;
     if (cold !== "unknown" && warm !== "unknown") expect(warm).toBeLessThan(cold);
 
     const notebook = summarizeNotebook([nb as NotebookRecord], modelCatalog);
@@ -372,6 +374,23 @@ describe("executePlan (mocked models, real pipeline)", () => {
     expect(review).toContain("emergency-en-001");
     expect(review).toContain("medical-boundary-en-001");
     expect(review).not.toContain("practical-en-001");
+  });
+
+  it("a failed judge call shows as a coverage gap and counts against grounded accuracy", async () => {
+    const plan = buildPlan(
+      options({ notebook: false }),
+      golden.filter((c) => c.id === "practical-en-001"),
+      [],
+      modelCatalog,
+    );
+    // The judge model (gpt-6-sol) errors; the luna router and answer work.
+    const { outcome } = await run(plan, 5, provider({ "gpt-6-sol": unavailableModel }));
+    const chat = outcome.records.filter((r): r is ChatRecord => r.kind === "chat");
+    expect(chat[0]?.judge?.error).toBe("provider_error");
+    const arm = summarizeArm("gpt-6-luna", chat, casesById, modelCatalog);
+    expect(arm.judge.coverage).toEqual({ pass: 0, total: 1 });
+    expect(arm.judge.errors).toBe(1);
+    expect(arm.groundedAccuracy).toEqual({ pass: 0, total: 1 });
   });
 
   it("stops cleanly at the budget: the call that doesn't fit and everything after it are skipped", async () => {
@@ -625,5 +644,90 @@ describe("judge", () => {
     const down = await runJudge(input, { model: unavailableModel() });
     expect(down).toMatchObject({ verdict: null, error: "provider_error" });
     expect(down.call.inputTokens).toBeNull();
+  });
+});
+
+describe("mergeRuns (--report)", () => {
+  const fp = {
+    kb: { en: "a", es: "b" },
+    prompts: "c",
+    versions: { router: 1, answer: 2, notebook: 4 },
+  };
+  const current = {
+    fingerprint: fp,
+    judgePromptVersion: 1,
+    judgeModel: config.models.judge,
+    routerModel: config.models.router,
+    notebookModel: config.models.notebook,
+  };
+  const meta = {
+    date: "2026-10-31",
+    gitSha: "abc",
+    dirty: false,
+    fingerprint: fp,
+    judgeModel: config.models.judge,
+    routerModel: config.models.router,
+    notebookModel: config.models.notebook,
+    judgePromptVersion: 1,
+    args: [],
+    estimate: { sections: [], total: { cold: 0, warm: 0, worst: 0, calls: 0, unknownPrice: [] } },
+    capUsd: 1,
+    spentUsd: 0.1,
+    stoppedAt: null,
+    skippedArms: [],
+    unavailableArms: [],
+    skippedUnits: 0,
+    durationMin: 1,
+    runDir: "x",
+  };
+  const record = (arm: ModelId, run: number, done = true) =>
+    ({
+      kind: "chat",
+      arm,
+      caseId: "practical-en-001",
+      run,
+      status: done ? "done" : { skipped: "budget" },
+    }) as ChatRecord;
+
+  it("merges comparable runs; a unit skipped in one run and done in another counts once", () => {
+    const merged = mergeRuns(
+      [
+        {
+          name: "r1",
+          metas: [meta],
+          records: [record("gpt-6-luna", 1), record("gpt-6-sol", 1, false)],
+        },
+        { name: "r2", metas: [meta], records: [record("gpt-6-sol", 1)] },
+      ],
+      current,
+    );
+    if (!merged.ok) throw new Error(merged.error);
+    expect(
+      merged.records.map((r) => `${r.kind === "chat" ? r.arm : ""}:${r.status === "done"}`),
+    ).toEqual(["gpt-6-luna:true", "gpt-6-sol:true"]);
+    expect(merged.metas).toHaveLength(2);
+  });
+
+  it("rejects duplicate finished records and the same run twice", () => {
+    const r = { name: "r1", metas: [meta], records: [record("gpt-6-luna", 1)] };
+    expect(mergeRuns([r, { ...r, name: "r2" }], current)).toMatchObject({
+      ok: false,
+      error: /duplicate record/,
+    });
+    expect(mergeRuns([r, r], current)).toMatchObject({ ok: false, error: /listed twice/ });
+  });
+
+  it.each([
+    ["judge prompt version", { judgePromptVersion: 2 }],
+    ["prompt hash", { fingerprint: { ...fp, prompts: "other" } }],
+    ["KB hash", { fingerprint: { ...fp, kb: { en: "x", es: "b" } } }],
+    ["prompt version", { fingerprint: { ...fp, versions: { router: 1, answer: 3, notebook: 4 } } }],
+    ["judge model", { judgeModel: "gpt-6-luna" as const }],
+  ])("rejects a run with a different %s", (problem, change) => {
+    const merged = mergeRuns(
+      [{ name: "r1", metas: [{ ...meta, ...change }], records: [] }],
+      current,
+    );
+    expect(merged).toMatchObject({ ok: false, error: `run r1: different ${problem}` });
   });
 });
