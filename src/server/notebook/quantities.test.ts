@@ -10,10 +10,11 @@ describe("notebook.quantitiesIn", () => {
       "3|times",
       "5|mg",
     ]);
-    expect(quantitiesIn("1/2 tablet, ½ tableta, 1½ tablets")).toEqual([
-      "0.5|tablet",
-      "0.5|tablet",
-      "1.5|tablet",
+    expect(quantitiesIn("1/2 tablet, ½ tableta, 1 / 2 tablet, 1½ tablets")).toEqual([
+      "1/2|tablet",
+      "1/2|tablet",
+      "1/2|tablet",
+      "1+1/2|tablet",
     ]);
     expect(quantitiesIn("8:30 p.m.")).toEqual(["8:30|pm"]);
   });
@@ -25,10 +26,10 @@ describe("notebook.quantitiesIn", () => {
     expect(quantitiesIn("one hundred and five mg")).toEqual(["105|mg"]);
     expect(quantitiesIn("treinta y cinco ml")).toEqual(["35|ml"]);
     expect(quantitiesIn("veinticinco miligramos")).toEqual(["25|mg"]);
-    expect(quantitiesIn("half a tablet")).toEqual(["0.5|tablet"]);
-    expect(quantitiesIn("media pastilla")).toEqual(["0.5|tablet"]);
-    expect(quantitiesIn("one and a half tablets")).toEqual(["1.5|tablet"]);
-    expect(quantitiesIn("dos y media pastillas")).toEqual(["2.5|tablet"]);
+    expect(quantitiesIn("half a tablet")).toEqual(["1/2|tablet"]);
+    expect(quantitiesIn("media pastilla")).toEqual(["1/2|tablet"]);
+    expect(quantitiesIn("one and a half tablets")).toEqual(["1+1/2|tablet"]);
+    expect(quantitiesIn("dos y media pastillas")).toEqual(["2+1/2|tablet"]);
     expect(quantitiesIn("woke up twice")).toEqual(["2|times"]);
     expect(quantitiesIn("despertó dos veces")).toEqual(["2|times"]);
   });
@@ -55,15 +56,33 @@ describe("notebook.quantitiesIn", () => {
   });
 
   it("marks what it can't read confidently as raw or code (verbatim-only)", () => {
-    expect(quantitiesIn("1,000 mg")).toEqual(["raw|1,000"]);
-    expect(quantitiesIn("1.2.3")).toEqual(["raw|1.2.3"]);
-    expect(quantitiesIn("5/0")).toEqual(["raw|5/0"]);
+    expect(quantitiesIn("1,000 mg")).toEqual(["raw|1,000|mg"]);
+    expect(quantitiesIn("1.2.3")).toEqual(["raw|1.2.3|"]);
+    expect(quantitiesIn("5/0 ml")).toEqual(["raw|5/0|ml"]);
+    expect(quantitiesIn("-1.000 mL")).toEqual(["raw|-1.000|ml"]);
     expect(quantitiesIn("x²")).toEqual(["raw|²"]);
     expect(quantitiesIn("B12")).toEqual(["code|b12"]);
   });
 
   it("finds nothing in text without numbers, and doesn't treat 'once' or articles as numbers", () => {
-    expect(quantitiesIn("Tired, ate a little, una siesta")).toEqual([]);
+    expect(quantitiesIn("Tired, ate a little, una siesta, a day")).toEqual([]);
     expect(quantitiesIn("once she was asleep")).toEqual([]);
+  });
+
+  it("binds a leading sign to the value; a hyphen joined to what's before is no sign", () => {
+    expect(quantitiesIn("-5 ml, +2 ml, −3 °C")).toEqual(["-5|ml", "+2|ml", "-3|deg_c"]);
+    expect(quantitiesIn("5-10 ml")).toEqual(["5|", "10|ml"]);
+  });
+
+  it("an article before a dose unit or form is one of it", () => {
+    expect(quantitiesIn("Gave a tablet")).toEqual(["1|tablet"]);
+    expect(quantitiesIn("Le di un miligramo")).toEqual(["1|mg"]);
+    expect(quantitiesIn("Le di una unidad")).toEqual(["1|unit"]);
+  });
+
+  it("compares text, not rounded numbers: fractions aren't reduced, decimals aren't rounded", () => {
+    expect(quantitiesIn("BP 120/80, 2/4 tablet")).toEqual(["120/80|", "2/4|tablet"]);
+    expect(quantitiesIn("2.50 ml, 2,5 ml, 007 ml")).toEqual(["2.5|ml", "2.5|ml", "7|ml"]);
+    expect(quantitiesIn("2.5000001 ml")).toEqual(["2.5000001|ml"]);
   });
 });

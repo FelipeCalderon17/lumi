@@ -27,11 +27,12 @@ import { quantitiesIn } from "./quantities";
  *
  * The model may only ORGANISE and REPHRASE. Code then checks what it can:
  *   - every item cites the notes it came from, and those notes exist;
- *   - every quantity in an item (digits, fractions, written numbers EN/ES), with its full unit,
- *     appears with the same value and the same unit in the notes the item cites (catches
- *     invented or altered doses, temperatures, times; "2.5 ml" ≠ "5.2 ml", "5 ml" ≠ "5 mg",
- *     "38 °C" ≠ "38 °F", "5 mL/kg" ≠ "5 mL"). Anything numeric it can't read must be copied
- *     verbatim (see ./quantities). Timestamps are not a source;
+ *   - every quantity in an item (digits, fractions, written numbers EN/ES, an article before a
+ *     dose unit), with its sign and full unit, appears as the same span in the notes the item
+ *     cites (catches invented or altered doses, temperatures, times; "2.5 ml" ≠ "5.2 ml",
+ *     "5 ml" ≠ "-5 ml" ≠ "5 mg", "38 °C" ≠ "38 °F", "5 mL/kg" ≠ "5 mL", "120/80" ≠ "150/100").
+ *     Only trivially safe spellings are equivalent; anything numeric it can't read must be
+ *     copied verbatim with its unit (see ./quantities). Timestamps are not a source;
  *   - dates come from the notes' own timestamps, never from the model.
  * Anything off → the raw notes grouped by date, which is still a useful page.
  * What code can't check (advice, interpretation, causal claims) is measured in the evals

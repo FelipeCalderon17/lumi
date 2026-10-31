@@ -170,6 +170,23 @@ describe("notebook.checkNotebook (traceability)", () => {
     ] as const) {
       expect([source, output, one(source, output)]).toEqual([source, output, false]);
     }
+    // Codex re-review 4: a sign, an unreadable number's unit, or an article is bound too.
+    for (const [source, output] of [
+      ["Gave 1,000 mg", "Gave 1,000 ml"],
+      ["Gave 1.000 mg", "Gave 1.000 ml"],
+      ["Gave 1.2.3 mg", "Gave 1.2.3 ml"],
+      ["Gave 5/0 mg", "Gave 5/0 ml"],
+      ["Gave 5 ml", "Gave -5 ml"],
+      ["Gave -5 ml", "Gave 5 ml"],
+      ["Tired", "Gave un miligramo"],
+      ["Tired", "Gave una unidad"],
+      ["Tired", "Gave a tablet"],
+      ["BP 120/80", "BP 150/100"],
+      ["Gave 1/2 tablet", "Gave 2/4 tablet"],
+      ["Gave 2.5000001 ml", "Gave 2.5000002 ml"],
+    ] as const) {
+      expect([source, output, one(source, output)]).toEqual([source, output, false]);
+    }
     // Same value, same unit, different spelling still passes.
     for (const [source, output] of [
       ["Slept three hours", "Slept 3 hours"],
@@ -178,6 +195,11 @@ describe("notebook.checkNotebook (traceability)", () => {
       ["Fiebre de 38,5 °C", "Fever of 38.5 °C"],
       ["Gave 5 mg", "Gave 5 milligrams"],
       ["Gave 1,000 mg", "Gave 1,000 mg"],
+      ["Gave ½ tablet", "Gave 1/2 tablet"],
+      ["Gave 1/2 tablet", "Gave 1 / 2 tablet"],
+      ["Gave one tablet", "Gave a tablet"],
+      ["Gave -5 ml", "Gave -5 mL"],
+      ["BP 120/80", "BP 120/80"],
     ] as const) {
       expect([source, output, one(source, output)]).toEqual([source, output, true]);
     }

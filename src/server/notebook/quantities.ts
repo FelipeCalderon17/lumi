@@ -1,19 +1,25 @@
 /**
- * Quantities in notebook text, for the "no invented numbers" check (Codex re-review 3).
+ * Quantities in notebook text, for the "no invented numbers" check (Codex re-reviews 3–4).
  *
- * FAIL CLOSED. Every numeric thing in a text becomes a key, and an item's keys must all appear
- * in the notes it cites:
- *   - "value|unit": the value from digits ("2.5", "2,5"), fractions ("1/2", "½"), clock times
- *     ("8:30") or written numbers EN/ES ("fifty", "treinta y cinco", "half", "media"), and the
- *     full canonical unit after it. Units stay distinct ("°C" ≠ "°F" ≠ "degrees", "mL" ≠ "mg"),
- *     compound units stay whole ("mL/kg", "mg per kg" → "ml/kg", "mg/kg"), and letters glued
- *     to a number keep their spelling ("5mEq" → "5|meq") even if we don't know the unit.
- *     A plain word after the number ("3 kids") is no unit: "3|".
- *   - "raw|…" for anything we can't read confidently: "1,000" (thousands or decimal?),
- *     "1.2.3", "5/0", "²". It only passes if the cited note has the very same characters.
+ * FAIL CLOSED, EXACT SPAN. Every numeric thing in a text becomes a key: its sign, its value and
+ * the whole unit after it, kept together. An item's keys must all appear in the notes it cites:
+ *   - "value|unit": a leading sign ("-5", "+2"), the value from digits ("2.5", "2,5"),
+ *     fractions ("1/2", "1 / 2", "½"), clock times ("8:30") or written numbers EN/ES ("fifty",
+ *     "treinta y cinco", "half", "media"), and the full canonical unit after it. Units stay
+ *     distinct ("°C" ≠ "°F" ≠ "degrees", "mL" ≠ "mg"), compound units stay whole ("mL/kg", "mg
+ *     per kg" → "ml/kg", "mg/kg"), and letters glued to a number keep their spelling ("5mEq" →
+ *     "5|meq") even if we don't know the unit. A plain word after the number ("3 kids") is no
+ *     unit: "3|".
+ *   - an article before a dose unit or form is a quantity of one: "a tablet", "un miligramo",
+ *     "una unidad" → "1|tablet", "1|mg", "1|unit".
+ *   - "raw|…|unit" for anything we can't read confidently: "1,000" (thousands or decimal?),
+ *     "1.2.3", "5/0", "²". The characters (with the sign) must match verbatim, AND the unit is
+ *     bound to them, so "1,000 mg" → "1,000 ml" fails.
  *   - "code|…" for letters followed by digits ("B12", "x2"): same, verbatim only.
- * So "38 °C" → "38 °F", "1/2 tablet" → "2 tablets", "5 ml" → "fifty ml" and "five
- * milliliters" from a note without numbers all fail, and the page falls back to the raw notes.
+ * The only equivalences are trivially safe ones: the same value in another spelling ("½" =
+ * "1/2" = "1 / 2" = "half", "2,5" = "2.5", "three" = "3", "a tablet" = "one tablet") with the
+ * same canonical unit. So "38 °C" → "38 °F", "5 ml" → "-5 ml", "1/2 tablet" → "2 tablets" and "a
+ * tablet" from a note without one all fail, and the page falls back to the raw notes.
  */
 
 const CANONICAL_UNITS: Record<string, readonly string[]> = {
@@ -164,15 +170,21 @@ const NUMBER_WORDS: Record<string, number> = {
 };
 const MULTIPLIERS: Record<string, number> = { hundred: 100, thousand: 1000, mil: 1000 };
 /** Words that are a value on their own. */
-const FRACTION_WORDS: Record<string, number> = { half: 0.5, medio: 0.5, media: 0.5, quarter: 0.25 };
+const FRACTION_WORDS: Record<string, string> = {
+  half: "1/2",
+  medio: "1/2",
+  media: "1/2",
+  quarter: "1/4",
+};
 /** Words that are a count of times: "twice" = "2 times" = "dos veces". */
-const TIMES_WORDS: Record<string, number> = { twice: 2, thrice: 3 };
-const FRACTION_CHARS: Record<string, number> = {
-  "½": 0.5,
-  "¼": 0.25,
-  "¾": 0.75,
-  "⅓": 1 / 3,
-  "⅔": 2 / 3,
+const TIMES_WORDS: Record<string, string> = { twice: "2", thrice: "3" };
+/** Fraction characters are the same text as the written fraction: "½" = "1/2". */
+const FRACTION_CHARS: Record<string, string> = {
+  "½": "1/2",
+  "¼": "1/4",
+  "¾": "3/4",
+  "⅓": "1/3",
+  "⅔": "2/3",
 };
 
 type Token = {
@@ -183,7 +195,28 @@ type Token = {
 };
 
 const TOKEN =
-  /(\d{1,2}:\d{2})|(\d+(?:[.,]\d+)*(?:\/\d+(?:[.,]\d+)*)?[½¼¾⅓⅔]?|[½¼¾⅓⅔])|([\p{L}µ]+)|([°º%/-])|(\S)/gu;
+  /(\d{1,2}:\d{2})|(\d+(?:[.,]\d+)*(?:\s?\/\s?\d+(?:[.,]\d+)*)?[½¼¾⅓⅔]?|[½¼¾⅓⅔])|([\p{L}µ]+)|([°º%/+\-−])|(\S)/gu;
+
+/** Units an article can count as one of: "a tablet", "un miligramo", "una unidad". */
+const ARTICLE_UNITS = new Set([
+  "ml",
+  "cc",
+  "mg",
+  "mcg",
+  "g",
+  "iu",
+  "meq",
+  "mmol",
+  "tablet",
+  "capsule",
+  "drop",
+  "tsp",
+  "tbsp",
+  "puff",
+  "unit",
+  "dose",
+]);
+const ARTICLES = new Set(["a", "an", "un", "una"]);
 
 function normalize(text: string): string {
   return text
@@ -201,26 +234,34 @@ function tokenize(text: string): Token[] {
   });
 }
 
-/** Stable text for a value, so 1/3 on both sides compares equal. */
-const show = (value: number) => String(Number(value.toFixed(6)));
+/** "007" → "7". Text, not Number: long digit runs don't round into each other. */
+const integerText = (digits: string) => digits.replace(/^0+(?=\d)/, "");
 
-/** The value of a digit token, or null when it can't be read confidently. */
-function digitValue(text: string): number | null {
+/**
+ * The canonical text of a digit token, or null when it can't be read confidently. Only
+ * trivially safe equivalences: "2,5" = "2.5" = "2.50", "½" = "1/2" = "1 / 2", "1½" = "1+1/2".
+ * Fractions are NOT reduced: "2/4" ≠ "1/2", and "120/80" ≠ "150/100" (blood pressure).
+ */
+function digitText(text: string): string | null {
   const fraction = FRACTION_CHARS[text.slice(-1)];
   const body = fraction === undefined ? text : text.slice(0, -1);
   if (body === "") return fraction ?? null;
   if (body.includes("/")) {
-    const [a = "", b = ""] = body.split("/");
-    if (fraction !== undefined || !/^\d+$/.test(a) || !/^\d+$/.test(b) || Number(b) === 0) {
+    const [a = "", b = ""] = body.split("/").map((part) => part.trim());
+    if (fraction !== undefined || !/^\d+$/.test(a) || !/^\d+$/.test(b) || /^0+$/.test(b)) {
       return null;
     }
-    return Number(a) / Number(b);
+    return `${integerText(a)}/${integerText(b)}`;
   }
-  if (/^\d+$/.test(body)) return Number(body) + (fraction ?? 0);
+  if (/^\d+$/.test(body)) {
+    return fraction === undefined ? integerText(body) : `${integerText(body)}+${fraction}`;
+  }
   // "2.5", "2,5": one separator. Exactly three digits after it ("1,000") could be thousands.
-  const decimal = /^\d+[.,](\d+)$/.exec(body);
-  if (decimal && fraction === undefined && decimal[1]?.length !== 3) {
-    return Number(body.replace(",", "."));
+  const decimal = /^(\d+)[.,](\d+)$/.exec(body);
+  if (decimal && fraction === undefined && decimal[2]?.length !== 3) {
+    const decimals = (decimal[2] ?? "").replace(/0+$/, "");
+    const whole = integerText(decimal[1] ?? "");
+    return decimals === "" ? whole : `${whole}.${decimals}`;
   }
   return null;
 }
@@ -311,12 +352,25 @@ function readWrittenNumber(tokens: Token[], i: number): { value: number; next: n
   return any ? { value: total + current, next } : null;
 }
 
-/** "and a half" / "y medio/media" after a number. */
-function readHalf(tokens: Token[], i: number): { add: number; next: number } {
+/**
+ * The sign right before the number at token i ("-5", "+2", "−5"), or "". Not a hyphen joined
+ * to what's before it: "5-10" is a range, "B-12" a name.
+ */
+function signOf(tokens: Token[], i: number): string {
+  const sign = tokens[i - 1];
+  if (sign?.kind !== "sym" || !["-", "+", "−"].includes(sign.text)) return "";
+  if (!adjacent(sign, tokens[i])) return "";
+  const before = tokens[i - 2];
+  if (adjacent(before, sign) && before?.kind !== "sym") return "";
+  return sign.text === "+" ? "+" : "-";
+}
+
+/** "and a half" / "y medio/media" after a number: "+1/2". */
+function readHalf(tokens: Token[], i: number): { add: string; next: number } {
   const [a, b, c] = [tokens[i]?.text, tokens[i + 1]?.text, tokens[i + 2]?.text];
-  if (a === "and" && b === "a" && c === "half") return { add: 0.5, next: i + 3 };
-  if (a === "y" && (b === "medio" || b === "media")) return { add: 0.5, next: i + 2 };
-  return { add: 0, next: i };
+  if (a === "and" && b === "a" && c === "half") return { add: "+1/2", next: i + 3 };
+  if (a === "y" && (b === "medio" || b === "media")) return { add: "+1/2", next: i + 2 };
+  return { add: "", next: i };
 }
 
 /** Every quantity in `text`, as keys (see the module comment). */
@@ -339,10 +393,13 @@ export function quantitiesIn(text: string): string[] {
         i += 1;
         continue;
       }
-      const value = digitValue(t.text);
+      const sign = signOf(tokens, i);
+      const value = digitText(t.text);
       if (value === null) {
-        keys.push(`raw|${t.text}`);
-        i += 1;
+        // Can't read it: the characters, the sign AND the unit must all match.
+        const { unit, next } = readUnit(tokens, i + 1, t);
+        keys.push(`raw|${sign}${t.text.replace(/\s/g, "")}|${unit}`);
+        i = Math.max(next, i + 1);
         continue;
       }
       const half = readHalf(tokens, i + 1);
@@ -351,9 +408,18 @@ export function quantitiesIn(text: string): string[] {
         half.next,
         half.add ? (tokens[half.next - 1] as Token) : t,
       );
-      keys.push(`${show(value + half.add)}|${unit}`);
+      keys.push(`${sign}${value}${half.add}|${unit}`);
       i = next;
       continue;
+    }
+    if (t.kind === "word" && ARTICLES.has(t.text)) {
+      // "a tablet", "un miligramo", "una unidad": one of a dose unit or form.
+      const { unit, next } = readUnit(tokens, i + 1, t);
+      if (ARTICLE_UNITS.has(unit.split("/")[0] ?? "")) {
+        keys.push(`1|${unit}`);
+        i = next;
+        continue;
+      }
     }
     if (t.kind === "word") {
       const times = TIMES_WORDS[t.text];
@@ -370,7 +436,7 @@ export function quantitiesIn(text: string): string[] {
             ? 1
             : 0;
         const { unit, next } = readUnit(tokens, i + 1 + skip, tokens[i + skip] as Token);
-        keys.push(`${show(fraction)}|${unit}`);
+        keys.push(`${fraction}|${unit}`);
         i = next;
         continue;
       }
@@ -379,7 +445,7 @@ export function quantitiesIn(text: string): string[] {
         const half = readHalf(tokens, written.next);
         const last = tokens[half.next - 1] as Token;
         const { unit, next } = readUnit(tokens, half.next, last);
-        keys.push(`${show(written.value + half.add)}|${unit}`);
+        keys.push(`${written.value}${half.add}|${unit}`);
         i = next;
         continue;
       }
