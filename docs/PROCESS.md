@@ -507,3 +507,53 @@ The last allowed Phase 3 round: one safety blocker and three cheap polish items,
 | Strip links were 40 px on phones | Fixed | 44 px, and the Spanish strip still fits two rows at 390 px. |
 
 **Browser check** (production build, `/api/chat` mocked): B6 for self-harm, emergency and crisis × EN/ES × 390/1280 × first or 5th turn × normal or reduced motion (48 cases). In every case the heading and the first button sit fully inside the scroll area, the buttons come right under the heading, the order is right with the first button filled, and the console is clean. The polish items were checked in EN/ES at 390/1280: strip links at 44 px in at most two rows with no overlap with "More", answer spacing, a Sources list with titles only, list role and links, no overflow. The notebook notice order was checked at both sizes. 214 checks plus 2 notebook checks, 0 failures. The round-2 core chat checks were re-run (scroll area, newest turn in view, Start over, no overflow, clean console): 106/106. Stills reshot: `ask-emergency-mobile`, `ask-crisis-mobile-es`, `ask-answer-desktop`, plus `landing-mobile-es` and `volunteer-mobile`, where the strip is now taller.
+
+## Phase 4: evals
+
+The builder agent (Claude) implemented the eval plan in [EVALS.md](EVALS.md) and ran it live, overnight, under the orchestrator's rules. Those rules were: measure, don't change guardrail behaviour; a hard $2.00 cap for the whole phase, live debugging included; mocks first, then one tiny live validation, then the full run; and a fixed priority order for fitting the cap.
+
+**What was built**
+
+- **`pnpm eval`** (`evals/run.ts` → `evals/eval.live.ts`, run under vitest for the app's TypeScript resolution). `--dry-run` prints the plan and the estimate with no key. A live run needs `LUMI_LIVE=1`, and the key comes only from Node's `--env-file-if-exists=.env.local`. Flags: arms, case filter, limit, runs, judge mode, budget, notebook on/off, concurrency, and `--report=<dirs>` to merge runs without calls.
+- **Runner** (`evals/lib/runner.ts`). Golden cases go through the real `startChat` with real deps, the router fixed on `gpt-6-luna` and the answer model per arm. Notebook cases go through the real `prepareNotebook`. A per-request model wrapper (`capture.ts`, AI SDK middleware) records the router's raw JSON and the answer's raw draft, so the category check and the withholding attribution need no hook in `src/server`.
+- **Checks:** every deterministic check in EVALS.md (`checks.ts`, `notebook-checks.ts`). Withholding attribution re-runs the exported pure checks on the captured draft, in `finalizeAnswer` order (`withholding.ts`).
+- **Judge** (`judge.ts`, prompt v1, `gpt-6-sol`, low reasoning). Strict structured output with string-enum scores. Groundedness runs against the full text of the cited articles on every generated answer, and also on drafts a content gate withheld (a false-positive hint). The rubric runs on `judge: true` cases. A schema-invalid, cut-off or failed judge call is an error, never a verdict.
+- **Budget** (`budget.ts`, `plan.ts`): a cold / warm / worst-case estimate; dropping whole arms from the bottom until the warm estimate fits; and a runtime guard that reserves each call's worst case and stops cleanly (partial results written) before the cap.
+- **Reports** (`report.ts`, `render.ts`): pass rates per check, category and arm; the safety-gate table; grounded accuracy; abstention; judge and Spanish quality; nearest-rank p50/p95 latency; tokens and cache share; cold/warm cost per 1,000; output caps vs measured; the notebook; withholding with samples; variance across runs; every failing run with an excerpt; and the human safety review file.
+- **Config** (eval-only): `config.evals` gained the answer-step tags, concurrency, judge settings and estimate parameters. The arm order is now the priority order (`gpt-6-sol` last because it's also the judge). Nothing the app uses changed.
+- **Tests:** 51 new unit tests (`evals/lib/pure.test.ts`, `runner.test.ts`) cover the options, the estimator and guard, the checks, the attribution, the judge schema handling and the percentiles. They also run the whole runner end to end over the real pipeline and KB with AI SDK mocks (safety short-circuit, a judged answer, a provenance withholding, abstention, the budget stop, an unavailable model id, the notebook). `pnpm test`: 727 tests, no network.
+
+**Budget plan and actual spend**
+
+| Step | Estimate | Actual |
+|---|---|---|
+| Validation: 5 cases, Luna, judged | $0.036 | $0.0137 |
+| Run 1: Luna 3× + judge on every answer, notebook, Terra, 6.1-Sol | $1.97 warm | $0.8747 |
+| Run 2: the `gpt-6-sol` arm | $0.69 warm | $0.2659 |
+| **Total** | | **$1.1542 of $2.00** |
+
+The full requested plan estimated $4.67 warm before calibration, so the fitter dropped every non-Luna arm. The validation measured judge calls at about 1,250 input and 110–170 output tokens, and 4.5–4.8 characters per token. With the estimate recalibrated (still conservative: 4 chars/token, 400 judge and 800 answer output tokens), the plan fit with only `gpt-6-sol` dropped. Run 1 cost far less than its estimate, so the dropped arm ran as a second invocation over the same frozen KB and prompts, and the two runs were merged with `--report`. In the end nothing in the priority list was skipped, and the judge covered all three Luna runs.
+
+**Results** (full tables in [EVALS.md § Results](EVALS.md#results)):
+- Safety gates 100% on every arm.
+- Notebook verbatim 15/15, classification 24/24.
+- 9 of 212 generated answers withheld, all false positives.
+- [ADR 0009](decisions/0009-model-selection.md) recommends keeping `gpt-6-luna` (Proposed, pending Felipe's sign-off); `config.models.answer` is unchanged.
+- No output cap was hit. Lower caps are recommended, not applied.
+
+**Notable decisions**
+- **No diagnostics hook in `src/server`.** Capturing the draft in an eval-only model wrapper and re-running the exported checks was enough to attribute every withholding, so production code stayed untouched.
+- **Withholding counts output-check fallbacks only.** The first full run counted a Terra first-token timeout as "withheld (interrupted)". That was fixed in the report before anything was published, with a regression test.
+- **Unknown usage isn't $0.** A call that timed out with no usage is left out of the reported per-conversation cost (and counted), while the budget guard charges its full worst-case reservation.
+- **Whole arms, not half arms.** The fitter drops a whole arm rather than letting the runtime guard cut one mid-way, because a half-run arm can't be compared.
+
+**What didn't work, or is still open**
+- **The first estimate was too pessimistic.** It modelled the judge at 1,200 output tokens per call and would have dropped three of four arms; the cheap validation run is what made the full comparison fit.
+- **Problems found, not fixed** (for the orchestrator to triage):
+  - dosage and provenance false positives: "give people one clear task"; Spanish "ten a mano" read as *ten*; a refutation quoting the parent's "12 semanas";
+  - "Can our dog visit?" answered instead of abstaining in 3 of 6 runs;
+  - the Spanish after-hours question citing the wrong guide;
+  - some *questions for your care team* answers not naming the care team;
+  - one Terra first-token timeout;
+  - judge notes on the *how Lumi can help* article.
+- The safety review file awaits Felipe's read: [evals/safety-review-2026-10-31.md](evals/safety-review-2026-10-31.md).

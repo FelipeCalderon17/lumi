@@ -2,7 +2,7 @@
 
 One Next.js app (App Router) serves the pages and a small set of API routes. All assistant logic lives in [`src/server/`](../src/server) as framework-free TypeScript ([ADR 0001](decisions/0001-single-nextjs-app.md)): no `next`, `react` or `src/app` imports, so it can be unit-tested directly and extracted later.
 
-> **Status (Phase 3):** the server side is implemented and tested with mocked models: the chat pipeline, voice-to-text, notebook classification (notes shown verbatim), gaps, staff endpoints and the usage ledger. One live smoke test has been run ([PROCESS.md](PROCESS.md), entry 4). The UI is built ([ADR 0016](decisions/0016-phase-3-ui.md)). Client logic lives in `src/lib/` (framework-free and unit-tested): the NDJSON reader (`chat-client.ts`), notebook storage, the voice cap, donate tiers and volunteer filters. It was checked in a real browser in EN and ES at mobile and desktop widths.
+> **Status (Phase 4):** evals are implemented and run (`pnpm eval`, [EVALS.md § Results](EVALS.md#results)): every safety gate at 100%, and [ADR 0009](decisions/0009-model-selection.md) recommends keeping `gpt-6-luna` for answers (pending sign-off). No pipeline behaviour changed in Phase 4. The server side is implemented and tested with mocked models: the chat pipeline, voice-to-text, notebook classification (notes shown verbatim), gaps, staff endpoints and the usage ledger. One live smoke test has been run ([PROCESS.md](PROCESS.md), entry 4). The UI is built ([ADR 0016](decisions/0016-phase-3-ui.md)). Client logic lives in `src/lib/` (framework-free and unit-tested): the NDJSON reader (`chat-client.ts`), notebook storage, the voice cap, donate tiers and volunteer filters. It was checked in a real browser in EN and ES at mobile and desktop widths.
 
 **Scope.** Lumi serves English- and Spanish-speaking families **in the US** ([ADR 0012](decisions/0012-us-scope-and-crisis-contacts.md)): 911 for emergencies, the 988 Suicide & Crisis Lifeline for emotional crisis, and "contact your local emergency services" for anyone outside the US.
 
@@ -86,7 +86,7 @@ Event names on the chat stream are the Phase 0 contract, confirmed as final by F
 - **Structural, fail-closed output checks** ([ADR 0015](decisions/0015-structural-output-checks.md)). Text is normalised first (NFKC, Unicode digits to ASCII, dotted abbreviations joined). The dosage gate is **layered**:
   - **verb rules:** an administration verb followed by any quantity, frequency or schedule, or with a frequency or schedule before it; a quantity right before a dose unit or form;
   - **verb-independent backstops:** medication context with a quantity, frequency or schedule; a quantity with a frequency; label values ("Paracetamol: half as needed", whatever follows the value); list lines under a heading as one scope; use/usa with a frequency or schedule before them or after their object;
-  - **number provenance** (chat answers): every number, frequency and schedule in the answer must also appear in an article it cites, compared as normalized token sets, so formatting doesn't matter. Benign numbers missing from the cited guide are withheld too (an accepted false positive, measured in Phase 4).
+  - **number provenance** (chat answers): every number, frequency and schedule in the answer must also appear in an article it cites, compared as normalized token sets, so formatting doesn't matter. Benign numbers missing from the cited guide are withheld too (an accepted false positive; measured in Phase 4 at 4 of 212 real answers, all false positives).
 
   Phone checks read the same normalized text.
 
@@ -142,7 +142,7 @@ The UI never shows a blank screen or a raw error. Every failure becomes a termin
 | Abstain marker split across chunks | completion check | checked on the full buffered text | Abstained, as intended. |
 | Not in the KB | answer | `[[NO_ANSWER]]` first | "I don't have a guide on that yet" + human contact + optional, previewed gap save. |
 | Unknown handle / no citations | validate | integrity check | Fallback (not shown as grounded). |
-| Answer contains a dose (verb rules; medication context, quantity + frequency, label value, list scope or schedule backstops; after Unicode normalisation) | output checks | `findUnsafeOutput` (ADR 0015) | Fallback, never shown. A harmless sentence that matches (e.g. "give each child…", a medicines list near an unrelated number) also gets the fallback: accepted, measured in Phase 4. |
+| Answer contains a dose (verb rules; medication context, quantity + frequency, label value, list scope or schedule backstops; after Unicode normalisation) | output checks | `findUnsafeOutput` (ADR 0015) | Fallback, never shown. A harmless sentence that matches (e.g. "give each child…", a medicines list near an unrelated number) also gets the fallback: accepted. Measured in Phase 4 at 5 of 212 real answers, all false positives ([EVALS.md](EVALS.md#withholding-on-real-answers-hand-labelled)). |
 | Notebook model returns text, an unknown topic, or a missing, duplicate or unknown index | notebook | strict schema + `checkAssignments` (ADR 0015) | Fallback: every note verbatim under `other`, in date order. Model text never reaches the page in any case: the only model output used is a topic per note. |
 | Notebook note misfiled (e.g. a sleep note under `other`) | notebook | can't be detected | The note is still on the page, verbatim, with its date, just under another heading. Classification accuracy is measured in evals. |
 | Valid handle, unsupported claim | validate can't see it | offline judge (evals) | **Can reach the parent.** Measured, not prevented. Kept small by the fixed medical path and the prompt rules. |
@@ -194,9 +194,9 @@ Two tables ([`src/db/schema.ts`](../src/db/schema.ts), migrations in [`drizzle/`
 
 ## Open questions
 
-Decided in review round 1: buffering (ADR 0010), deterministic self-harm check (ADR 0003), country and crisis contacts (ADR 0012), transport (NDJSON, above). Decided after Codex review 3: notebook safety on past events: a safety notice comes **with** the page, never instead of it (ADR 0003); the price catalog for every model is applied (ADR 0009, 0014); output caps router 1,000 / answer 3,000 approved until Phase 4 tuning.
+Decided in review round 1: buffering (ADR 0010), deterministic self-harm check (ADR 0003), country and crisis contacts (ADR 0012), transport (NDJSON, above). Decided after Codex review 3: notebook safety on past events: a safety notice comes **with** the page, never instead of it (ADR 0003); the price catalog for every model is applied (ADR 0009, 0014); output caps router 1,000 / answer 3,000 approved until Phase 4 tuning (Phase 4 measured maxima of 188 / 577 with no truncation; ADR 0009 recommends, doesn't apply, lower caps).
 
-Pending sign-off: **ADR 0015 revision 3** is Proposed until Codex verifies the re-review 6 fixes and Felipe signs off. It covers the layered dosage backstops (a finite detector with listed residual vocabulary and accepted over-withholding) and the notebook redesign: AI classifies only, and the page shows every note verbatim.
+Pending sign-off: **ADR 0015 revision 3** is Proposed until Codex verifies the re-review 6 fixes and Felipe signs off. It covers the layered dosage backstops (a finite detector with listed residual vocabulary and accepted over-withholding) and the notebook redesign: AI classifies only, and the page shows every note verbatim. **ADR 0009** is Proposed until Felipe signs off on the Phase 4 recommendation to keep `gpt-6-luna` for answers.
 
 Still open:
 

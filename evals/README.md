@@ -3,7 +3,10 @@
 Plan and results: [docs/EVALS.md](../docs/EVALS.md).
 
 - `golden.jsonl` — one case per line, validated by `GoldenCaseSchema` in `golden.ts` (checked in `pnpm test`, free).
-- `run.ts` — `pnpm eval`. Calls the real model, **costs money**, never runs in CI. Stub in Phase 0.
+- `notebook.jsonl` — notebook cases, validated by `NotebookCaseSchema` in `notebook.ts`.
+- `run.ts` — `pnpm eval` launcher: `pnpm eval --dry-run` estimates, `LUMI_LIVE=1 pnpm eval` calls the real models (**costs money**, budget-guarded, never in CI). It starts `eval.live.ts` under vitest for the TypeScript resolution.
+- `lib/` — the runner: plan and budget guard (`plan.ts`, `budget.ts`), deterministic checks (`checks.ts`, `notebook-checks.ts`), the versioned judge prompt and schema (`judge.ts`), withholding attribution (`withholding.ts`), the output-capturing model wrapper (`capture.ts`), aggregation and Markdown (`report.ts`, `render.ts`). Unit-tested with mocked models (`*.test.ts`, free, in `pnpm test`).
+- `runs/` — raw outputs of live runs (git-ignored). Results are summarised in docs/EVALS.md § Results.
 
 ## Case format
 
