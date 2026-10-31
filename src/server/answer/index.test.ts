@@ -12,6 +12,7 @@ import {
 } from "../test-helpers";
 import {
   ABSTAIN_MARKER,
+  ANSWER_POLICY_VERSION,
   buildQuestionBlock,
   buildSystemPrefix,
   finalizeAnswer,
@@ -45,6 +46,25 @@ describe("answer.buildSystemPrefix (prompt layout)", () => {
     expect(prefix).toContain(
       '<article handle="1" title="Article 1">\nBody of article 1.\n</article>',
     );
+  });
+
+  it("tells the model to reuse the cited article's numbers and timing words (provenance-aware)", () => {
+    for (const language of ["en", "es"] as const) {
+      const prefix = buildSystemPrefix(testKb(language));
+      const policy = prefix.slice(0, prefix.indexOf("\n\n<reference_data>\n"));
+      expect(policy).toContain(
+        "use only numbers that appear in the article you cite, and write them the same way it does",
+      );
+      expect(policy).toContain(
+        `reuse the article's exact words ("every day", "bedtime", "antes de dormir") instead of paraphrasing them`,
+      );
+      expect(policy).toContain(`don't turn "every day" into "daily"`);
+      expect(policy).toContain(
+        "Don't add amounts, frequencies or times that the article doesn't state.",
+      );
+      expect(policy).toContain(`Start each bullet with "-"; never use a numbered list.`);
+    }
+    expect(ANSWER_POLICY_VERSION).toBe(2);
   });
 
   it("asks for the reply language of the KB", () => {
