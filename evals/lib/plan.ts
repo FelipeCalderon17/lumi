@@ -133,14 +133,11 @@ const ANSWER_CHARS_FOR_JUDGE = 1_400;
 /** The judge prompt's own wrapper text around question, answer and articles. */
 const JUDGE_WRAPPER_CHARS = 400;
 
-export type UnitCalls = {
-  /** Calls the expected path makes (for the pre-run estimate). */
-  expected: CallEstimate[];
-  /** Calls that may happen at most (what the runtime guard reserves), excluding the judge. */
-  pipelineWorst: CallEstimate[];
-  /** The judge call, if this unit may be judged. */
-  judge: CallEstimate | null;
-};
+/**
+ * The calls the expected path makes, for the PRE-RUN estimate only. The runtime guard reserves
+ * upper bounds built from the actual requests instead (bounds.ts).
+ */
+export type UnitCalls = { expected: CallEstimate[] };
 
 export function unitCalls(unit: Unit, sizes: PromptSizes): UnitCalls {
   const { charsPerToken, outputTokens } = config.evals.estimate;
@@ -158,11 +155,11 @@ export function unitCalls(unit: Unit, sizes: PromptSizes): UnitCalls {
       expectedOutputTokens: outputTokens.notebook,
       maxOutputTokens: config.limits.maxNotebookOutputTokens,
     };
-    return { expected: [call], pipelineWorst: [call], judge: null };
+    return { expected: [call] };
   }
 
   const c = unit.case;
-  if (checkEmergency(c.input).triggered) return { expected: [], pipelineWorst: [], judge: null };
+  if (checkEmergency(c.input).triggered) return { expected: [] };
   const language = answerLanguage(c);
   const router: CallEstimate = {
     step: "router",
@@ -211,8 +208,6 @@ export function unitCalls(unit: Unit, sizes: PromptSizes): UnitCalls {
       ...(reachesAnswer ? [answer] : []),
       ...(judge && outcomes.includes("answer") ? [judge] : []),
     ],
-    pipelineWorst: [router, answer],
-    judge,
   };
 }
 

@@ -271,6 +271,16 @@ export const config = {
       maxOutputTokens: 2_000,
       timeoutMs: 90_000,
     },
+    /**
+     * Runtime guard: what each call RESERVES before it's made. An upper bound, not an estimate:
+     * input from the actual prompt text at a low chars/token (measured 4.5–4.8), plus a fixed
+     * allowance for message framing and the structured-output schema, plus the full output cap,
+     * times every allowed attempt (maxRetries + 1), with no cache discount.
+     */
+    guard: {
+      charsPerToken: 3,
+      requestOverheadTokens: 1_000,
+    },
     /** Pre-run estimate only (the actual cost always comes from provider usage). */
     estimate: {
       /** Conservative: the measured answer prefix is 4.5–4.8 characters per token (EN/ES). */
@@ -293,6 +303,7 @@ export const config = {
     answerStepTags: readonly string[];
     concurrency: number;
     judge: { reasoning: ReasoningEffort; maxOutputTokens: number; timeoutMs: number };
+    guard: { charsPerToken: number; requestOverheadTokens: number };
     estimate: {
       charsPerToken: number;
       outputTokens: Record<"router" | "answer" | "judge" | "notebook", number>;

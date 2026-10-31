@@ -205,7 +205,6 @@ async function run(plan: Plan, capUsd = 5, prov = provider()) {
     kbs,
     catalog: modelCatalog,
     guard,
-    sizes: promptSizes(kbs),
     concurrency: 1,
   });
   return { guard, outcome };

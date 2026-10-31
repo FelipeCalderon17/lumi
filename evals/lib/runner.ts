@@ -15,13 +15,20 @@ import { createRateLimiter } from "../../src/server/rate-limit";
 import { type Route, RouterOutputSchema, toRoute } from "../../src/server/router";
 import { checkEmergency } from "../../src/server/safety";
 import type { Language } from "../../src/server/types";
-import { type BudgetGuard, type CallEstimate, worstCaseUsd } from "./budget";
+import {
+  answerBound,
+  boundUsd,
+  type CallBound,
+  judgeBound,
+  notebookBound,
+  routerBound,
+} from "./bounds";
+import type { BudgetGuard } from "./budget";
 import { type Capture, captureModel, isModelUnavailable } from "./capture";
 import { allPass, type CheckResult, gatePass, runChecks, terminalOf } from "./checks";
-import { type JudgeMode, type JudgeResult, runJudge } from "./judge";
+import { type JudgeInput, type JudgeMode, type JudgeResult, runJudge } from "./judge";
 import { checkNotebookCase, type NotebookCheckResult } from "./notebook-checks";
-import type { ChatUnit, NotebookUnit, Plan, PromptSizes, Unit } from "./plan";
-import { unitCalls } from "./plan";
+import type { ChatUnit, NotebookUnit, Plan, Unit } from "./plan";
 import { attributeWithholding, type Withholding } from "./withholding";
 
 /**
@@ -84,7 +91,6 @@ export type RunnerDeps = {
   kbs: Record<Language, KnowledgeBase>;
   catalog: PriceCatalog;
   guard: BudgetGuard;
-  sizes: PromptSizes;
   concurrency: number;
   /** Called once per finished unit (the live run appends it to results.jsonl). */
   onRecord?: (record: RunRecord) => void;
@@ -103,14 +109,17 @@ export function rowsCost(rows: readonly UsageEntry[], catalog: PriceCatalog): Co
   return rows.reduce<CostEstimate>((sum, row) => addCosts(sum, estimateCost(row, catalog)), 0);
 }
 
-function reserveAll(
+/** Reserves the upper bound of every call in `bounds` (bounds.ts), or returns null. */
+function reserveBounds(
   guard: BudgetGuard,
-  calls: CallEstimate[],
+  bounds: readonly CallBound[],
   catalog: PriceCatalog,
   label: string,
 ) {
-  const worst = calls.reduce<CostEstimate>((s, c) => addCosts(s, worstCaseUsd(c, catalog)), 0);
-  return guard.tryReserve(worst === "unknown" ? Number.POSITIVE_INFINITY : worst, label);
+  return guard.tryReserve(
+    bounds.reduce((sum, b) => sum + boundUsd(b, catalog), 0),
+    label,
+  );
 }
 
 function limiter() {
@@ -176,12 +185,17 @@ export async function executePlan(plan: Plan, deps: RunnerDeps): Promise<RunOutc
 
   const runChat = async (unit: ChatUnit): Promise<ChatRecord> => {
     const c = unit.case;
-    const calls = unitCalls(unit, deps.sizes);
     const safetyOnly = checkEmergency(c.input).triggered;
     const label = `${unit.arm} ${c.id} run ${unit.run}`;
+    // Upper bound of the router and answer calls, from the text that will actually be sent.
     const reservation = safetyOnly
       ? null
-      : reserveAll(deps.guard, calls.pipelineWorst, deps.catalog, label);
+      : reserveBounds(
+          deps.guard,
+          [routerBound(c.input), answerBound(unit.arm, c.input, deps.kbs)],
+          deps.catalog,
+          label,
+        );
     if (!safetyOnly && !reservation) return skippedChat(unit, "budget");
 
     const router = captureModel(deps.provider.language(config.models.router));
@@ -257,32 +271,37 @@ export async function executePlan(plan: Plan, deps: RunnerDeps): Promise<RunOutc
       withholding && ["dosage", "number_provenance", "phone_number"].includes(withholding.first);
     const target: JudgeRecord["target"] | null =
       terminal?.type === "answer" ? "answer" : gateWithheld ? "withheld_draft" : null;
-    if (unit.judge !== "none" && target && calls.judge) {
-      const judgeReservation = deps.guard.tryReserve(
-        (() => {
-          const w = worstCaseUsd(calls.judge, deps.catalog);
-          return w === "unknown" ? Number.POSITIVE_INFINITY : w;
-        })(),
+    if (unit.judge !== "none" && target) {
+      // Build the exact judge request first, then reserve its upper bound (Codex review).
+      const text = terminal?.type === "answer" ? terminal.text : (record.answerDraft ?? "").trim();
+      const handles =
+        terminal?.type === "answer"
+          ? terminal.citations.map((x) => x.handle)
+          : (withholding?.citedHandles ?? []);
+      const articles = handles.flatMap((h) => {
+        const a = kb.byHandle.get(h);
+        return a ? [{ handle: a.handle, title: a.title, body: a.body }] : [];
+      });
+      const mode: JudgeMode = target === "answer" ? unit.judge : "groundedness";
+      const input: JudgeInput = {
+        question: c.input,
+        answer: text,
+        language: answerLanguage,
+        articles,
+        mode,
+      };
+      const judgeReservation = reserveBounds(
+        deps.guard,
+        [judgeBound(input)],
+        deps.catalog,
         `${label} judge`,
       );
       if (!judgeReservation) {
         record.judgeSkipped = "budget";
       } else {
-        const text =
-          terminal?.type === "answer" ? terminal.text : (record.answerDraft ?? "").trim();
-        const handles =
-          terminal?.type === "answer"
-            ? terminal.citations.map((x) => x.handle)
-            : (withholding?.citedHandles ?? []);
-        const articles = handles.flatMap((h) => {
-          const a = kb.byHandle.get(h);
-          return a ? [{ handle: a.handle, title: a.title, body: a.body }] : [];
+        const result = await runJudge(input, {
+          model: deps.provider.language(config.models.judge),
         });
-        const mode: JudgeMode = target === "answer" ? unit.judge : "groundedness";
-        const result = await runJudge(
-          { question: c.input, answer: text, language: answerLanguage, articles, mode },
-          { model: deps.provider.language(config.models.judge) },
-        );
         deps.guard.settle(judgeReservation, estimateCost(result.call, deps.catalog));
         record.judge = { ...result, mode, target };
       }
@@ -291,10 +310,9 @@ export async function executePlan(plan: Plan, deps: RunnerDeps): Promise<RunOutc
   };
 
   const runNotebook = async (unit: NotebookUnit): Promise<NotebookRecord> => {
-    const calls = unitCalls(unit, deps.sizes);
-    const reservation = reserveAll(
+    const reservation = reserveBounds(
       deps.guard,
-      calls.pipelineWorst,
+      [notebookBound(unit.case.notes, unit.case.locale)],
       deps.catalog,
       `notebook ${unit.case.id}`,
     );

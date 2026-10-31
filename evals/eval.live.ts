@@ -191,7 +191,6 @@ it.skipIf(!enabled)(
       kbs,
       catalog: modelCatalog,
       guard,
-      sizes,
       concurrency: opts.concurrency,
       onRecord: (r) => appendFileSync(resultsFile, `${JSON.stringify(r)}\n`),
       log: (line) => console.log(line),
