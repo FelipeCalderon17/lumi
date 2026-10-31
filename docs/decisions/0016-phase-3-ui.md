@@ -1,6 +1,6 @@
 # 0016 — Phase 3 UI: one deep slice, honest mocks, on-device state
 
-**Status:** Proposed · 2026-10-31 · *Phase 3 (UI). Revised after Codex's Phase 3 review (fixes round 1). Pending re-review and Felipe's sign-off.*
+**Status:** Accepted (Felipe, 2026-11-01) · 2026-10-31 · *Phase 3 (UI). Revised after Codex's Phase 3 review (revision 1) and final verification (revision 2).*
 
 ## Context
 The brief asks for one slice done deeply and reasonable placeholders for the rest. The server side (Phases 0–2) is done: the chat pipeline, notebook classification, voice, gaps, staff and the ledger. Phase 3 is the site a stressed parent actually sees, often on a phone at 2 a.m. It must also look like something FutureProofing would proudly show a client, without any "AI template" look. Nothing in this phase may weaken a server guardrail.

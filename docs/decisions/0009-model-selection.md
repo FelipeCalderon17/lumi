@@ -1,6 +1,6 @@
 # 0009 — Model selection for the answer step
 
-**Status:** Proposed — recommendation from the Phase 4 run, pending Felipe's sign-off · 2026-10-31 · *First written 2026-10-30; Decision filled in from the comparison in [EVALS.md § Results](../EVALS.md#results).*
+**Status:** Accepted (Felipe, 2026-11-01) · 2026-10-31 · *First written 2026-10-30; Decision filled in from the comparison in [EVALS.md § Results](../EVALS.md#results). The output caps below are still a recommendation, not decided.*
 
 ## Context
 The answer step is where quality, cost and latency trade off most. The router is a tiny classification call and stays on the cheapest model. For the answer, a cheaper model may be good enough on a small, curated KB, or it may hedge, mis-cite or sound stilted in Spanish. We'd rather measure that than assume it.
