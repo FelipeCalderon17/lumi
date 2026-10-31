@@ -165,7 +165,7 @@ export function AskLumi({ locale, t }: { locale: Locale; t: Dictionary }) {
               // biome-ignore lint/a11y/noNoninteractiveTabindex: a scrollable region must be focusable so keyboard users can scroll it (WCAG 2.1.1).
               tabIndex={0}
               onScroll={(event) => setScrolled(event.currentTarget.scrollTop > 4)}
-              className={`max-h-[max(16rem,calc(100dvh_-_24rem))] scrollbar-lumi overflow-y-auto overscroll-contain px-4 py-6 focus-visible:outline-offset-[-3px] sm:max-h-[min(60vh,40rem)] sm:px-6 ${
+              className={`max-h-[max(16rem,calc(100dvh_-_24rem))] scrollbar-lumi overflow-y-auto px-4 py-6 focus-visible:outline-offset-[-3px] sm:max-h-[min(60vh,40rem)] sm:px-6 ${
                 scrolled ? "shadow-[inset_0_12px_12px_-12px_rgb(0_0_0/0.4)]" : ""
               }`}
             >
