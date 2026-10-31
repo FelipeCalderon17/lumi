@@ -40,6 +40,7 @@ export function ChatResponse({
             hrefFor={guide}
             labelFor={(c) => fill(h.citationLabel, { n: c.handle, title: c.title })}
             headingOffset={1}
+            collapseCitations
             className="text-[1.1rem]"
           />
           <div className="mt-6 border-t border-line pt-4">
