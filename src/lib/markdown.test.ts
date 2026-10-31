@@ -141,6 +141,36 @@ describe("stripCitations", () => {
     ]);
   });
 
+  it("keeps exactly one space when a marker sits between two words", () => {
+    expect(
+      stripCitations(parseMarkdown("Ask [2] the nurse. Ask[2] the nurse. Ask [2]the nurse.")),
+    ).toEqual([
+      {
+        type: "paragraph",
+        children: [{ type: "text", text: "Ask the nurse. Ask the nurse. Ask the nurse." }],
+      },
+    ]);
+  });
+
+  it("keeps one space between a word and a formatted run around a marker (regression)", () => {
+    expect(
+      stripCitations(parseMarkdown("Ask [2]**the social worker** or *a nurse* [3] *today*.")),
+    ).toEqual([
+      {
+        type: "paragraph",
+        children: [
+          { type: "text", text: "Ask " },
+          { type: "strong", children: [{ type: "text", text: "the social worker" }] },
+          { type: "text", text: " or " },
+          { type: "em", children: [{ type: "text", text: "a nurse" }] },
+          { type: "text", text: " " },
+          { type: "em", children: [{ type: "text", text: "today" }] },
+          { type: "text", text: "." },
+        ],
+      },
+    ]);
+  });
+
   it("returns the same blocks when there is no marker", () => {
     const blocks = parseMarkdown("No citations here.\n\n- Nor here.");
     expect(stripCitations(blocks)).toBe(blocks);

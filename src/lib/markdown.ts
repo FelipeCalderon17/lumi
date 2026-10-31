@@ -96,10 +96,12 @@ export function parseInline(text: string): Inline[] {
 
 /**
  * Presentation only, for answers: removes every citation marker ("[7]", "[2, 6]"), so the parent
- * reads plain text. The guides are listed once, below the answer, in its Sources list. The space
- * a marker leaves is trimmed ("helps [7]." → "helps.", nothing trails a bullet that ended with
- * one). The parser keeps cite nodes, and the server still requires and checks citations.
- * Returns the same array when there's nothing to remove.
+ * reads plain text. The guides are listed once, below the answer, in its Sources list.
+ * Spacing: a marker between two words or formatted runs leaves exactly ONE space ("Ask [2] the
+ * nurse" → "Ask the nurse", "Ask [2]**the social worker**" → "Ask **the social worker**"). The
+ * space collapses before punctuation ("helps [7]." → "helps.") and at the start or end of a
+ * line, item or formatted run. The parser keeps cite nodes, and the server still requires and
+ * checks citations. Returns the same array when there's nothing to remove.
  */
 export function stripCitations(blocks: Block[]): Block[] {
   const hasCite = (nodes: Inline[]): boolean =>
@@ -111,31 +113,46 @@ export function stripCitations(blocks: Block[]): Block[] {
   )
     return blocks;
 
+  const punctuation = /^[.,;:!?)\]}…]/;
   const strip = (nodes: Inline[]): Inline[] => {
     const out: Inline[] = [];
-    let trimNextStart = false;
+    const append = (text: string) => {
+      const before = out.at(-1);
+      if (before?.type === "text") out[out.length - 1] = { type: "text", text: before.text + text };
+      else if (text !== "") out.push({ type: "text", text });
+    };
+    // After a removed marker: is a separator owed, and did whitespace touch the marker?
+    let removed = false;
+    let spaced = false;
     for (const node of nodes) {
       if (node.type === "cite") {
         const before = out.at(-1);
-        if (before === undefined) trimNextStart = true;
-        else if (before.type === "text") {
+        if (before?.type === "text" && /\s$/.test(before.text)) {
+          spaced = true;
           const trimmed = before.text.trimEnd();
           if (trimmed === "") out.pop();
           else out[out.length - 1] = { type: "text", text: trimmed };
         }
+        removed = true;
         continue;
       }
       if (node.type === "text") {
-        const text = trimNextStart ? node.text.trimStart() : node.text;
-        trimNextStart = false;
-        const before = out.at(-1);
-        // Rejoin the text on both sides of a removed marker.
-        if (before?.type === "text")
-          out[out.length - 1] = { type: "text", text: before.text + text };
-        else if (text !== "") out.push({ type: "text", text });
+        if (!removed) {
+          append(node.text);
+          continue;
+        }
+        if (/^\s/.test(node.text)) spaced = true;
+        const rest = node.text.trimStart();
+        if (rest === "") continue; // only whitespace: the next node decides
+        const space = out.length > 0 && spaced && !punctuation.test(rest);
+        append(space ? ` ${rest}` : rest);
+        removed = false;
+        spaced = false;
         continue;
       }
-      trimNextStart = false;
+      if (removed && spaced && out.length > 0) append(" ");
+      removed = false;
+      spaced = false;
       out.push({ ...node, children: strip(node.children) });
     }
     return out;
