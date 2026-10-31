@@ -98,6 +98,14 @@ The brief asks for one slice done deeply and reasonable placeholders for the res
 - Notes typed with stray trailing spaces or blank lines print that way. That's the cost of "the parent's own words, exactly".
 - The by-date page shows server notices by kind, without pointing at a note, when only the server matched. This can only happen if the server and client rules diverge, which they can't with a shared module.
 
+## Revision 2: Phase 3 fixes round 2 (Codex final verification)
+
+**Urgent actions first (B6, safety visibility).** On a phone, the self-harm and crisis cards (about 800 px) start at the top of the chat's scroll area (about 460 px), and their 988/911 buttons sat 640–760 px down, so they needed manual scrolling. In `SafetyCard`, urgent (ember) cards (emergency, self-harm, crisis) now render their call buttons **directly under the heading**, before the body and the numbered steps. The reviewed copy and the button order are unchanged: "Call 911" filled and most prominent for an emergency; 988, Text 988, then 911 for self-harm and crisis. Calm cards (medical, off-topic, abstained, fallback) keep their actions at the end. The notebook's safety notices use the same order (the call button under the title). Checked: the heading and the first button are fully inside the scroll area right after the response arrives, for all three kinds, in EN and ES at 390 × 844 and 1280, as the first or the 5th turn, with and without reduced motion.
+
+**Sources list without numbers.** With no inline markers in answers, the circled citation numbers in "From these guides" matched nothing. The list now shows plain linked guide titles in order, with a small decorative sage dot. `role="list"` keeps list semantics in Safari, which drops them for unstyled lists.
+
+**Smaller fixes.** `stripCitations` keeps exactly one space where a marker sat between two words or formatted runs ("Ask [2]**the social worker**" used to render as "Askthe social worker"). It collapses only before punctuation or at the start or end of a line, item or run. The emergency strip's 911/988 links are now 44 px tap targets on phones, and the Spanish strip still fits two rows at 390 px.
+
 ## Consequences
 - The deep slice is complete end to end, and every failure ends in calm, fixed copy with 911.
 - The rest of the site feels real but never pretends: badges, dashed borders and "nothing is sent" lines.
