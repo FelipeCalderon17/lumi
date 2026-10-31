@@ -111,7 +111,7 @@
   /* Paper grain: a still, barely-there texture so the night isn't flat. Decorative only. */
   body::before {
     content: "";
-    position: fixed;
+    position: absolute;
     inset: 0;
     pointer-events: none;
     z-index: 0;

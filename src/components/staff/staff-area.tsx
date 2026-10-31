@@ -238,16 +238,15 @@ function Dashboard({
 
   return (
     <div className="mt-8 space-y-14">
-      <div className="flex justify-end">
-        <button type="button" className="btn-quiet" onClick={onLogout}>
-          {s.signOut}
-        </button>
-      </div>
-
       <section aria-labelledby="gaps-title">
-        <h2 id="gaps-title" className="text-4xl">
-          {s.gapsTitle}
-        </h2>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 id="gaps-title" className="text-4xl">
+            {s.gapsTitle}
+          </h2>
+          <button type="button" className="btn-quiet" onClick={onLogout}>
+            {s.signOut}
+          </button>
+        </div>
         <p className="mt-3 max-w-3xl text-muted">{s.gapsLede}</p>
         <p role="status" aria-live="polite" className="mt-3 min-h-6 text-sage">
           {status}

@@ -22,7 +22,18 @@ function currentTheme(): Theme {
 export function ThemeToggle({ toDawn, toNight }: { toDawn: string; toNight: string }) {
   const [theme, setTheme] = useState<Theme | null>(null);
 
-  useEffect(() => setTheme(currentTheme()), []);
+  useEffect(() => {
+    // Safety net: re-apply a saved choice if the document was re-rendered without it.
+    try {
+      const saved = localStorage.getItem(THEME_STORAGE_KEY);
+      if ((saved === "dark" || saved === "light") && !document.documentElement.dataset.theme) {
+        document.documentElement.dataset.theme = saved;
+      }
+    } catch {
+      // Storage disabled: follow the OS.
+    }
+    setTheme(currentTheme());
+  }, []);
 
   const toggle = () => {
     const next: Theme = currentTheme() === "dark" ? "light" : "dark";

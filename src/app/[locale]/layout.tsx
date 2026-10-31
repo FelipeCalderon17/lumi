@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Atkinson_Hyperlegible_Next, Fraunces } from "next/font/google";
 import { notFound } from "next/navigation";
+import Script from "next/script";
 import { EmergencyStrip } from "@/components/emergency-strip";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
@@ -61,11 +62,11 @@ export default async function LocaleLayout({ children, params }: LayoutProps<"/[
       className={`${fraunces.variable} ${atkinson.variable}`}
       suppressHydrationWarning
     >
-      <head>
-        {/* biome-ignore lint/security/noDangerouslySetInnerHtml: a fixed, static string (no user input) that must run before paint. */}
-        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
-      </head>
       <body className="flex flex-col">
+        {/* Applies a saved night/dawn choice before first paint (a fixed string, no user input). */}
+        <Script id="lumi-theme" strategy="beforeInteractive">
+          {THEME_INIT_SCRIPT}
+        </Script>
         <a
           href="#main"
           className="sr-only z-50 rounded-pill bg-lantern px-4 py-2 font-semibold text-on-lantern focus:not-sr-only focus:absolute focus:top-3 focus:left-3"

@@ -10,27 +10,29 @@ export function EmergencyStrip({ t }: { t: Dictionary }) {
   return (
     <aside
       aria-label={strip.label}
-      className="relative border-b border-line/70 bg-raised/80 text-[0.95rem] print:hidden"
+      className="relative border-b border-line/70 bg-raised/80 text-[0.9rem] sm:text-[0.95rem] print:hidden"
     >
-      <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-6 gap-y-0 px-5">
-        <a
-          href="tel:911"
-          aria-label={`${strip.emergency}. ${actions.call911}`}
-          className="flex min-h-11 items-center gap-2 font-semibold text-text hover:underline"
-        >
-          <span aria-hidden="true" className="size-2 rounded-pill bg-ember" />
-          {strip.emergency}
-        </a>
-        <a
-          href="tel:988"
-          aria-label={`${strip.crisis}. ${actions.call988}`}
-          className="flex min-h-11 items-center gap-2 text-text hover:underline"
-        >
-          <span aria-hidden="true" className="size-2 rounded-pill bg-sage" />
-          {strip.crisis}
-        </a>
-        <details className="group ml-auto">
-          <summary className="flex min-h-11 cursor-pointer list-none items-center gap-1 text-muted hover:text-text [&::-webkit-details-marker]:hidden">
+      <div className="mx-auto flex max-w-6xl items-start gap-3 px-5">
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-6">
+          <a
+            href="tel:911"
+            aria-label={`${strip.emergency}. ${actions.call911}`}
+            className="flex min-h-10 items-center gap-2 font-semibold text-text hover:underline sm:min-h-11"
+          >
+            <span aria-hidden="true" className="size-2 rounded-pill bg-ember" />
+            {strip.emergency}
+          </a>
+          <a
+            href="tel:988"
+            aria-label={`${strip.crisis}. ${actions.call988}`}
+            className="flex min-h-10 items-center gap-2 text-text hover:underline sm:min-h-11"
+          >
+            <span aria-hidden="true" className="size-2 rounded-pill bg-sage" />
+            {strip.crisis}
+          </a>
+        </div>
+        <details className="group shrink-0">
+          <summary className="flex min-h-10 cursor-pointer sm:min-h-11 list-none items-center gap-1 text-muted hover:text-text [&::-webkit-details-marker]:hidden">
             {strip.more}
             <span
               aria-hidden="true"

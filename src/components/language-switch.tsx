@@ -1,10 +1,13 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { Locale } from "@/i18n/config";
 
-/** Links to the same page in the other language. */
+/**
+ * Links to the same page in the other language. A plain link on purpose: switching language
+ * swaps the whole document (<html lang>), so a full load is cleaner than a client re-render
+ * of the root layout (which would also drop the theme set before paint).
+ */
 export function LanguageSwitch({
   locale,
   label,
@@ -19,7 +22,7 @@ export function LanguageSwitch({
   const href = pathname.replace(/^\/(en|es)(?=\/|$)/, `/${other}`);
 
   return (
-    <Link
+    <a
       href={href}
       hrefLang={other}
       lang={other}
@@ -27,6 +30,6 @@ export function LanguageSwitch({
       className="flex min-h-11 items-center rounded-pill border border-line px-4 text-[0.95rem] text-muted transition-colors duration-200 hover:border-glow hover:text-text"
     >
       {label}
-    </Link>
+    </a>
   );
 }
