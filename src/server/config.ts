@@ -88,7 +88,7 @@ export const config = {
   models: {
     /** Fixed on the cheapest model, also during the answer-model comparison (ADR 0009). */
     router: "gpt-6-luna",
-    /** Provisional until the comparison in docs/EVALS.md is run (ADR 0009). */
+    /** Kept on the cheapest model after the Phase 4 comparison in docs/EVALS.md (ADR 0009, accepted). */
     answer: "gpt-6-luna",
     /** Notebook structuring: organise and rephrase only, so the cheap model is enough. */
     notebook: "gpt-6-luna",

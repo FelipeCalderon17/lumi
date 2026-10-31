@@ -2,7 +2,7 @@
 
 One Next.js app (App Router) serves the pages and a small set of API routes. All assistant logic lives in [`src/server/`](../src/server) as framework-free TypeScript ([ADR 0001](decisions/0001-single-nextjs-app.md)): no `next`, `react` or `src/app` imports, so it can be unit-tested directly and extracted later.
 
-> **Status (Phase 4):** evals are implemented and run (`pnpm eval`, [EVALS.md § Results](EVALS.md#results)): every safety gate at 100%, and [ADR 0009](decisions/0009-model-selection.md) recommends keeping `gpt-6-luna` for answers (pending sign-off). No pipeline behaviour changed in Phase 4. The server side is implemented and tested with mocked models: the chat pipeline, voice-to-text, notebook classification (notes shown verbatim), gaps, staff endpoints and the usage ledger. One live smoke test has been run ([PROCESS.md](PROCESS.md), entry 4). The UI is built ([ADR 0016](decisions/0016-phase-3-ui.md)). Client logic lives in `src/lib/` (framework-free and unit-tested): the NDJSON reader (`chat-client.ts`), notebook storage, the voice cap, donate tiers and volunteer filters. It was checked in a real browser in EN and ES at mobile and desktop widths.
+> **Status (Phase 4):** evals are implemented and run (`pnpm eval`, [EVALS.md § Results](EVALS.md#results)): every safety gate at 100%, and [ADR 0009](decisions/0009-model-selection.md) keeps `gpt-6-luna` for answers, on the Phase 4 numbers (accepted). No pipeline behaviour changed in Phase 4. The server side is implemented and tested with mocked models: the chat pipeline, voice-to-text, notebook classification (notes shown verbatim), gaps, staff endpoints and the usage ledger. One live smoke test has been run ([PROCESS.md](PROCESS.md), entry 4). The UI is built ([ADR 0016](decisions/0016-phase-3-ui.md)). Client logic lives in `src/lib/` (framework-free and unit-tested): the NDJSON reader (`chat-client.ts`), notebook storage, the voice cap, donate tiers and volunteer filters. It was checked in a real browser in EN and ES at mobile and desktop widths.
 
 **Scope.** Lumi serves English- and Spanish-speaking families **in the US** ([ADR 0012](decisions/0012-us-scope-and-crisis-contacts.md)): 911 for emergencies, the 988 Suicide & Crisis Lifeline for emotional crisis, and "contact your local emergency services" for anyone outside the US.
 
@@ -61,7 +61,7 @@ One Next.js app (App Router) serves the pages and a small set of API routes. All
  Separate, opt-in, after `abstained`:
    editable preview + "Lumi staff can read this" → POST /api/gaps { question, language, topic, consent: true }
    → gaps/ → gap_question (30-day retention, delete token)       rate-limited separately
-   Staff: /[locale]/staff/gaps (passcode → HMAC session cookie, ADR 0008)
+   Staff: /[locale]/staff (passcode → HMAC session cookie, ADR 0008)
 ```
 
 ### Other endpoints
@@ -196,7 +196,7 @@ Two tables ([`src/db/schema.ts`](../src/db/schema.ts), migrations in [`drizzle/`
 
 Decided in review round 1: buffering (ADR 0010), deterministic self-harm check (ADR 0003), country and crisis contacts (ADR 0012), transport (NDJSON, above). Decided after Codex review 3: notebook safety on past events: a safety notice comes **with** the page, never instead of it (ADR 0003); the price catalog for every model is applied (ADR 0009, 0014); output caps router 1,000 / answer 3,000 approved until Phase 4 tuning (Phase 4 measured maxima of 188 / 577 with no truncation; ADR 0009 recommends, doesn't apply, lower caps).
 
-Pending sign-off: **ADR 0015 revision 3** is Proposed until Codex verifies the re-review 6 fixes and Felipe signs off. It covers the layered dosage backstops (a finite detector with listed residual vocabulary and accepted over-withholding) and the notebook redesign: AI classifies only, and the page shows every note verbatim. **ADR 0009** is Proposed until Felipe signs off on the Phase 4 recommendation to keep `gpt-6-luna` for answers.
+Signed off by Felipe: **ADR 0015** (2026-10-31): the layered dosage backstops (a finite detector with listed residual vocabulary and accepted over-withholding) and the notebook redesign, where AI classifies only and the page shows every note verbatim. **ADR 0009** (2026-11-01): keep `gpt-6-luna` for answers, from the Phase 4 comparison. **ADR 0016** (2026-11-01): the Phase 3 UI. Still not decided: lowering the output caps (ADR 0009 recommends router 500 / answer 1,500 / notebook 1,000).
 
 Still open:
 
