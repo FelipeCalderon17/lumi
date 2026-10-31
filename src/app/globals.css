@@ -266,6 +266,40 @@
   }
 }
 
+/*
+ * A calm, themed scrollbar for inner scroll areas (the Ask Lumi conversation). Kept visible: it
+ * tells the parent there's more above. Thin, transparent track, a muted thumb from the tokens
+ * (works in night and dawn), a little stronger on hover or keyboard focus.
+ * Chrome 121+ / Firefox use the standard properties; Safari and older WebKit use the
+ * ::-webkit-scrollbar fallback (Chrome ignores it once scrollbar-color is set).
+ */
+@utility scrollbar-lumi {
+  --lumi-scroll-thumb: color-mix(in srgb, var(--lumi-muted) 45%, transparent);
+  --lumi-scroll-thumb-strong: color-mix(in srgb, var(--lumi-muted) 70%, transparent);
+  scrollbar-width: thin;
+  scrollbar-color: var(--lumi-scroll-thumb) transparent;
+  scrollbar-gutter: stable;
+  &:hover,
+  &:focus-visible {
+    scrollbar-color: var(--lumi-scroll-thumb-strong) transparent;
+  }
+  &::-webkit-scrollbar {
+    width: 10px;
+  }
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  &::-webkit-scrollbar-thumb {
+    background-color: var(--lumi-scroll-thumb);
+    background-clip: padding-box;
+    border: 2px solid transparent;
+    border-radius: 999px;
+  }
+  &::-webkit-scrollbar-thumb:hover {
+    background-color: var(--lumi-scroll-thumb-strong);
+  }
+}
+
 @keyframes lumi-flicker {
   0%,
   100% {
