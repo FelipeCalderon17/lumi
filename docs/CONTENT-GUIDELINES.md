@@ -74,7 +74,7 @@ Every article has `risk: standard | high` in its frontmatter. Mark **`high`** an
 - Frontmatter matches the schema; `lang` matches the folder; ids are unique.
 - Every EN id has an ES pair with the same `category` and `risk`, and vice versa.
 - Body is 250–450 words.
-- No dosage patterns ("5 ml", "200mg", "every 4 hours"), no "cure"/"guarantee" (EN/ES), no "journey"/"warrior".
+- No dosage patterns ("5 ml", "200mg", "a tablet", "give it every 4 hours", "take … twice daily": the structural gate in [ADR 0015](decisions/0015-structural-output-checks.md); KB text has to pass it too), no "cure"/"guarantee" (EN/ES), no "journey"/"warrior".
 - No phone numbers except 911, and 988 only inside the approved crisis line.
 - "OpenAI" only in the privacy disclosures (`help.processingNotice`, `how-lumi-can-help`).
 

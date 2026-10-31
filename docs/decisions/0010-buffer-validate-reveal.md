@@ -8,7 +8,8 @@ The first design streamed answer tokens to the parent and checked citations only
 ## Decision
 - The answer is generated with `streamText` (so a stalled provider is detected early by a first-token timer) but **buffered on the server**. Nothing from the model is sent to the client until the full text has passed:
   1. the **completion check** (`interpretCompletion`): `finishReason` must be `stop`. `length` → fallback(truncated), anything else → fallback(interrupted). The abstain marker is detected on the full text, so a marker split across chunks still works.
-  2. **citation integrity** (`validate/`).
+  2. **citation integrity** (`validate/`);
+  3. the **output checks** (`findUnsafeOutput`): no phone numbers other than 911/988, and the structural, fail-closed dosage gate ([ADR 0015](0015-structural-output-checks.md)).
 - While waiting, the server sends a `progress` event, and the UI shows a calm, static state: *"Looking through our family guides…"* / *"Buscando en nuestras guías para familias…"*. No typing animation.
 - The validated answer is revealed in one piece as a single terminal `answer` event.
 - **Transport:** NDJSON over `fetch`, exactly one terminal event per request, cancellation via `AbortSignal`, and the client shows the fallback on a non-2xx or a stream that ends without a terminal event (contract in [ARCHITECTURE.md § Transport](../ARCHITECTURE.md#transport)).

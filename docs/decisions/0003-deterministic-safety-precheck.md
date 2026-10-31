@@ -1,6 +1,6 @@
 # 0003 — Deterministic safety check before any model call and any limit
 
-**Status:** Accepted · 2026-10-30 · *Revised 2026-10-30 after Codex review 1: runs before the length check and rate limiting; adds an explicit self-harm backstop; router gets an `urgent` intent.* · *Revised 2026-10-30 after Codex review 3: broader grammar coverage and punctuation-tolerant normalisation; poisoning needs overdose context for medicines; the notebook shows safety notices alongside the page instead of blocking it (Felipe's decision, approved).*
+**Status:** Accepted · 2026-10-30 · *Revised 2026-10-30 after Codex review 1: runs before the length check and rate limiting; adds an explicit self-harm backstop; router gets an `urgent` intent.* · *Revised 2026-10-30 after Codex review 3: broader grammar coverage and punctuation-tolerant normalisation; poisoning needs overdose context for medicines; the notebook shows safety notices alongside the page instead of blocking it (Felipe's decision, approved).* · *Docs revised 2026-10-30 after Codex re-review 4: the router isn't reached past the length and rate limits; known misses as golden cases; future work.*
 
 ## Context
 A parent may type something that is a medical emergency ("she's not breathing", "convulsiona"), or say they're about to hurt themselves. The response has to be immediate and correct even if the model provider is slow, down or misclassifies the message, and even if the parent has hit a rate limit or written a very long message.
@@ -26,8 +26,8 @@ A parent may type something that is a medical emergency ("she's not breathing", 
 *Added 2026-10-30 after Codex re-review 3.*
 
 - **It's a regex backstop with finite coverage.** The rules are now written by grammar family rather than by phrasing: {subject / clitic before or after the verb} × {modal, "estar" + gerund, or none} × {an explicit list of each verb's forms}, with a few adverbs and intensifiers allowed in between ("no lo puedo despertar" / "no puedo despertarlo", "me estoy ahogando" / "estoy ahogándome", "me voy a hacer mucho daño", "I am thinking about cutting myself"). That covers far more than single phrases, but it's still a list. Typos ("resprando"), slang we haven't seen, indirect phrasing ("he's gone grey and floppy") and other languages will get through.
-- **The router's `urgent` intent is the second layer.** Anything this check misses still goes to the router, which lists `urgent` and `emotional_crisis` among its intents, and code puts them first. That layer depends on the provider being up; this one doesn't.
-- **911 is always on screen and in the fallback copy.** The 911 line is fixed copy in the UI dictionaries (`emergency.banner`), shown by the emergency banner; Phase 3 puts it on every page, and today it's on the help page. Every fallback message ("Lumi can't answer right now") also ends with "In an emergency, call 911". So even a miss here plus a router failure leaves the parent one line away from 911.
+- **The router's `urgent` intent is the second layer.** A chat message this check misses normally goes on to the router, which lists `urgent` and `emotional_crisis` among its intents, and code puts them first. Not always: the length check and the rate limits run after this check and before the router, so an over-long or rate-limited message that doesn't match here never reaches the router. That layer also depends on the provider being up; this one doesn't. In those cases the parent still sees 911 (next point).
+- **911 is always on screen and in the fallback copy.** The 911 line is fixed copy in the UI dictionaries (`emergency.banner`), shown by the emergency banner; Phase 3 puts it on every page, and today it's on the help page. Every fallback message ("Lumi can't answer right now") also ends with "In an emergency, call 911". So even a miss here plus a router failure, or a non-matching message stopped by the length or rate limit, leaves the parent one line away from 911.
 - **Known false positives, kept on purpose** (recall over precision; each costs one extra emergency screen):
   - "No, está respirando" (punctuation is dropped, so it reads as "no está respirando");
   - "I can't wake up early" (matches "can't wake");
@@ -35,6 +35,14 @@ A parent may type something that is a medical emergency ("she's not breathing", 
   - "me ahogo de calor" and similar figurative uses of "ahogarse";
   - "he accidentally took his medicine with lunch", "se tomó todas sus medicinas según las instrucciones" (accidental-ingestion and "todas" patterns).
   They're listed in `src/server/safety/index.test.ts` so a change to them is visible.
+- **Known misses are golden cases.** Phrasings a review finds that this check misses go to `evals/golden.jsonl` with `knownLimitation: true` and `detectedBy: "router"` (e.g. "No esta resprando", "No he podido despertarlo", "No consigo que respire", "Me voy a hacer muchísimo daño", "I am unable to breathe"). A test asserts they're still missed, so the flag is dropped when the rules start catching one. Individual phrasings don't block a phase; structural gaps (a whole grammar family) do.
+
+## Future work
+*Agreed 2026-10-30 after Codex re-review 4. Not built yet.*
+
+- **Typo-tolerant / fuzzy matching** for the verb and symptom words ("resprando", "convulsonando"), with a measured false-positive budget.
+- **A dedicated safety classifier** as an extra layer between this check and the router: still not a replacement, since it's a model call that can fail.
+- **Clinician review of the patterns** and of the fixed emergency copy, before any real family uses Lumi.
 
 ## Alternatives
 - **Let the router classify emergencies.** Rejected as the only layer: depends on the provider being up and on model judgement.
