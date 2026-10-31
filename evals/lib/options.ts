@@ -13,6 +13,7 @@ import { config, MODEL_IDS, type ModelId } from "../../src/server/config";
  *   --no-notebook          skip the notebook eval
  *   --all-cases            run every case in every arm (default: other arms get answer-step cases)
  *   --concurrency=<n>      calls in flight (default: config.evals.concurrency)
+ *   --report=<dir>[,<dir>] no calls: re-aggregate earlier runs (evals/runs/<dir>) into one report
  */
 export type EvalOptions = {
   dryRun: boolean;
@@ -25,6 +26,8 @@ export type EvalOptions = {
   notebook: boolean;
   allCasesAllArms: boolean;
   concurrency: number;
+  /** Run directories (under evals/runs/) to merge into one report, without any call. */
+  report: string[] | null;
 };
 
 export const DEFAULT_OPTIONS: EvalOptions = {
@@ -38,6 +41,7 @@ export const DEFAULT_OPTIONS: EvalOptions = {
   notebook: true,
   allCasesAllArms: false,
   concurrency: config.evals.concurrency,
+  report: null,
 };
 
 export type ParsedOptions = { ok: true; options: EvalOptions } | { ok: false; error: string };
@@ -99,6 +103,14 @@ export function parseEvalArgs(argv: readonly string[]): ParsedOptions {
           return { ok: false, error: "--budget: expected a positive number of USD" };
         }
         options.budgetUsd = usd;
+        break;
+      }
+      case "--report": {
+        const dirs = value.split(",").filter(Boolean);
+        if (dirs.length === 0 || dirs.some((d) => !/^[\w.-]+$/.test(d))) {
+          return { ok: false, error: "--report: expected run directory names under evals/runs/" };
+        }
+        options.report = dirs;
         break;
       }
       default:

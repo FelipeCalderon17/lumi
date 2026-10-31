@@ -365,7 +365,7 @@ describe("executePlan (mocked models, real pipeline)", () => {
       durationMin: 1,
       runDir: "evals/runs/x/",
     };
-    const md = renderResults(meta, [arm], notebook, judgeOutputs(outcome.records));
+    const md = renderResults([meta], [arm], notebook, judgeOutputs(outcome.records));
     expect(md).toContain("Safety gates (must be 100%)");
     expect(md).toContain("number_provenance");
     expect(md).toContain("practical-en-002");
@@ -406,6 +406,79 @@ describe("executePlan (mocked models, real pipeline)", () => {
     ]);
     const sol = outcome.records.filter((r) => r.kind === "chat" && r.arm === "gpt-6.1-sol");
     expect(sol.every((r) => r.status === "done")).toBe(true);
+  });
+});
+
+describe("summarizeArm edge cases", () => {
+  it("a timeout isn't a withholding, and a call with unknown usage stays out of the cost", () => {
+    const c = golden[1] as GoldenCase;
+    const row = (over: Partial<ChatRecord["rows"][number]>): ChatRecord["rows"][number] => ({
+      step: "answer",
+      model: "gpt-6.1-terra",
+      inputTokens: null,
+      cachedInputTokens: null,
+      outputTokens: null,
+      reasoningTokens: null,
+      audioSeconds: null,
+      latencyMs: 8_000,
+      finishReason: "none",
+      requestId: "r",
+      outcome: "fallback",
+      failureReason: "timeout",
+      ...over,
+    });
+    const record: ChatRecord = {
+      kind: "chat",
+      arm: "gpt-6.1-terra",
+      armIndex: 1,
+      run: 1,
+      caseId: c.id,
+      tags: c.tags,
+      locale: "en",
+      input: c.input,
+      status: "done",
+      events: [{ type: "fallback", reason: "timeout", language: "en" }],
+      rejected: null,
+      route: {
+        language: "en",
+        category: "practical",
+        topic: "hospital-logistics",
+        intents: ["practical"],
+      },
+      answerDraft: "",
+      rows: [
+        row({
+          step: "router",
+          model: "gpt-6-luna",
+          inputTokens: 550,
+          cachedInputTokens: 0,
+          outputTokens: 25,
+          finishReason: "stop",
+        }),
+        row({}),
+      ],
+      latency: { routerMs: 1_000, answerMs: 8_000, totalMs: 9_000 },
+      checks: [{ name: "outcome", pass: false }],
+      pass: false,
+      gatePass: false,
+      // As recorded by the first full run, before the runner stopped attributing timeouts.
+      withholding: {
+        first: "interrupted",
+        layers: ["interrupted"],
+        unsafeMatches: [],
+        unsourced: [],
+        citedHandles: [],
+      },
+      judge: null,
+      judgeSkipped: null,
+      costUsd: "unknown",
+      providerError: null,
+    };
+    const arm = summarizeArm("gpt-6.1-terra", [record], casesById, modelCatalog);
+    expect(arm.withholding).toMatchObject({ eligible: 0, withheld: 0 });
+    expect(arm.reliability.fallbacks).toEqual({ timeout: 1 });
+    expect(arm.cost.unknownUsageCalls).toBe(1);
+    expect(arm.cost.actualUsd).toBeCloseTo((550 * 0.1 + 25 * 0.5) / 1e6, 12);
   });
 });
 

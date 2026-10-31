@@ -11,7 +11,7 @@
 import { spawnSync } from "node:child_process";
 
 const args = process.argv.slice(2);
-const dryRun = args.includes("--dry-run");
+const dryRun = args.includes("--dry-run") || args.some((a) => a.startsWith("--report="));
 if (!dryRun && process.env.LUMI_LIVE !== "1") {
   console.log("pnpm eval: LUMI_LIVE=1 is not set, so this is an estimate only (no model call).");
   console.log(

@@ -114,6 +114,8 @@ export type ArmSummary = {
   }[];
   cost: {
     actualUsd: CostEstimate;
+    /** Calls left out of every cost here because the provider reported no usage. */
+    unknownUsageCalls: number;
     perConversation: CostEstimate;
     perAnswered: { actual: CostEstimate; cold: CostEstimate; warm: CostEstimate; n: number };
   };
@@ -134,12 +136,20 @@ export type ArmSummary = {
 
 const mean = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
 
+/** A call whose token usage the provider reported (a timed-out stream reports none). */
+const knownUsage = (row: UsageEntry) =>
+  row.inputTokens !== null && row.cachedInputTokens !== null && row.outputTokens !== null;
+
+/**
+ * Cost of the calls with known usage. Calls with unknown usage are left out and counted
+ * separately (`unknownUsageCalls`): the guard charged them at their full reservation.
+ */
 function costOf(
   rows: readonly UsageEntry[],
   catalog: PriceCatalog,
   cached?: (row: UsageEntry) => number,
 ) {
-  return rows.reduce<CostEstimate>((sum, row) => {
+  return rows.filter(knownUsage).reduce<CostEstimate>((sum, row) => {
     const facts =
       cached && row.inputTokens !== null
         ? { ...row, cachedInputTokens: Math.min(row.inputTokens, cached(row)) }
@@ -301,8 +311,11 @@ export function summarizeArm(
     // Withholding: drafts that are answers (revealed, or withheld by a gate).
     const answerRow = r.rows.find((x) => x.step === "answer");
     if (answerRow) {
+      const outputCheck =
+        terminal?.type === "fallback" &&
+        (terminal.reason === "invalid_output" || terminal.reason === "truncated");
       if (terminal?.type === "answer") eligible += 1;
-      else if (r.withholding) {
+      else if (r.withholding && outputCheck) {
         eligible += 1;
         withheld += 1;
         byFirst[r.withholding.first] = (byFirst[r.withholding.first] ?? 0) + 1;
@@ -453,6 +466,7 @@ export function summarizeArm(
     }),
     cost: {
       actualUsd: actual,
+      unknownUsageCalls: rows.filter((x) => !knownUsage(x.row)).length,
       perConversation: divide(actual, done.length),
       perAnswered: {
         actual: divide(actualAnswered, answered.length),

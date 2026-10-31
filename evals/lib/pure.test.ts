@@ -82,6 +82,13 @@ describe("parseEvalArgs", () => {
     expect(parsed.options.casePattern?.test("practical-en-001")).toBe(true);
   });
 
+  it("--report takes run directory names and nothing that looks like a path", () => {
+    const ok = parseEvalArgs(["--report=2026-10-31T07-54-47-196Z,run-2"]);
+    expect(ok.ok && ok.options.report).toEqual(["2026-10-31T07-54-47-196Z", "run-2"]);
+    expect(parseEvalArgs(["--report=../secrets"]).ok).toBe(false);
+    expect(parseEvalArgs(["--report="]).ok).toBe(false);
+  });
+
   it.each([
     ["--arms=gpt-unknown"],
     ["--budget=0"],

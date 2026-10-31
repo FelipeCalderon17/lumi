@@ -55,8 +55,20 @@ function table(header: string[], rows: string[][]): string {
   ].join("\n");
 }
 
+/** One line per run (a report can merge several runs over the same frozen inputs). */
+function runLines(meta: RunMeta, label: string): string[] {
+  return [
+    `- **${label}:** \`pnpm eval ${meta.args.join(" ")}\` at git \`${meta.gitSha.slice(0, 12)}\`${meta.dirty ? " (uncommitted changes)" : ""} · cap $${meta.capUsd.toFixed(2)} · estimate before the run: warm ${usd(meta.estimate.total.warm, 2)}, cold ${usd(meta.estimate.total.cold, 2)}, worst case ${usd(meta.estimate.total.worst, 2)} · **actual spend ${usd(meta.spentUsd)}** · ${meta.durationMin.toFixed(1)} min · raw outputs \`${meta.runDir}\` (git-ignored)`,
+    meta.stoppedAt
+      ? `  - **Budget guard stopped the run** before: ${meta.stoppedAt}. ${meta.skippedUnits} units skipped.`
+      : `  - Budget guard: not triggered; ${meta.skippedUnits} units skipped.`,
+    ...meta.skippedArms.map((s) => `  - Skipped arm \`${s.arm}\`: ${s.reason}`),
+    ...meta.unavailableArms.map((s) => `  - Unavailable arm \`${s.arm}\`: ${s.reason}`),
+  ];
+}
+
 export function renderResults(
-  meta: RunMeta,
+  metas: readonly RunMeta[],
   arms: ArmSummary[],
   notebook: NotebookSummary | null,
   judgeCaps: {
@@ -65,21 +77,18 @@ export function renderResults(
     truncated: number;
   },
 ): string {
+  const [meta] = metas;
+  if (!meta) throw new Error("renderResults needs at least one run");
   const out: string[] = [];
   const armNames = arms.map((a) => `\`${a.arm}\``);
+  const spent = metas.reduce((s, m) => s + m.spentUsd, 0);
   out.push(`### Run of ${meta.date}`);
   out.push(
     [
-      `- **Git:** \`${meta.gitSha.slice(0, 12)}\`${meta.dirty ? " (uncommitted changes)" : ""} · **command:** \`pnpm eval ${meta.args.join(" ")}\``,
-      `- **KB:** en \`${meta.fingerprint.kb.en.slice(0, 12)}\`, es \`${meta.fingerprint.kb.es.slice(0, 12)}\` · **prompts:** \`${meta.fingerprint.prompts.slice(0, 12)}\` (router v${meta.fingerprint.versions.router}, answer v${meta.fingerprint.versions.answer}, notebook v${meta.fingerprint.versions.notebook}, judge v${meta.judgePromptVersion})`,
+      `- **KB:** en \`${meta.fingerprint.kb.en.slice(0, 12)}\`, es \`${meta.fingerprint.kb.es.slice(0, 12)}\` · **prompts:** \`${meta.fingerprint.prompts.slice(0, 12)}\` (router v${meta.fingerprint.versions.router}, answer v${meta.fingerprint.versions.answer}, notebook v${meta.fingerprint.versions.notebook}, judge v${meta.judgePromptVersion})${metas.length > 1 ? ", identical in every run below" : ""}`,
       `- **Models:** router \`${meta.routerModel}\` (fixed), answer arms ${armNames.join(", ")}, notebook \`${meta.notebookModel}\`, judge \`${meta.judgeModel}\``,
-      `- **Budget:** cap $${meta.capUsd.toFixed(2)} · estimate before the run: warm ${usd(meta.estimate.total.warm, 2)}, cold ${usd(meta.estimate.total.cold, 2)}, worst case ${usd(meta.estimate.total.worst, 2)} · **actual spend ${usd(meta.spentUsd)}** (provider usage × catalog prices) · ${meta.durationMin.toFixed(1)} min`,
-      meta.stoppedAt
-        ? `- **Budget guard stopped the run** before: ${meta.stoppedAt}. ${meta.skippedUnits} units skipped.`
-        : `- Budget guard: not triggered; ${meta.skippedUnits} units skipped.`,
-      ...meta.skippedArms.map((s) => `- Skipped arm \`${s.arm}\`: ${s.reason}`),
-      ...meta.unavailableArms.map((s) => `- Unavailable arm \`${s.arm}\`: ${s.reason}`),
-      `- Raw outputs: \`${meta.runDir}\` (git-ignored)`,
+      `- **Total actual spend: ${usd(spent)}** (provider usage × catalog prices; a call with unknown usage is charged at its worst-case reservation)`,
+      ...metas.flatMap((m, i) => runLines(m, metas.length > 1 ? `Run ${i + 1}` : "Run")),
     ].join("\n"),
   );
 
@@ -174,7 +183,13 @@ export function renderResults(
               `${a.tokens.input} / ${a.tokens.cached} / ${a.tokens.output} / ${a.tokens.reasoning}`,
           ),
         ],
-        ["Pipeline spend (router + answer)", ...arms.map((a) => usd(a.cost.actualUsd))],
+        [
+          "Pipeline spend (router + answer, calls with known usage)",
+          ...arms.map(
+            (a) =>
+              `${usd(a.cost.actualUsd)}${a.cost.unknownUsageCalls ? ` (+${a.cost.unknownUsageCalls} call with unknown usage)` : ""}`,
+          ),
+        ],
         ["Judge spend", ...arms.map((a) => usd(a.judge.costUsd))],
         [
           "Judge errors / skipped for budget",

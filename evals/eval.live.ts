@@ -23,7 +23,7 @@ import { parseEvalArgs } from "./lib/options";
 import { buildPlan, estimatePlan, fitPlanToBudget, promptSizes } from "./lib/plan";
 import { renderResults, renderSafetyReview, usd } from "./lib/render";
 import { judgeOutputs, summarizeArm, summarizeNotebook } from "./lib/report";
-import { type ChatRecord, executePlan, type NotebookRecord } from "./lib/runner";
+import { type ChatRecord, executePlan, type NotebookRecord, type RunRecord } from "./lib/runner";
 import { NotebookCaseSchema } from "./notebook";
 
 const enabled = process.env.LUMI_EVAL === "1";
@@ -43,6 +43,50 @@ function git(cmd: string): string {
   }
 }
 
+type Meta = Parameters<typeof renderSafetyReview>[0];
+
+/** Aggregates records and writes results.md, safety-review.md and summary.json into `dir`. */
+function writeReport(
+  dir: URL,
+  metas: Meta[],
+  records: RunRecord[],
+  cases: Map<string, GoldenCase>,
+  extra: Record<string, unknown> = {},
+) {
+  const chat = records.filter((r): r is ChatRecord => r.kind === "chat");
+  const nb = records.filter((r): r is NotebookRecord => r.kind === "notebook");
+  const arms = [...new Set(chat.map((r) => r.arm))];
+  const armSummaries = arms.map((arm) => summarizeArm(arm, chat, cases, modelCatalog));
+  const notebookSummary = nb.length ? summarizeNotebook(nb, modelCatalog) : null;
+  const judgeCaps = judgeOutputs(records);
+  writeFileSync(
+    new URL("summary.json", dir),
+    JSON.stringify(
+      { metas, arms: armSummaries, notebook: notebookSummary, judgeCaps, ...extra },
+      null,
+      2,
+    ),
+  );
+  writeFileSync(
+    new URL("results.md", dir),
+    renderResults(metas, armSummaries, notebookSummary, judgeCaps),
+  );
+  writeFileSync(
+    new URL("safety-review.md", dir),
+    renderSafetyReview(metas[0] as Meta, chat, cases),
+  );
+  for (const a of armSummaries) {
+    console.log(
+      `${a.arm.padEnd(14)} runs ${a.runs} · checks ${a.passAll.pass}/${a.passAll.total} · safety gate ${a.safetyGateAll.pass}/${a.safetyGateAll.total} · grounded ${a.groundedAccuracy.pass}/${a.groundedAccuracy.total} · judge ${a.judge.groundedness.pass}/${a.judge.groundedness.total}`,
+    );
+  }
+  if (notebookSummary) {
+    console.log(
+      `notebook       verbatim ${notebookSummary.verbatim.pass}/${notebookSummary.verbatim.total} · classification ${notebookSummary.classification.pass}/${notebookSummary.classification.total}`,
+    );
+  }
+}
+
 it.skipIf(!enabled)(
   "pnpm eval",
   async () => {
@@ -55,6 +99,33 @@ it.skipIf(!enabled)(
     const golden = readJsonl("./golden.jsonl", (v) => GoldenCaseSchema.parse(v));
     const notebookCases = readJsonl("./notebook.jsonl", (v) => NotebookCaseSchema.parse(v));
     const kbs = { en: await loadKnowledgeBase("en"), es: await loadKnowledgeBase("es") };
+    const cases = new Map<string, GoldenCase>(golden.map((c) => [c.id, c]));
+
+    if (opts.report) {
+      // No calls: merge earlier runs over the same frozen inputs into one report.
+      const metas: Meta[] = [];
+      const records: RunRecord[] = [];
+      for (const name of opts.report) {
+        const runDir = new URL(`./runs/${name}/`, import.meta.url);
+        const summary = JSON.parse(readFileSync(new URL("summary.json", runDir), "utf8"));
+        metas.push(...(summary.metas ?? [summary.meta]));
+        records.push(...readJsonl(`./runs/${name}/results.jsonl`, (v) => v as RunRecord));
+      }
+      const current = fingerprint(kbs);
+      const frozen = (m: Meta) =>
+        m.fingerprint.prompts === current.prompts &&
+        m.fingerprint.kb.en === current.kb.en &&
+        m.fingerprint.kb.es === current.kb.es;
+      if (!metas.every(frozen))
+        throw new Error("--report: runs differ in KB or prompts; can't merge");
+      const stamp = `${new Date().toISOString().replace(/[:.]/g, "-")}-report`;
+      const dir = new URL(`./runs/${stamp}/`, import.meta.url);
+      mkdirSync(dir, { recursive: true });
+      writeReport(dir, metas, records, cases);
+      console.log(`\nReport (no model call): evals/runs/${stamp}/results.md, safety-review.md`);
+      return;
+    }
+
     const sizes = promptSizes(kbs);
     const fullPlan = buildPlan(opts, golden, notebookCases, modelCatalog);
     const fitted = fitPlanToBudget(fullPlan, sizes, modelCatalog, opts.budgetUsd);
@@ -126,13 +197,7 @@ it.skipIf(!enabled)(
       log: (line) => console.log(line),
     });
 
-    const cases = new Map<string, GoldenCase>(golden.map((c) => [c.id, c]));
-    const chat = outcome.records.filter((r): r is ChatRecord => r.kind === "chat");
-    const nb = outcome.records.filter((r): r is NotebookRecord => r.kind === "notebook");
-    const arms = [...new Set(plan.units.flatMap((u) => (u.kind === "chat" ? [u.arm] : [])))];
-    const armSummaries = arms.map((arm) => summarizeArm(arm, chat, cases, modelCatalog));
-    const notebookSummary = nb.length ? summarizeNotebook(nb, modelCatalog) : null;
-    const meta = {
+    const meta: Meta = {
       date: started.toISOString().slice(0, 10),
       gitSha: git("rev-parse HEAD"),
       dirty: git("status --porcelain") !== "",
@@ -155,48 +220,20 @@ it.skipIf(!enabled)(
       durationMin: (Date.now() - started.getTime()) / 60_000,
       runDir: `evals/runs/${stamp}/`,
     };
-    const judgeCaps = judgeOutputs(outcome.records);
-    writeFileSync(
-      new URL("summary.json", dir),
-      JSON.stringify(
-        {
-          meta,
-          arms: armSummaries,
-          notebook: notebookSummary,
-          judgeCaps,
-          guard: {
-            spentUsd: guard.spentUsd,
-            stoppedAt: guard.stoppedAt,
-            overruns: guard.overruns,
-            unknownCostCalls: guard.unknownCostCalls,
-          },
-          fatal: outcome.fatal,
-        },
-        null,
-        2,
-      ),
-    );
-    writeFileSync(
-      new URL("results.md", dir),
-      renderResults(meta, armSummaries, notebookSummary, judgeCaps),
-    );
-    writeFileSync(new URL("safety-review.md", dir), renderSafetyReview(meta, chat, cases));
-
+    writeReport(dir, [meta], outcome.records, cases, {
+      guard: {
+        spentUsd: guard.spentUsd,
+        stoppedAt: guard.stoppedAt,
+        overruns: guard.overruns,
+        unknownCostCalls: guard.unknownCostCalls,
+      },
+      fatal: outcome.fatal,
+    });
     console.log(
       `\nActual spend: ${usd(guard.spentUsd)} of $${opts.budgetUsd.toFixed(2)} (overruns ${guard.overruns}, unknown-cost calls ${guard.unknownCostCalls})`,
     );
     if (guard.stoppedAt) console.log(`Budget guard stopped before: ${guard.stoppedAt}`);
     if (outcome.fatal) console.log(`Stopped: ${outcome.fatal}`);
-    for (const a of armSummaries) {
-      console.log(
-        `${a.arm.padEnd(14)} runs ${a.runs} · checks ${a.passAll.pass}/${a.passAll.total} · safety gate ${a.safetyGateAll.pass}/${a.safetyGateAll.total} · grounded ${a.groundedAccuracy.pass}/${a.groundedAccuracy.total} · judge ${a.judge.groundedness.pass}/${a.judge.groundedness.total}`,
-      );
-    }
-    if (notebookSummary) {
-      console.log(
-        `notebook       verbatim ${notebookSummary.verbatim.pass}/${notebookSummary.verbatim.total} · classification ${notebookSummary.classification.pass}/${notebookSummary.classification.total}`,
-      );
-    }
     console.log(
       `\nReport: evals/runs/${stamp}/results.md, safety-review.md, summary.json, results.jsonl`,
     );

@@ -222,8 +222,12 @@ export async function executePlan(plan: Plan, deps: RunnerDeps): Promise<RunOutc
       knownHandles: new Set(kb.byHandle.keys()),
     });
     const answerRow = rows.find((r) => r.step === "answer");
+    // Only output-check fallbacks are withholdings; a timeout or provider error isn't.
     const withholding =
-      terminal?.type === "fallback" && answerRow && answer.capture.calls > 0
+      terminal?.type === "fallback" &&
+      (terminal.reason === "invalid_output" || terminal.reason === "truncated") &&
+      answerRow &&
+      answer.capture.calls > 0
         ? attributeWithholding(answer.capture.text, answerRow.finishReason, kb)
         : null;
 
