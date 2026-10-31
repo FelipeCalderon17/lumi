@@ -18,6 +18,7 @@ import type { RateLimiter } from "../rate-limit";
 import { checkEmergency, type EmergencyKind } from "../safety";
 import type { FailureReason, Language, ModelCall } from "../types";
 import { LANGUAGES } from "../types";
+import { quantitiesIn } from "./quantities";
 
 /**
  * The parent's "2 a.m. notebook": notes typed or dictated during the week, turned into a
@@ -26,9 +27,11 @@ import { LANGUAGES } from "../types";
  *
  * The model may only ORGANISE and REPHRASE. Code then checks what it can:
  *   - every item cites the notes it came from, and those notes exist;
- *   - every number in an item, with its unit, appears with the same value and the same unit in
- *     the notes the item cites (catches invented or altered doses, temperatures, times;
- *     "2.5 ml" ≠ "5.2 ml", "5 ml" ≠ "5 mg"). Timestamps are not a source;
+ *   - every quantity in an item (digits, fractions, written numbers EN/ES), with its full unit,
+ *     appears with the same value and the same unit in the notes the item cites (catches
+ *     invented or altered doses, temperatures, times; "2.5 ml" ≠ "5.2 ml", "5 ml" ≠ "5 mg",
+ *     "38 °C" ≠ "38 °F", "5 mL/kg" ≠ "5 mL"). Anything numeric it can't read must be copied
+ *     verbatim (see ./quantities). Timestamps are not a source;
  *   - dates come from the notes' own timestamps, never from the model.
  * Anything off → the raw notes grouped by date, which is still a useful page.
  * What code can't check (advice, interpretation, causal claims) is measured in the evals
@@ -158,70 +161,7 @@ export function groupNotesByDate(notes: readonly Note[]): NotesByDate {
     .map(([date, items]) => ({ date, notes: items }));
 }
 
-/** Unit spellings → one canonical unit, so "5 ml", "5ml" and "5 milliliters" compare equal. */
-const UNIT_ALIASES: Record<string, string> = {};
-for (const [unit, aliases] of Object.entries({
-  ml: [
-    "ml",
-    "mls",
-    "milliliter",
-    "milliliters",
-    "millilitre",
-    "millilitres",
-    "mililitro",
-    "mililitros",
-  ],
-  cc: ["cc"],
-  mg: ["mg", "mgs", "milligram", "milligrams", "miligramo", "miligramos"],
-  mcg: ["mcg", "µg", "ug", "microgram", "micrograms", "microgramo", "microgramos"],
-  g: ["g", "gr", "gram", "grams", "gramo", "gramos"],
-  kg: ["kg", "kgs", "kilo", "kilos", "kilogram", "kilograms", "kilogramo", "kilogramos"],
-  lb: ["lb", "lbs", "pound", "pounds", "libra", "libras"],
-  oz: ["oz", "ounce", "ounces", "onza", "onzas"],
-  deg: ["°", "°c", "°f", "degree", "degrees", "grado", "grados"],
-  pct: ["%", "percent", "porciento"],
-  am: ["am"],
-  pm: ["pm"],
-  h: ["h", "hr", "hrs", "hour", "hours", "hora", "horas"],
-  min: ["min", "mins", "minute", "minutes", "minuto", "minutos"],
-  day: ["day", "days", "dia", "dias"],
-  night: ["night", "nights", "noche", "noches"],
-  week: ["week", "weeks", "semana", "semanas"],
-  month: ["month", "months", "mes", "meses"],
-  year: ["year", "years", "ano", "anos"],
-  times: ["time", "times", "vez", "veces"],
-  tablet: ["tablet", "tablets", "pill", "pills", "tableta", "tabletas", "pastilla", "pastillas"],
-  capsule: ["capsule", "capsules", "capsula", "capsulas"],
-  drop: ["drop", "drops", "gota", "gotas"],
-  tsp: ["tsp", "teaspoon", "teaspoons", "cucharadita", "cucharaditas"],
-  tbsp: ["tbsp", "tablespoon", "tablespoons", "cucharada", "cucharadas"],
-  puff: ["puff", "puffs", "inhalacion", "inhalaciones"],
-  unit: ["unit", "units", "unidad", "unidades"],
-  dose: ["dose", "doses", "dosis"],
-})) {
-  for (const alias of aliases) UNIT_ALIASES[alias] = unit;
-}
-
-/** A number (decimal or clock time) and the word, symbol or abbreviation right after it. */
-const QUANTITY =
-  /(\d{1,2}:\d{2}|\d+(?:[.,]\d+)?)(?:\s?(°\s?[cf]?(?![\p{L}])|%|(?:[ap]\.m\.?)|[\p{L}µ]+))?/giu;
-
-/**
- * Every number in `text` as "value|unit": complete values (decimals included, "38,5" = "38.5")
- * with their canonical unit, or "" when the next word isn't a known unit. So "2.5 ml" and
- * "5.2 ml" differ, and so do "5 ml" and "5 mg".
- */
-export function quantitiesIn(text: string): string[] {
-  return [...text.matchAll(QUANTITY)].map(([, number = "", rawUnit = ""]) => {
-    const value = number.includes(":") ? number : String(Number(number.replace(",", ".")));
-    const word = rawUnit
-      .normalize("NFD")
-      .replace(/\p{Mn}/gu, "")
-      .toLowerCase()
-      .replace(/[\s.]/g, "");
-    return `${value}|${UNIT_ALIASES[word] ?? ""}`;
-  });
-}
+export { quantitiesIn };
 
 export type NotebookCheck =
   | { ok: true; notebook: Notebook }

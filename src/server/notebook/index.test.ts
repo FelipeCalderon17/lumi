@@ -25,7 +25,7 @@ const notes: Note[] = [
 const good = {
   language: "en",
   observations: [
-    { topic: "Sleep", text: "Woke up 3 times one night.", sourceNoteIndexes: [0] },
+    { topic: "Sleep", text: "Woke up 3 times during the night.", sourceNoteIndexes: [0] },
     {
       topic: "Medicines given",
       text: "You gave 5 ml of the new syrup at 8pm and wondered if it made her tired.",
@@ -45,7 +45,7 @@ describe("notebook.checkNotebook (traceability)", () => {
         observations: [
           {
             topic: "Sleep",
-            text: "Woke up 3 times one night.",
+            text: "Woke up 3 times during the night.",
             dates: ["2026-10-27"],
             sourceNoteIndexes: [0],
           },
@@ -137,13 +137,50 @@ describe("notebook.checkNotebook (traceability)", () => {
 
   it("extracts complete values with canonical units", () => {
     expect(quantitiesIn("38,5 °C at 8:30pm, 2.50 ml, 3 veces, 5 mg")).toEqual([
-      "38.5|deg",
+      "38.5|deg_c",
       "8:30|pm",
       "2.5|ml",
       "3|times",
       "5|mg",
     ]);
     expect(quantitiesIn("room 12 and 7")).toEqual(["12|", "7|"]);
+  });
+
+  it("regression (Codex re-review 3): every reproduced numeric change fails", () => {
+    const one = (source: string, output: string) =>
+      checkNotebook(
+        NotebookModelOutputSchema.parse({
+          language: "en",
+          observations: [{ topic: "Notes", text: output, sourceNoteIndexes: [0] }],
+          questions: [],
+        }),
+        [{ text: source, createdAt: "2026-10-27T23:10:00-05:00" }],
+      ).ok;
+    for (const [source, output] of [
+      ["Temperature 38 °C", "Temperature 38 °F"],
+      ["Temperature 38 C", "Temperature 38 F"],
+      ["Gave 1/2 tablet", "Gave 2 tablets"],
+      ["Gave 5 ml", "Gave fifty ml"],
+      ["Slept 3 hours", "Slept thirty hours"],
+      ["Tired", "Gave five milliliters"],
+      ["Gave 5 mL/kg", "Gave 5 mL"],
+      ["Gave 1,000 mg", "Gave 1 mg"],
+      ["Took B12", "Took B6"],
+      ["Gave 5mEq", "Gave 5 mmol"],
+    ] as const) {
+      expect([source, output, one(source, output)]).toEqual([source, output, false]);
+    }
+    // Same value, same unit, different spelling still passes.
+    for (const [source, output] of [
+      ["Slept three hours", "Slept 3 hours"],
+      ["Gave 1/2 tablet", "Gave half a tablet"],
+      ["Le di media pastilla", "Gave half a tablet"],
+      ["Fiebre de 38,5 °C", "Fever of 38.5 °C"],
+      ["Gave 5 mg", "Gave 5 milligrams"],
+      ["Gave 1,000 mg", "Gave 1,000 mg"],
+    ] as const) {
+      expect([source, output, one(source, output)]).toEqual([source, output, true]);
+    }
   });
 
   it("lists notes no item uses instead of dropping them silently", () => {
@@ -342,6 +379,32 @@ describe("notebook.prepareNotebook", () => {
     });
     if (out.kind === "done") await out.recorded;
     expect(rows[0]).toMatchObject({ outcome: "fallback", failureReason: "invalid_output" });
+  });
+
+  it("regression (Codex re-review 3): a changed quantity through the model falls back", async () => {
+    for (const [source, output] of [
+      ["Temperature 38 °C", "Temperature 38 °F"],
+      ["Gave 1/2 tablet", "Gave 2 tablets"],
+      ["Gave 5 ml", "Gave fifty ml"],
+      ["Tired", "Gave five milliliters"],
+      ["Gave 5 mL/kg", "Gave 5 mL"],
+    ] as const) {
+      const one: Note[] = [{ text: source, createdAt: "2026-10-27T23:10:00-05:00" }];
+      const model = jsonModel({
+        language: "en",
+        observations: [{ topic: "Notes", text: output, sourceNoteIndexes: [0] }],
+        questions: [],
+      });
+      const out = await prepareNotebook({ notes: one, locale: "en" }, testCtx(), deps(model));
+      expect([source, output, out]).toMatchObject([
+        source,
+        output,
+        {
+          kind: "done",
+          response: { result: { type: "notebook_fallback", reason: "invalid_output" } },
+        },
+      ]);
+    }
   });
 
   it("schema-invalid output, provider errors and rate limits all fall back to the raw notes", async () => {
