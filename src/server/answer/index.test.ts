@@ -64,10 +64,10 @@ describe("answer.buildSystemPrefix (prompt layout)", () => {
       );
       expect(policy).toContain(`Start each bullet with "-"; never use a numbered list.`);
     }
-    expect(ANSWER_POLICY_VERSION).toBe(3);
+    expect(ANSWER_POLICY_VERSION).toBe(4);
   });
 
-  it("tells the model to abstain when no article covers the specific topic (no-guide rule, v3)", () => {
+  it("abstains when no article covers the specific topic, answers when one does (no-guide rule, v4)", () => {
     for (const language of ["en", "es"] as const) {
       const prefix = buildSystemPrefix(testKb(language));
       const policy = prefix.slice(0, prefix.indexOf("\n\n<reference_data>\n"));
@@ -75,8 +75,13 @@ describe("answer.buildSystemPrefix (prompt layout)", () => {
         "An article must address the specific thing asked, not just the general area",
       );
       expect(policy).toContain(
-        `if no article covers that specific topic (for example pets visiting, or one hospital's own rules or services), reply ${ABSTAIN_MARKER}`,
+        `if no article covers that specific topic (for example whether the hospital has a chapel), reply ${ABSTAIN_MARKER}`,
       );
+      // The converse (v4): an article that covers the topic by saying who to ask is an answer.
+      expect(policy).toContain(
+        "when an article does talk about the topic itself, answer from it and cite it, even if its advice is to ask the care team, the nurse or the social worker",
+      );
+      expect(policy).toContain("Don't abstain then.");
       expect(policy).toContain(
         "Never answer from general knowledge plus a loosely related citation",
       );
