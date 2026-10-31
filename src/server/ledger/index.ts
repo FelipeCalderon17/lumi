@@ -132,10 +132,15 @@ export type UsageGroup = {
   outputTokens: number;
   reasoningTokens: number;
   audioSeconds: number;
-  /** Calls with at least one unknown count (their tokens are left out of the sums above). */
+  /** Calls missing a count the price needs. Unknown values are left out of the sums above. */
   callsWithUnknownUsage: number;
   /** "unknown" if the price is unknown or any call's usage is unknown. */
   estimatedUsd: CostEstimate;
+  /**
+   * Lower bound: the cost of the usage we do know (the sums above). Equals `estimatedUsd` when
+   * every call is known. "unknown" only when the PRICE is unknown: then there is no bound.
+   */
+  knownUsd: CostEstimate;
 };
 
 export type UsageSummary = {
@@ -146,6 +151,17 @@ export type UsageSummary = {
   estimatedUsd: CostEstimate;
   /** Total cost ÷ requests × 1,000. "unknown" whenever the total is. */
   estimatedUsdPer1000Requests: CostEstimate;
+  /**
+   * Lower bound on the total: Σ `knownUsd` over the groups that have a price. Equals
+   * `estimatedUsd` when that is known. Never present it as the full cost when it isn't.
+   */
+  knownUsd: number;
+  /** `knownUsd` ÷ requests × 1,000 (0 with no requests). A lower bound, like `knownUsd`. */
+  knownUsdPer1000Requests: number;
+  /** Calls with unknown usage in the PRICED groups: what they cost is missing from `knownUsd`. */
+  callsWithUnknownUsage: number;
+  /** Every call in a group whose model has no price (no bound at all for those). */
+  callsWithUnknownPrice: number;
 };
 
 /**
@@ -153,14 +169,26 @@ export type UsageSummary = {
  * sum of per-call estimateCost; any call with unknown usage makes it "unknown".
  */
 export function estimateGroupCost(group: UsageGroupTotals, catalog: PriceCatalog): CostEstimate {
+  const unknownUsage =
+    priceOf(group.model, catalog)?.billing === "audio_duration"
+      ? group.callsWithUnknownAudio
+      : group.callsWithUnknownTokens;
+  return unknownUsage > 0 ? "unknown" : knownGroupCost(group, catalog);
+}
+
+/**
+ * Lower bound for a group: its summed KNOWN facts priced with the catalog. The sums skip unknown
+ * values and every price term is ≥ 0, so this never exceeds the real cost. "unknown" only when
+ * the model (or a price it needs) has no price: then there is nothing to bound.
+ */
+export function knownGroupCost(group: UsageGroupTotals, catalog: PriceCatalog): CostEstimate {
   const price = priceOf(group.model, catalog);
   if (!price) return "unknown";
   if (price.billing === "audio_duration") {
-    if (price.usdPerMinute === null || group.callsWithUnknownAudio > 0) return "unknown";
+    if (price.usdPerMinute === null) return "unknown";
     return (group.audioSeconds / 60) * price.usdPerMinute;
   }
   if (
-    group.callsWithUnknownTokens > 0 ||
     price.inputUsdPerMillion === null ||
     price.cachedInputUsdPerMillion === null ||
     price.outputUsdPerMillion === null
@@ -181,7 +209,6 @@ export function estimateGroupCost(group: UsageGroupTotals, catalog: PriceCatalog
  */
 export function summarizeTotals(totals: UsageTotals, catalog: PriceCatalog): UsageSummary {
   const groups = totals.groups.map((g): UsageGroup => {
-    const cost = estimateGroupCost(g, catalog);
     const audioBilled = priceOf(g.model, catalog)?.billing === "audio_duration";
     return {
       step: g.step,
@@ -193,10 +220,22 @@ export function summarizeTotals(totals: UsageTotals, catalog: PriceCatalog): Usa
       reasoningTokens: g.reasoningTokens,
       audioSeconds: g.audioSeconds,
       callsWithUnknownUsage: audioBilled ? g.callsWithUnknownAudio : g.callsWithUnknownTokens,
-      estimatedUsd: cost,
+      estimatedUsd: estimateGroupCost(g, catalog),
+      knownUsd: knownGroupCost(g, catalog),
     };
   });
   const total = groups.reduce<CostEstimate>((sum, g) => addCosts(sum, g.estimatedUsd), 0);
+  let knownUsd = 0;
+  let callsWithUnknownUsage = 0;
+  let callsWithUnknownPrice = 0;
+  for (const g of groups) {
+    if (g.knownUsd === "unknown") {
+      callsWithUnknownPrice += g.calls;
+    } else {
+      knownUsd += g.knownUsd;
+      callsWithUnknownUsage += g.callsWithUnknownUsage;
+    }
+  }
   const ratioInput = totals.groups.reduce((sum, g) => sum + g.ratioInputTokens, 0);
   const ratioCached = totals.groups.reduce((sum, g) => sum + g.ratioCachedTokens, 0);
   const { requests } = totals;
@@ -207,6 +246,10 @@ export function summarizeTotals(totals: UsageTotals, catalog: PriceCatalog): Usa
     estimatedUsd: groups.length === 0 ? 0 : total,
     estimatedUsdPer1000Requests:
       total === "unknown" ? "unknown" : requests === 0 ? 0 : (total / requests) * 1_000,
+    knownUsd,
+    knownUsdPer1000Requests: requests === 0 ? 0 : (knownUsd / requests) * 1_000,
+    callsWithUnknownUsage,
+    callsWithUnknownPrice,
   };
 }
 

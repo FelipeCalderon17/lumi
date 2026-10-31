@@ -7,6 +7,7 @@ import {
   createNoopLedger,
   estimateCost,
   estimateGroupCost,
+  knownGroupCost,
   recordBestEffort,
   recordCallsBestEffort,
   summarizeTotals,
@@ -188,6 +189,124 @@ describe("ledger.summarizeUsage", () => {
       cachedInputRatio: null,
       estimatedUsd: 0,
       estimatedUsdPer1000Requests: 0,
+      knownUsd: 0,
+      knownUsdPer1000Requests: 0,
+      callsWithUnknownUsage: 0,
+      callsWithUnknownPrice: 0,
+    });
+  });
+});
+
+describe("ledger lower bound (knownUsd): what we know, labelled, never the full cost", () => {
+  // One gpt-6-luna answer call: 2_000 × 0.10 + 8_000 × 0.01 + 200 × 0.50 = 380 per 1M.
+  const ANSWER = 0.00038;
+
+  it("all known → knownUsd equals estimatedUsd, per group and in total", () => {
+    const summary = summarizeUsage(
+      [
+        row({ step: "router", inputTokens: 500, cachedInputTokens: 0, outputTokens: 40 }),
+        row({}),
+        row({ requestId: "r2" }),
+      ],
+      modelCatalog,
+    );
+    for (const g of summary.groups) expect(g.knownUsd).toBe(g.estimatedUsd);
+    expect(summary.knownUsd).toBe(summary.estimatedUsd);
+    expect(summary.knownUsdPer1000Requests).toBe(summary.estimatedUsdPer1000Requests);
+    expect(summary.callsWithUnknownUsage).toBe(0);
+    expect(summary.callsWithUnknownPrice).toBe(0);
+  });
+
+  it("one call with unknown tokens (a timeout) → estimate unknown, lower bound = the known calls", () => {
+    const timedOut = {
+      requestId: "r3",
+      inputTokens: null,
+      cachedInputTokens: null,
+      outputTokens: null,
+      reasoningTokens: null,
+    };
+    const summary = summarizeUsage(
+      [row({}), row({ requestId: "r2" }), row(timedOut)],
+      modelCatalog,
+    );
+    const [answer] = summary.groups;
+    expect(answer?.estimatedUsd).toBe("unknown");
+    expect(answer?.knownUsd).toBeCloseTo(2 * ANSWER, 12);
+    expect(answer?.callsWithUnknownUsage).toBe(1);
+    expect(summary.estimatedUsd).toBe("unknown");
+    expect(summary.estimatedUsdPer1000Requests).toBe("unknown");
+    expect(summary.knownUsd).toBeCloseTo(2 * ANSWER, 12);
+    expect(summary.knownUsdPer1000Requests).toBeCloseTo(((2 * ANSWER) / 3) * 1_000, 12);
+    expect(summary.callsWithUnknownUsage).toBe(1);
+    expect(summary.callsWithUnknownPrice).toBe(0);
+  });
+
+  it("transcription with an unknown audio duration → lower bound over the known seconds", () => {
+    const audio = { step: "transcribe" as const, model: "gpt-transcribe" as const };
+    const tokensUnknown = { inputTokens: null, cachedInputTokens: null, outputTokens: null };
+    const summary = summarizeUsage(
+      [
+        row({ ...audio, ...tokensUnknown, audioSeconds: 60 }),
+        row({ ...audio, ...tokensUnknown, requestId: "r2", audioSeconds: 30 }),
+        row({ ...audio, ...tokensUnknown, requestId: "r3", audioSeconds: null }),
+      ],
+      modelCatalog,
+    );
+    const [transcribe] = summary.groups;
+    // Duration-billed: unknown TOKENS don't matter, only the missing duration does.
+    expect(transcribe?.callsWithUnknownUsage).toBe(1);
+    expect(transcribe?.estimatedUsd).toBe("unknown");
+    // 90 s at $0.0045 per minute.
+    expect(transcribe?.knownUsd).toBeCloseTo(1.5 * 0.0045, 12);
+    expect(summary.knownUsd).toBeCloseTo(1.5 * 0.0045, 12);
+    expect(summary.callsWithUnknownUsage).toBe(1);
+  });
+
+  it("an unknown price → that group has no lower bound; the total bounds the priced groups and counts it", () => {
+    const summary = summarizeUsage(
+      [
+        row({}),
+        row({ requestId: "r2", outputTokens: null }),
+        row({ requestId: "r3", model: "gpt-6.1-terra" }),
+        row({ requestId: "r4", model: "gpt-6.1-terra", outputTokens: null }),
+      ],
+      unknownPriceCatalog,
+    );
+    const luna = summary.groups.find((g) => g.model === "gpt-6-luna");
+    const terra = summary.groups.find((g) => g.model === "gpt-6.1-terra");
+    expect(terra?.estimatedUsd).toBe("unknown");
+    expect(terra?.knownUsd).toBe("unknown");
+    expect(luna?.estimatedUsd).toBe("unknown");
+    // The known call in full, plus the known input of the call whose output is missing.
+    expect(luna?.knownUsd).toBeCloseTo(ANSWER + (2_000 * 0.1 + 8_000 * 0.01) / 1e6, 12);
+    expect(summary.estimatedUsd).toBe("unknown");
+    expect(summary.knownUsd).toBe(luna?.knownUsd);
+    // Disjoint counts: unknown usage in priced groups, and every call that couldn't be priced.
+    expect(summary.callsWithUnknownUsage).toBe(1);
+    expect(summary.callsWithUnknownPrice).toBe(2);
+    const [group] = totalsFromRows([row({})]).groups;
+    if (!group) throw new Error("no group");
+    const retired = { ...group, model: "retired-model" as "gpt-6-luna" };
+    expect(knownGroupCost(retired, modelCatalog)).toBe("unknown");
+  });
+
+  it("the lower bound never exceeds the full estimate once the unknowns become known", () => {
+    const rows = [row({}), row({ requestId: "r2", cachedInputTokens: 1_000 })];
+    const full = summarizeUsage(rows, modelCatalog);
+    const partial = summarizeUsage(
+      [rows[0] as UsageRow, { ...(rows[1] as UsageRow), outputTokens: null }],
+      modelCatalog,
+    );
+    expect(partial.knownUsd).toBeLessThan(full.estimatedUsd as number);
+  });
+
+  it("zero requests → everything is 0, nothing unknown", () => {
+    const summary = summarizeTotals({ requests: 0, groups: [] }, modelCatalog);
+    expect(summary).toMatchObject({
+      knownUsd: 0,
+      knownUsdPer1000Requests: 0,
+      callsWithUnknownUsage: 0,
+      callsWithUnknownPrice: 0,
     });
   });
 });

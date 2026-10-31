@@ -5,7 +5,8 @@ import { summarizeTotals, type UsageReader, type UsageSummary } from "./ledger";
 
 /**
  * What the staff view shows: consented gaps (purged past retention first) and usage aggregated
- * in SQL over the whole window, with cost DERIVED from the current price catalog (ADR 0013).
+ * in SQL over the whole window, with cost DERIVED from the current price catalog (ADR 0013):
+ * exact or "unknown", plus a labelled lower bound (`knownUsd`) and counts of what it leaves out.
  * Each half degrades on its own.
  */
 export type StaffOverview = {

@@ -39,6 +39,32 @@ describe("staff.staffOverview", () => {
       ["retired-model", "unknown"],
     ]);
     expect(overview.usage.summary.estimatedUsd).toBe("unknown");
+    // The labelled lower bound flows through: the priced group, and the call with no price.
+    expect(overview.usage.summary).toMatchObject({
+      knownUsd: expect.closeTo(0.00038, 10),
+      callsWithUnknownUsage: 0,
+      callsWithUnknownPrice: 1,
+    });
+  });
+
+  it("a timed-out call: unknown total, a lower bound with its count, and still complete", async () => {
+    const noUsage = { inputTokens: null, cachedInputTokens: null, outputTokens: null };
+    const timedOut = { ...row, ...noUsage, requestId: "r2", reasoningTokens: null };
+    const usage: UsageReader = { totalsSince: async () => totalsFromRows([row, timedOut]) };
+    const overview = await staffOverview({ gaps: null, usage });
+    expect(overview.usage).toMatchObject({
+      status: "ok",
+      complete: true,
+      summary: {
+        estimatedUsd: "unknown",
+        estimatedUsdPer1000Requests: "unknown",
+        knownUsd: expect.closeTo(0.00038, 10),
+        knownUsdPer1000Requests: expect.closeTo(0.19, 10),
+        callsWithUnknownUsage: 1,
+        callsWithUnknownPrice: 0,
+        groups: [{ estimatedUsd: "unknown", knownUsd: expect.closeTo(0.00038, 10) }],
+      },
+    });
   });
 
   it("degrades each half on its own: no database, or the database failing", async () => {
