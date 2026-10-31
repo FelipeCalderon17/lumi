@@ -6,11 +6,11 @@ import {
   buildNotesBlock,
   checkNotebook,
   groupNotesByDate,
+  NOTEBOOK_PROMPT_VERSION,
   NOTEBOOK_SYSTEM,
   type Note,
   NotebookModelOutputSchema,
   prepareNotebook,
-  quantitiesIn,
 } from "./index";
 
 const notes: Note[] = [
@@ -35,8 +35,8 @@ const good = {
   questions: [{ text: "Is it OK that she ate half her dinner?", sourceNoteIndexes: [1] }],
 };
 
-describe("notebook.checkNotebook (traceability)", () => {
-  it("accepts a faithful notebook, dedupes indexes and derives dates from the notes", () => {
+describe("notebook.checkNotebook (traceability, numbers by construction)", () => {
+  it("keeps quantity-free rephrasings, quotes the notes for the rest, dedupes indexes, derives dates", () => {
     const check = checkNotebook(NotebookModelOutputSchema.parse(good), notes);
     expect(check).toEqual({
       ok: true,
@@ -45,20 +45,63 @@ describe("notebook.checkNotebook (traceability)", () => {
         observations: [
           {
             topic: "Sleep",
-            text: "Woke up 3 times during the night.",
+            // "3 times" is a quantity: the parent's own note is shown instead.
+            text: "Slept badly, woke up 3 times",
+            verbatim: true,
             dates: ["2026-10-27"],
             sourceNoteIndexes: [0],
           },
           {
             topic: "Medicines given",
-            text: "You gave 5 ml of the new syrup at 8pm and wondered if it made her tired.",
+            text: "Gave 5 ml of the new syrup at 8pm, probably the medicine made her tired",
+            verbatim: true,
             dates: ["2026-10-28"],
             sourceNoteIndexes: [2],
           },
         ],
-        questions: [{ text: "Is it OK that she ate half her dinner?", sourceNoteIndexes: [1] }],
+        questions: [
+          {
+            text: "Ate half her dinner. Want to ask if that's OK",
+            verbatim: true,
+            sourceNoteIndexes: [1],
+          },
+        ],
         unusedNoteIndexes: [],
       },
+    });
+  });
+
+  it("an item with no quantity-like content keeps the model's words", () => {
+    const plain = NotebookModelOutputSchema.parse({
+      language: "en",
+      observations: [
+        { topic: "Sleep", text: "Slept badly and woke up in the night.", sourceNoteIndexes: [0] },
+      ],
+      questions: [{ text: "Is it OK that she didn't finish dinner?", sourceNoteIndexes: [1] }],
+    });
+    const check = checkNotebook(plain, notes);
+    expect(check.ok && check.notebook.observations[0]).toMatchObject({
+      text: "Slept badly and woke up in the night.",
+      verbatim: false,
+    });
+    expect(check.ok && check.notebook.questions[0]).toEqual({
+      text: "Is it OK that she didn't finish dinner?",
+      verbatim: false,
+      sourceNoteIndexes: [1],
+    });
+  });
+
+  it("a verbatim item quotes every cited note, in note order, one per line", () => {
+    const two = NotebookModelOutputSchema.parse({
+      language: "en",
+      observations: [{ topic: "Notes", text: "Gave 10 ml twice.", sourceNoteIndexes: [2, 0] }],
+      questions: [],
+    });
+    const check = checkNotebook(two, notes);
+    expect(check.ok && check.notebook.observations[0]).toMatchObject({
+      text: `${notes[0]?.text}\n${notes[2]?.text}`,
+      verbatim: true,
+      sourceNoteIndexes: [0, 2],
     });
   });
 
@@ -70,93 +113,41 @@ describe("notebook.checkNotebook (traceability)", () => {
     });
   });
 
-  it("rejects a number that isn't in the cited notes (invented dose, time or temperature)", () => {
-    const invented = {
-      ...good,
-      observations: [
-        { topic: "Medicines", text: "You gave 10 ml at 8pm.", sourceNoteIndexes: [2] },
-      ],
-    };
-    expect(checkNotebook(NotebookModelOutputSchema.parse(invented), notes)).toEqual({
-      ok: false,
-      problem: "invented_number",
-    });
+  it("a quantity-like topic can't be quoted, so the page falls back", () => {
+    for (const topic of ["5 ml at night", "Two doses", "Half a tablet", "Doses"]) {
+      const out = NotebookModelOutputSchema.parse({
+        ...good,
+        observations: [{ topic, text: "You gave the syrup.", sourceNoteIndexes: [2] }],
+      });
+      expect([topic, checkNotebook(out, notes)]).toEqual([
+        topic,
+        { ok: false, problem: "quantity_in_topic" },
+      ]);
+    }
   });
 
-  const withObservation = (text: string, sourceNoteIndexes: number[]) =>
-    NotebookModelOutputSchema.parse({
-      ...good,
-      observations: [{ topic: "Medicines", text, sourceNoteIndexes }],
-    });
-  const problemOf = (text: string, sourceNoteIndexes: number[]) => {
-    const check = checkNotebook(withObservation(text, sourceNoteIndexes), notes);
-    return check.ok ? null : check.problem;
+  const shown = (source: string, output: string) => {
+    const check = checkNotebook(
+      NotebookModelOutputSchema.parse({
+        language: "en",
+        observations: [{ topic: "Notes", text: output, sourceNoteIndexes: [0] }],
+        questions: [{ text: output, sourceNoteIndexes: [0] }],
+      }),
+      [{ text: source, createdAt: "2026-10-28T21:00:00-05:00" }],
+    );
+    if (!check.ok) throw new Error(check.problem);
+    return [check.notebook.observations[0], check.notebook.questions[0]];
   };
 
-  it("regression (Codex review 3): the note's date is not a source number", () => {
-    // Note 1 is dated 2026-10-28 and has no numbers in its text.
-    expect(problemOf("Gave 28 ml", [1])).toBe("invented_number");
-    expect(problemOf("On the 27th she woke up 3 times.", [0])).toBe("invented_number");
-    expect(problemOf("Gave 10 ml", [1])).toBe("invented_number"); // month
-    expect(problemOf("Gave 2026 ml", [1])).toBe("invented_number"); // year
-  });
-
-  it("regression (Codex review 3): complete decimal values are compared, not digit runs", () => {
-    const decimal: Note[] = [{ text: "Gave 2.5 ml at night", createdAt: "2026-10-28T21:00:00Z" }];
-    const check = (text: string) =>
-      checkNotebook(
-        NotebookModelOutputSchema.parse({
-          ...good,
-          observations: [{ topic: "Medicines", text, sourceNoteIndexes: [0] }],
-          questions: [],
-        }),
-        decimal,
-      );
-    expect(check("Gave 5.2 ml").ok).toBe(false);
-    expect(check("Gave 25 ml").ok).toBe(false);
-    expect(check("Gave 2 ml").ok).toBe(false);
-    expect(check("Gave 2.5 ml").ok).toBe(true);
-    expect(check("Gave 2,5 ml").ok).toBe(true); // same value, Spanish decimal comma
-    expect(check("Gave 2.5ml").ok).toBe(true);
-    expect(check("Gave 2.5 milliliters").ok).toBe(true);
-  });
-
-  it("rejects a changed unit even when the value matches", () => {
-    expect(problemOf("Gave 5 mg of the new syrup", [2])).toBe("invented_number");
-    expect(problemOf("Gave 5 tablets", [2])).toBe("invented_number");
-    expect(problemOf("Gave 5 of the new syrup", [2])).toBe("invented_number"); // unit dropped
-    expect(problemOf("Gave 5 ml at 8am", [2])).toBe("invented_number"); // pm → am
-    expect(problemOf("Gave 5 ml at 8 pm", [2])).toBeNull();
-  });
-
-  it("only the CITED notes are a source: a number from an uncited note fails", () => {
-    // "3 times" is in note 0, but this item cites note 2 only.
-    expect(problemOf("Gave 5 ml, woke up 3 times", [2])).toBe("invented_number");
-    expect(problemOf("Gave 5 ml, woke up 3 times", [0, 2])).toBeNull();
-  });
-
-  it("extracts complete values with canonical units", () => {
-    expect(quantitiesIn("38,5 °C at 8:30pm, 2.50 ml, 3 veces, 5 mg")).toEqual([
-      "38.5|deg_c",
-      "8:30|pm",
-      "2.5|ml",
-      "3|times",
-      "5|mg",
-    ]);
-    expect(quantitiesIn("room 12 and 7")).toEqual(["12|", "7|"]);
-  });
-
-  it("regression (Codex re-review 3): every reproduced numeric change fails", () => {
-    const one = (source: string, output: string) =>
-      checkNotebook(
-        NotebookModelOutputSchema.parse({
-          language: "en",
-          observations: [{ topic: "Notes", text: output, sourceNoteIndexes: [0] }],
-          questions: [],
-        }),
-        [{ text: source, createdAt: "2026-10-27T23:10:00-05:00" }],
-      ).ok;
+  it("regression (Codex review 3 to re-review 5): an altered number is never shown", () => {
+    // Every pair the reviewers reproduced: the page shows the parent's note, never the output.
     for (const [source, output] of [
+      // review 3
+      ["Gave 2.5 ml at night", "Gave 5.2 ml"],
+      ["Gave 2.5 ml at night", "Gave 25 ml"],
+      ["Slept badly", "On the 27th she slept badly."],
+      ["Slept badly", "Gave 28 ml"], // the note's date is never a source
+      // re-review 3
       ["Temperature 38 °C", "Temperature 38 °F"],
       ["Temperature 38 C", "Temperature 38 F"],
       ["Gave 1/2 tablet", "Gave 2 tablets"],
@@ -167,42 +158,72 @@ describe("notebook.checkNotebook (traceability)", () => {
       ["Gave 1,000 mg", "Gave 1 mg"],
       ["Took B12", "Took B6"],
       ["Gave 5mEq", "Gave 5 mmol"],
-    ] as const) {
-      expect([source, output, one(source, output)]).toEqual([source, output, false]);
-    }
-    // Codex re-review 4: a sign, an unreadable number's unit, or an article is bound too.
-    for (const [source, output] of [
+      // re-review 4
       ["Gave 1,000 mg", "Gave 1,000 ml"],
-      ["Gave 1.000 mg", "Gave 1.000 ml"],
       ["Gave 1.2.3 mg", "Gave 1.2.3 ml"],
       ["Gave 5/0 mg", "Gave 5/0 ml"],
+      ["Gave -1.000 mg", "Gave 1.000 mg"],
+      ["Gave +5 ml", "Gave 5 ml"],
       ["Gave 5 ml", "Gave -5 ml"],
-      ["Gave -5 ml", "Gave 5 ml"],
+      ["Temperature −5 °C", "Temperature 5 °C"],
+      ["Tired", "Gave a tablet"],
       ["Tired", "Gave un miligramo"],
       ["Tired", "Gave una unidad"],
-      ["Tired", "Gave a tablet"],
       ["BP 120/80", "BP 150/100"],
       ["Gave 1/2 tablet", "Gave 2/4 tablet"],
       ["Gave 2.5000001 ml", "Gave 2.5000002 ml"],
-    ] as const) {
-      expect([source, output, one(source, output)]).toEqual([source, output, false]);
-    }
-    // Same value, same unit, different spelling still passes.
-    for (const [source, output] of [
-      ["Slept three hours", "Slept 3 hours"],
-      ["Gave 1/2 tablet", "Gave half a tablet"],
-      ["Le di media pastilla", "Gave half a tablet"],
-      ["Fiebre de 38,5 °C", "Fever of 38.5 °C"],
-      ["Gave 5 mg", "Gave 5 milligrams"],
-      ["Gave 1,000 mg", "Gave 1,000 mg"],
+      // re-review 5: unknown units, separated signs, compound units, articles, written numbers
+      ["Gave 2 sachets", "Gave 2 spoons"],
+      ["Gave 2 sobres", "Gave 2 cucharones"],
+      ["Gave 1,000 sachets", "Gave 1,000 spoons"],
+      ["Gave 2 sachets", "Gave 2"],
+      ["Gave 2 bags", "Gave 2 vials"],
+      ["Gave 5 fl oz", "Gave 5 oz"],
+      ["Gave a sachet", "Gave a spoon"],
+      ["Temperature − 5 °C", "Temperature 5 °C"],
+      ["Temperature -five °C", "Temperature five °C"],
+      ["Temperature +five °C", "Temperature -five °C"],
+      ["Gave -half a tablet", "Gave half a tablet"],
+      ["Gave - 5 ml", "Gave 5 ml"],
+      ["Gave + 5 ml", "Gave - 5 ml"],
+      ["Gave − 5 ml", "Gave 5 ml"],
+      ["Gave 5 μg", "Gave 5 mg"],
+      ["Gave 5 mg/m²", "Gave 5 mg/m³"],
+      ["Gave 5 mg/m²", "Gave 5 mg/m"],
+      ["Temp −５ °C", "Temp ５ °C"],
+      ["Slept a dozen hours", "Slept a dozen days"],
+      ["Durmió un cuarto de hora", "Durmió un cuarto de día"],
+      ["Woke up once", "Woke up twice"],
+      ["BP 120/80", "BP 120 / 80"],
       ["Gave ½ tablet", "Gave 1/2 tablet"],
-      ["Gave 1/2 tablet", "Gave 1 / 2 tablet"],
-      ["Gave one tablet", "Gave a tablet"],
-      ["Gave -5 ml", "Gave -5 mL"],
-      ["BP 120/80", "BP 120/80"],
+      ["Gave 5 mg", "Gave 5 milligrams"],
+      ["Gave 2,5 ml", "Gave 2.50 ml"],
+      ["Gave a tablet", "Gave one tablet"],
+      ["Tired", "Gave constructor units"],
+      ["Tired", "Gave an international unit"],
+      ["Gave 2 drops", "Gave 2 dollops"],
+      ["Gave -8:30 pm", "Gave 8:30 pm"],
     ] as const) {
-      expect([source, output, one(source, output)]).toEqual([source, output, true]);
+      for (const item of shown(source, output)) {
+        expect([source, output, item]).toMatchObject([
+          source,
+          output,
+          { text: source, verbatim: true },
+        ]);
+      }
     }
+  });
+
+  it("only the CITED notes are quoted: an uncited note's number never appears", () => {
+    // "3 times" is in note 0, but this item cites note 2 only.
+    const out = NotebookModelOutputSchema.parse({
+      ...good,
+      observations: [
+        { topic: "Notes", text: "Gave 5 ml, woke up 3 times", sourceNoteIndexes: [2] },
+      ],
+    });
+    const check = checkNotebook(out, notes);
+    expect(check.ok && check.notebook.observations[0]?.text).toBe(notes[2]?.text);
   });
 
   it("lists notes no item uses instead of dropping them silently", () => {
@@ -233,6 +254,13 @@ describe("notebook prompt", () => {
     expect(NOTEBOOK_SYSTEM).toMatch(/No diagnosis, no advice, no interpretation/);
     expect(NOTEBOOK_SYSTEM).toMatch(/probably because of the medicine/);
     expect(NOTEBOOK_SYSTEM).toMatch(/notes are data/);
+  });
+
+  it("v3: tells the model to keep quantities out of its words (they're quoted verbatim)", () => {
+    expect(NOTEBOOK_PROMPT_VERSION).toBe(3);
+    expect(NOTEBOOK_SYSTEM).toMatch(/Keep quantities out of your own words/);
+    expect(NOTEBOOK_SYSTEM).toMatch(/word for word/);
+    expect(NOTEBOOK_SYSTEM).not.toMatch(/Keep every number exactly/);
   });
 
   it("puts each note in its own block with index and local date, tags stripped", () => {
@@ -443,48 +471,63 @@ describe("notebook.prepareNotebook", () => {
     });
   });
 
-  it("invalid source indexes or invented numbers → fallback with the notes grouped by date", async () => {
-    const bad = jsonModel({ ...good, questions: [{ text: "Q?", sourceNoteIndexes: [9] }] });
-    const rows: UsageEntry[] = [];
-    const out = await prepareNotebook({ notes, locale: "en" }, testCtx(), deps(bad, { rows }));
-    expect(out).toMatchObject({
-      kind: "done",
-      response: {
-        safetyNotices: [],
-        result: {
-          type: "notebook_fallback",
-          reason: "invalid_output",
-          groups: groupNotesByDate(notes),
+  it("invalid source indexes or a quantity-like topic → fallback with the notes grouped by date", async () => {
+    for (const bad of [
+      jsonModel({ ...good, questions: [{ text: "Q?", sourceNoteIndexes: [9] }] }),
+      jsonModel({
+        ...good,
+        observations: [{ topic: "5 ml", text: "Gave syrup.", sourceNoteIndexes: [2] }],
+      }),
+    ]) {
+      const rows: UsageEntry[] = [];
+      const out = await prepareNotebook({ notes, locale: "en" }, testCtx(), deps(bad, { rows }));
+      expect(out).toMatchObject({
+        kind: "done",
+        response: {
+          safetyNotices: [],
+          result: {
+            type: "notebook_fallback",
+            reason: "invalid_output",
+            groups: groupNotesByDate(notes),
+          },
         },
-      },
-    });
-    if (out.kind === "done") await out.recorded;
-    expect(rows[0]).toMatchObject({ outcome: "fallback", failureReason: "invalid_output" });
+      });
+      if (out.kind === "done") await out.recorded;
+      expect(rows[0]).toMatchObject({ outcome: "fallback", failureReason: "invalid_output" });
+    }
   });
 
-  it("regression (Codex re-review 3): a changed quantity through the model falls back", async () => {
+  it("regression (Codex re-review 5): through the endpoint, a changed number shows the note verbatim", async () => {
     for (const [source, output] of [
-      ["Temperature 38 °C", "Temperature 38 °F"],
-      ["Gave 1/2 tablet", "Gave 2 tablets"],
-      ["Gave 5 ml", "Gave fifty ml"],
-      ["Tired", "Gave five milliliters"],
-      ["Gave 5 mL/kg", "Gave 5 mL"],
+      ["Gave 1,000 sachets", "Gave 1,000 spoons"],
+      ["Gave 2 sachets", "Gave 2 spoons"],
+      ["Gave 2 sobres", "Gave 2 cucharones"],
+      ["Temperature − 5 °C", "Temperature 5 °C"],
+      ["Temperature -five °C", "Temperature five °C"],
+      ["Gave 5 mg/m²", "Gave 5 mg/m"],
+      ["Tired", "Gave an international unit"],
+      ["Slept a dozen hours", "Slept a dozen days"],
+      ["Durmió un cuarto de hora", "Durmió un cuarto de día"],
+      ["Woke up once", "Woke up twice"],
     ] as const) {
       const one: Note[] = [{ text: source, createdAt: "2026-10-27T23:10:00-05:00" }];
       const model = jsonModel({
         language: "en",
         observations: [{ topic: "Notes", text: output, sourceNoteIndexes: [0] }],
-        questions: [],
+        questions: [{ text: output, sourceNoteIndexes: [0] }],
       });
       const out = await prepareNotebook({ notes: one, locale: "en" }, testCtx(), deps(model));
-      expect([source, output, out]).toMatchObject([
+      if (out.kind !== "done" || out.response.result.type !== "notebook") {
+        throw new Error(`${source}: expected a prepared page`);
+      }
+      const { observations, questions } = out.response.result.notebook;
+      expect([source, observations[0], questions[0]]).toMatchObject([
         source,
-        output,
-        {
-          kind: "done",
-          response: { result: { type: "notebook_fallback", reason: "invalid_output" } },
-        },
+        { text: source, verbatim: true },
+        { text: source, verbatim: true },
       ]);
+      // The model's altered text never reaches the response (unless it's part of the note).
+      if (!source.includes(output)) expect(JSON.stringify(out.response)).not.toContain(output);
     }
   });
 

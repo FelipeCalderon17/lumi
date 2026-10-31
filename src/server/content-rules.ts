@@ -64,17 +64,17 @@ const B = String.raw`(?<![\p{L}\p{N}])`;
 const E = String.raw`(?![\p{L}\p{N}])`;
 
 /** Dose units, EN + ES, abbreviated and spelled out. */
-const DOSE_UNITS =
+export const DOSE_UNITS =
   "mg|mgs|mcg|µg|ug|ml|mls|cc|iu|ui|g|gr|grams?|gramos?|milligrams?|micrograms?|millilit(?:er|re)s?|miligramos?|microgramos?|mililitros?|international units?|unidad(?:es)? internacionales|units?|unidad(?:es)?|drops?|gotas?|teaspoons?(?:ful)?|tsp|tablespoons?(?:ful)?|tbsp|cucharaditas?|cucharadas?|puffs?|inhalaci(?:o|ó)n(?:es)?";
 /** Dose forms. A tablet is only the device in an explicit construction (see DEVICE_TABLET). */
-const DOSE_FORMS =
+export const DOSE_FORMS =
   "tablets?|pills?|capsules?|doses?|tabletas?|pastillas?|comprimidos?|c[aá]psulas?|dosis";
 /** Units that only ever mean a dose, so they're withheld even without a number. */
 const BARE_DOSE_UNITS =
   "mg|mgs|mcg|µg|ml|mls|milligrams?|micrograms?|millilit(?:er|re)s?|miligramos?|microgramos?|mililitros?";
 
 /** Written numbers, EN + ES, including ES "once" (11): EN "once" is a count of one anyway. */
-const WRITTEN_NUMBERS =
+export const WRITTEN_NUMBERS =
   "zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|dozen|half|quarter|once|twice|thrice" +
   "|cero|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|doce|trece|catorce|quince|dieci\\p{L}+|veinte|veinti\\p{L}+|treinta|cuarenta|cincuenta|sesenta|setenta|ochenta|noventa|cien|ciento|\\p{L}+cientos|mil";
 /** A digit quantity: optional sign, integer, decimal, fraction ("1/2") or a fraction character. */
