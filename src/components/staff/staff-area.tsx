@@ -475,7 +475,9 @@ function Dashboard({
             {usage.summary.groups.length === 0 ? (
               <p className="mt-4 text-muted">{s.noUsage}</p>
             ) : (
-              <div className="mt-6 overflow-x-auto rounded-soft border border-line">
+              // `relative`: the cost cells' sr-only text is absolutely positioned; without a
+              // containing block here it escapes the scroller and widens the page on mobile.
+              <div className="relative mt-6 overflow-x-auto rounded-soft border border-line">
                 <table className="w-full min-w-[36rem] text-left text-[0.95rem]">
                   <thead className="bg-raised/60 text-muted">
                     <tr>
