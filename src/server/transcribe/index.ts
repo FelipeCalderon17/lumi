@@ -21,6 +21,10 @@ import { LANGUAGES } from "../types";
  *   3. measured length: the provider's own duration is the only trusted one. If it reports
  *      more than 2 minutes, or reports no duration at all, the text is discarded (controlled
  *      failure). The client's duration is a pre-check only, never a substitute.
+ *      Every duration the provider reports (`duration`, billed usage `seconds`) must be a
+ *      finite number above 0, and they must agree within config.limits.audio.
+ *      durationAgreementSeconds; the LARGEST is checked against the limit. Otherwise the text
+ *      is discarded and the ledger gets `audio_seconds` null with the reason (Codex re-review 3).
  */
 
 export const TranscribeQuerySchema = z.object({
@@ -81,6 +85,41 @@ const TranscriptionUsageSchema = z.union([
   }),
   z.object({ type: z.literal("duration"), seconds: z.number().nonnegative() }),
 ]);
+
+/** Every duration the provider reported, as given (not yet validated). */
+function reportedDurations(durationInSeconds: unknown, usage: unknown): unknown[] {
+  const reported: unknown[] = [];
+  if (durationInSeconds !== undefined && durationInSeconds !== null) {
+    reported.push(durationInSeconds);
+  }
+  if (typeof usage === "object" && usage !== null && "type" in usage) {
+    if ((usage as { type: unknown }).type === "duration") {
+      reported.push((usage as { seconds?: unknown }).seconds);
+    }
+  }
+  return reported;
+}
+
+export type DurationCheck =
+  | { ok: true; seconds: number }
+  | { ok: false; reason: "unverified_duration" | "invalid_duration" | "inconsistent_duration" };
+
+/**
+ * The one duration we trust, or why there isn't one: none reported; one that isn't a finite
+ * number above 0; or two that disagree. When they agree, the largest is used for the limit.
+ */
+export function trustedDuration(reported: readonly unknown[]): DurationCheck {
+  if (reported.length === 0) return { ok: false, reason: "unverified_duration" };
+  const valid = reported.filter(
+    (value): value is number => typeof value === "number" && Number.isFinite(value) && value > 0,
+  );
+  if (valid.length !== reported.length) return { ok: false, reason: "invalid_duration" };
+  const max = Math.max(...valid);
+  if (max - Math.min(...valid) > config.limits.audio.durationAgreementSeconds) {
+    return { ok: false, reason: "inconsistent_duration" };
+  }
+  return { ok: true, seconds: max };
+}
 
 /**
  * `transcribe()` doesn't expose the provider's `usage`, so we pass the call through a thin
@@ -162,20 +201,24 @@ export async function transcribeAudio(
       abortSignal: signal,
     });
     const usage = TranscriptionUsageSchema.safeParse(capture.usage());
-    const audioSeconds =
-      transcript.durationInSeconds ??
-      (usage.success && usage.data.type === "duration" ? usage.data.seconds : null);
+    const duration = trustedDuration(
+      reportedDurations(transcript.durationInSeconds, capture.usage()),
+    );
     const tokens =
       usage.success && usage.data.type === "tokens"
         ? { input: usage.data.input_tokens, output: usage.data.output_tokens }
         : null;
-    const facts = call(audioSeconds, tokens, true);
 
     // No trusted duration → we can't verify the limit, so the text isn't used. The ledger
-    // still records the call, with audioSeconds null (unknown).
-    if (audioSeconds === null) {
-      return { result: { status: "failed", reason: "unverified_duration" }, call: facts };
+    // still records the call, with audioSeconds null (unknown) and the reason.
+    if (!duration.ok) {
+      return {
+        result: { status: "failed", reason: duration.reason },
+        call: call(null, tokens, true),
+      };
     }
+    const audioSeconds = duration.seconds;
+    const facts = call(audioSeconds, tokens, true);
     if (audioSeconds > config.limits.audio.maxSeconds + TOLERANCE_SECONDS) {
       return { result: { status: "too_long" }, call: facts };
     }

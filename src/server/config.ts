@@ -171,6 +171,8 @@ export const config = {
     audio: {
       /** Hard cap on recording length (ADR 0014). */
       maxSeconds: 120,
+      /** Most two provider-reported durations may differ (rounding) before we distrust both. */
+      durationAgreementSeconds: 2,
       /** 2 min at up to ~256 kbps. The client records at a lower bitrate (Phase 3). */
       maxBytes: 4 * 1024 * 1024,
       /** Containers MediaRecorder produces (Chrome/Firefox: webm, Safari: mp4) + m4a uploads. */

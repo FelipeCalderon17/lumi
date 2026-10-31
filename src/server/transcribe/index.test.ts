@@ -1,3 +1,4 @@
+import { createOpenAI } from "@ai-sdk/openai";
 import { MockTranscriptionModelV4 } from "ai/test";
 import { describe, expect, it } from "vitest";
 import { config } from "../config";
@@ -10,6 +11,7 @@ import {
   handleTranscription,
   TranscribeQuerySchema,
   transcribeAudio,
+  trustedDuration,
 } from "./index";
 
 const WEBM = new Uint8Array([0x1a, 0x45, 0xdf, 0xa3, 1, 2, 3, 4, 5, 6]);
@@ -72,6 +74,19 @@ describe("transcribe.checkAudio (before any model call)", () => {
   });
 });
 
+describe("transcribe.trustedDuration", () => {
+  it("needs at least one finite duration above 0, and agreement between them", () => {
+    expect(trustedDuration([])).toEqual({ ok: false, reason: "unverified_duration" });
+    for (const bad of [-1, 0, Number.NaN, Number.POSITIVE_INFINITY, "12", null]) {
+      expect(trustedDuration([bad])).toEqual({ ok: false, reason: "invalid_duration" });
+    }
+    expect(trustedDuration([10, -1])).toEqual({ ok: false, reason: "invalid_duration" });
+    expect(trustedDuration([4, 300])).toEqual({ ok: false, reason: "inconsistent_duration" });
+    expect(trustedDuration([10, 12])).toEqual({ ok: true, seconds: 12 });
+    expect(trustedDuration([12.5])).toEqual({ ok: true, seconds: 12.5 });
+  });
+});
+
 describe("transcribe.transcribeAudio (mocked model)", () => {
   it("returns the text, detected language and duration; tokens when reported", async () => {
     const { result, call } = await transcribeAudio(WEBM, testCtx(), {
@@ -110,6 +125,74 @@ describe("transcribe.transcribeAudio (mocked model)", () => {
       cachedInputTokens: null,
       finishReason: "stop",
     });
+  });
+
+  it("regression (Codex re-review 3): invalid or disagreeing durations → failed; ledger gets null", async () => {
+    for (const [durationInSeconds, usage, reason] of [
+      [-1, undefined, "invalid_duration"],
+      [0, undefined, "invalid_duration"],
+      [Number.NaN, undefined, "invalid_duration"],
+      [Number.POSITIVE_INFINITY, undefined, "invalid_duration"],
+      [undefined, { type: "duration", seconds: -3 }, "invalid_duration"],
+      [4, { type: "duration", seconds: 300 }, "inconsistent_duration"],
+      [300, { type: "duration", seconds: 4 }, "inconsistent_duration"],
+    ] as const) {
+      const { result, call } = await transcribeAudio(WEBM, testCtx(), {
+        model: model({ durationInSeconds, usage }),
+      });
+      const label = `${durationInSeconds} / ${JSON.stringify(usage)}`;
+      expect([label, result]).toEqual([label, { status: "failed", reason }]);
+      expect([label, call?.audioSeconds]).toEqual([label, null]);
+    }
+  });
+
+  it("two agreeing durations: the LARGEST is checked against the limit and recorded", async () => {
+    const ok = await transcribeAudio(WEBM, testCtx(), {
+      model: model({ durationInSeconds: 10, usage: { type: "duration", seconds: 11 } }),
+    });
+    expect(ok.result).toMatchObject({ status: "ok" });
+    expect(ok.call?.audioSeconds).toBe(11);
+    const limit = config.limits.audio.maxSeconds;
+    const over = await transcribeAudio(WEBM, testCtx(), {
+      model: model({
+        durationInSeconds: limit + 1,
+        usage: { type: "duration", seconds: limit + 3 },
+      }),
+    });
+    expect(over.result).toEqual({ status: "too_long" });
+    expect(over.call?.audioSeconds).toBe(limit + 3);
+  });
+
+  it("the installed OpenAI adapter with a fake local fetch: invalid durations fail closed", async () => {
+    for (const [duration, seconds, reason] of [
+      [-1, undefined, "invalid_duration"],
+      [0, undefined, "invalid_duration"],
+      [4, 300, "inconsistent_duration"],
+      [undefined, undefined, "unverified_duration"],
+    ] as const) {
+      const provider = createOpenAI({
+        apiKey: "test-fake-key-no-network",
+        fetch: async () =>
+          new Response(
+            JSON.stringify({
+              text: "Parking?",
+              language: "english",
+              duration,
+              usage: seconds === undefined ? undefined : { type: "duration", seconds },
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } },
+          ),
+      });
+      const { result, call } = await transcribeAudio(WEBM, testCtx(), {
+        model: provider.transcription("gpt-transcribe"),
+      });
+      expect([duration, seconds, result]).toEqual([
+        duration,
+        seconds,
+        { status: "failed", reason },
+      ]);
+      expect(call?.audioSeconds).toBeNull();
+    }
   });
 
   it("a short client-declared duration doesn't stand in for the provider's", async () => {
@@ -206,6 +289,25 @@ describe("transcribe.handleTranscription", () => {
     await out.recorded;
     expect(rows).toEqual([
       expect.objectContaining({ step: "transcribe", audioSeconds: 3, outcome: "transcribed" }),
+    ]);
+  });
+
+  it("an invalid provider duration is recorded as null with the reason, not as a fact", async () => {
+    const rows: UsageEntry[] = [];
+    const out = await handleTranscription(
+      { audio: WEBM, contentType: "audio/webm", durationMs: 3_000 },
+      testCtx(),
+      { ...deps({ rows }), model: model({ durationInSeconds: -1 }) },
+    );
+    expect(out.body).toEqual({ status: "failed", reason: "invalid_duration" });
+    await out.recorded;
+    expect(rows).toEqual([
+      expect.objectContaining({
+        step: "transcribe",
+        audioSeconds: null,
+        failureReason: "invalid_duration",
+        outcome: "fallback",
+      }),
     ]);
   });
 

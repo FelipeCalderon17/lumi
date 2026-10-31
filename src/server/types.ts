@@ -14,6 +14,10 @@ export type FailureReason =
   | "invalid_output"
   /** Transcription: the provider reported no duration, so the 2-minute limit can't be verified. */
   | "unverified_duration"
+  /** Transcription: a reported duration is not a finite number above 0. */
+  | "invalid_duration"
+  /** Transcription: two reported durations (e.g. `duration` and billed `seconds`) disagree. */
+  | "inconsistent_duration"
   /** finishReason "length": the answer was cut off by maxOutputTokens. Never shown. */
   | "truncated"
   /** finishReason "interrupted" / "error" / "other", or a stream that ended without a finish. */
