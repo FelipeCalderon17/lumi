@@ -2,13 +2,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { parseArticleFile } from "@/server/knowledge";
-import {
-  type Block,
-  collapseRepeatedCitations,
-  type Inline,
-  parseInline,
-  parseMarkdown,
-} from "./markdown";
+import { type Block, type Inline, parseInline, parseMarkdown, stripCitations } from "./markdown";
 
 const inlineText = (nodes: Inline[]): string =>
   nodes
@@ -86,59 +80,69 @@ describe("parseInline", () => {
   });
 });
 
-describe("collapseRepeatedCitations", () => {
-  const cites = (blocks: Block[]) => JSON.stringify(blocks).match(/"handles":\[[\d,]+\]/g) ?? [];
+describe("stripCitations", () => {
+  const text = (blocks: Block[]) => JSON.stringify(blocks);
 
-  it("a whole answer citing one guide shows one pill, at the end", () => {
-    const blocks = collapseRepeatedCitations(
-      parseMarkdown(
-        "Sleep can change [1]. Naps help [1].\n\n- Keep a routine [1].\n- Dim lights [1].",
-      ),
-    );
-    expect(cites(blocks)).toEqual(['"handles":[1]']);
-    expect(blocks[0]).toEqual({
-      type: "paragraph",
-      children: [{ type: "text", text: "Sleep can change. Naps help." }],
-    });
-    expect(blocks[1]).toMatchObject({
-      type: "list",
-      items: [
-        [{ text: "Keep a routine." }],
-        [{ text: "Dim lights " }, { handles: [1] }, { text: "." }],
-      ],
-    });
-  });
-
-  it("keeps the last pill of each run, so every claim still precedes its own source", () => {
-    const blocks = collapseRepeatedCitations(parseMarkdown("A [1]. B [1]. C [2]. D [2]. E [1]."));
-    expect(blocks[0]).toEqual({
-      type: "paragraph",
-      children: [
-        { type: "text", text: "A. B " },
-        { type: "cite", handles: [1] },
-        { type: "text", text: ". C. D " },
-        { type: "cite", handles: [2] },
-        { type: "text", text: ". E " },
-        { type: "cite", handles: [1] },
-        { type: "text", text: "." },
-      ],
-    });
-  });
-
-  it("grouped citations and headings end a run; they are never removed", () => {
-    const blocks = collapseRepeatedCitations(
-      parseMarkdown("A [1]. B [1, 2]. C [1].\n\n## Next\n\nD [1]."),
-    );
-    expect(cites(blocks)).toEqual([
-      '"handles":[1]',
-      '"handles":[1,2]',
-      '"handles":[1]',
-      '"handles":[1]',
+  it("removes a single marker and the space before it", () => {
+    expect(stripCitations(parseMarkdown("Naps help [7]. Keep a routine [7]"))).toEqual([
+      { type: "paragraph", children: [{ type: "text", text: "Naps help. Keep a routine" }] },
     ]);
   });
 
-  it("leaves text without repeats untouched", () => {
-    const blocks = parseMarkdown("A [1]. B [2].");
-    expect(collapseRepeatedCitations(blocks)).toBe(blocks);
+  it("removes a grouped marker, leaving no bracket text", () => {
+    const blocks = stripCitations(parseMarkdown("Ask the social worker [2, 6] about it."));
+    expect(blocks).toEqual([
+      { type: "paragraph", children: [{ type: "text", text: "Ask the social worker about it." }] },
+    ]);
+    expect(text(blocks)).not.toContain("cite");
+  });
+
+  it("keeps punctuation tight after a marker", () => {
+    expect(
+      stripCitations(parseMarkdown("Bring snacks [1], a charger [2]; and socks [3]!")),
+    ).toEqual([
+      {
+        type: "paragraph",
+        children: [{ type: "text", text: "Bring snacks, a charger; and socks!" }],
+      },
+    ]);
+  });
+
+  it("leaves no trailing space when a bullet ends with a marker, and no leading one when it starts with one", () => {
+    expect(stripCitations(parseMarkdown("- Bring your ID [2]\n- [6] Pack clothes [2, 6]"))).toEqual(
+      [
+        {
+          type: "list",
+          items: [
+            [{ type: "text", text: "Bring your ID" }],
+            [{ type: "text", text: "Pack clothes" }],
+          ],
+        },
+      ],
+    );
+  });
+
+  it("removes markers inside bold and italic text, and in headings", () => {
+    expect(
+      stripCitations(
+        parseMarkdown("## Money [3]\n\n**Call the billing office [3]** and *ask [4]*."),
+      ),
+    ).toEqual([
+      { type: "heading", level: 2, children: [{ type: "text", text: "Money" }] },
+      {
+        type: "paragraph",
+        children: [
+          { type: "strong", children: [{ type: "text", text: "Call the billing office" }] },
+          { type: "text", text: " and " },
+          { type: "em", children: [{ type: "text", text: "ask" }] },
+          { type: "text", text: "." },
+        ],
+      },
+    ]);
+  });
+
+  it("returns the same blocks when there is no marker", () => {
+    const blocks = parseMarkdown("No citations here.\n\n- Nor here.");
+    expect(stripCitations(blocks)).toBe(blocks);
   });
 });

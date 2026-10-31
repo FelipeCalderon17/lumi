@@ -185,7 +185,6 @@ export const en = {
     tooLong: "That's a bit long for Lumi. Could you shorten it to the main question?",
     sourcesTitle: "From these guides",
     answerNote: "AI answers can contain mistakes. The guides linked above say more.",
-    citationLabel: "Guide {n}: {title}",
     medicalAdd: "+ Add to my notebook",
     medicalAdded: "Added to your notebook.",
     medicalOpenNotebook: "Open my notebook",

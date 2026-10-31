@@ -177,7 +177,6 @@ export const es: Dictionary = {
     sourcesTitle: "De estas guías",
     answerNote:
       "Las respuestas de la IA pueden contener errores. Las guías enlazadas arriba tienen más detalles.",
-    citationLabel: "Guía {n}: {title}",
     medicalAdd: "+ Agregar a mi cuaderno",
     medicalAdded: "Se agregó a tu cuaderno.",
     medicalOpenNotebook: "Abrir mi cuaderno",

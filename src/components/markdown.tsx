@@ -1,16 +1,7 @@
-import Link from "next/link";
 import { Fragment, type ReactNode } from "react";
-import { type Block, collapseRepeatedCitations, type Inline, parseMarkdown } from "@/lib/markdown";
-import type { Citation } from "@/server/events";
+import { type Block, type Inline, parseMarkdown, stripCitations } from "@/lib/markdown";
 
-type CitationProps = {
-  /** Citations from the answer event, by handle. Unknown handles render as plain text. */
-  citations?: readonly Citation[];
-  hrefFor?: (articleId: string) => string;
-  labelFor?: (citation: Citation) => string;
-};
-
-function renderInline(nodes: Inline[], props: CitationProps, keyPrefix = ""): ReactNode[] {
+function renderInline(nodes: Inline[], keyPrefix = ""): ReactNode[] {
   return nodes.map((node, i) => {
     const key = `${keyPrefix}${i}`;
     switch (node.type) {
@@ -19,41 +10,20 @@ function renderInline(nodes: Inline[], props: CitationProps, keyPrefix = ""): Re
       case "strong":
         return (
           <strong key={key} className="font-bold text-text">
-            {renderInline(node.children, props, `${key}-`)}
+            {renderInline(node.children, `${key}-`)}
           </strong>
         );
       case "em":
-        return <em key={key}>{renderInline(node.children, props, `${key}-`)}</em>;
-      case "cite": {
-        const { citations, hrefFor, labelFor } = props;
-        if (!citations || !hrefFor)
-          return <Fragment key={key}>[{node.handles.join(", ")}]</Fragment>;
-        return (
-          <span key={key} className="whitespace-nowrap">
-            {node.handles.map((handle) => {
-              const citation = citations.find((c) => c.handle === handle);
-              if (!citation) return null;
-              return (
-                <Link
-                  key={handle}
-                  href={hrefFor(citation.articleId)}
-                  aria-label={labelFor?.(citation)}
-                  title={citation.title}
-                  className="ml-1 inline-flex min-w-6 items-center justify-center rounded-pill border border-sage/60 px-1.5 align-[0.12em] font-semibold text-[0.78rem] leading-5 text-sage no-underline transition-colors duration-200 hover:bg-sage/15"
-                >
-                  {handle}
-                </Link>
-              );
-            })}
-          </span>
-        );
-      }
+        return <em key={key}>{renderInline(node.children, `${key}-`)}</em>;
+      case "cite":
+        // Kept as the original text where markers aren't hidden (answers hide them).
+        return <Fragment key={key}>[{node.handles.join(", ")}]</Fragment>;
     }
     return null;
   });
 }
 
-function renderBlock(block: Block, i: number, props: CitationProps, headingOffset: number) {
+function renderBlock(block: Block, i: number, headingOffset: number) {
   switch (block.type) {
     case "heading": {
       const level = Math.min(6, block.level + headingOffset);
@@ -67,14 +37,14 @@ function renderBlock(block: Block, i: number, props: CitationProps, headingOffse
               : "mt-8 font-display text-xl"
           }
         >
-          {renderInline(block.children, props)}
+          {renderInline(block.children)}
         </Tag>
       );
     }
     case "paragraph":
       return (
         <p key={i} className="mt-4 first:mt-0">
-          {renderInline(block.children, props)}
+          {renderInline(block.children)}
         </p>
       );
     case "list":
@@ -86,7 +56,7 @@ function renderBlock(block: Block, i: number, props: CitationProps, headingOffse
               key={j}
               className="relative pl-6 before:absolute before:top-[0.7em] before:left-1 before:size-1.5 before:rounded-pill before:bg-glow"
             >
-              {renderInline(item, props)}
+              {renderInline(item)}
             </li>
           ))}
         </ul>
@@ -96,26 +66,25 @@ function renderBlock(block: Block, i: number, props: CitationProps, headingOffse
 
 /**
  * Renders KB articles and answers from our Markdown subset. Never uses innerHTML: text from an
- * article or a model answer is always rendered as text. `collapseCitations` (answers) shows a
- * repeated single-source pill once per run; the Sources list is unaffected.
+ * article or a model answer is always rendered as text. `hideCitations` (answers) drops the
+ * citation markers; the answer's Sources list names the guides instead.
  */
 export function Markdown({
   source,
   headingOffset = 0,
   className,
-  collapseCitations = false,
-  ...props
+  hideCitations = false,
 }: {
   source: string;
   headingOffset?: number;
   className?: string;
-  collapseCitations?: boolean;
-} & CitationProps) {
+  hideCitations?: boolean;
+}) {
   const parsed = parseMarkdown(source);
-  const blocks = collapseCitations ? collapseRepeatedCitations(parsed) : parsed;
+  const blocks = hideCitations ? stripCitations(parsed) : parsed;
   return (
     <div className={className}>
-      {blocks.map((block, i) => renderBlock(block, i, props, headingOffset))}
+      {blocks.map((block, i) => renderBlock(block, i, headingOffset))}
     </div>
   );
 }

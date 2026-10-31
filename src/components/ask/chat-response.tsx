@@ -1,6 +1,5 @@
 import Link from "next/link";
 import type { Dictionary, Locale } from "@/i18n";
-import { fill } from "@/i18n/format";
 import type { ChatOutcome } from "@/lib/chat-client";
 import { Markdown } from "../markdown";
 import { CallButtons, SafetyCard } from "../safety-card";
@@ -34,15 +33,7 @@ export function ChatResponse({
     case "answer":
       return (
         <div>
-          <Markdown
-            source={event.text}
-            citations={event.citations}
-            hrefFor={guide}
-            labelFor={(c) => fill(h.citationLabel, { n: c.handle, title: c.title })}
-            headingOffset={1}
-            collapseCitations
-            className="text-[1.1rem]"
-          />
+          <Markdown source={event.text} headingOffset={1} hideCitations className="text-[1.1rem]" />
           <div className="mt-6 border-t border-line pt-4">
             <h3 className="eyebrow text-sage">{h.sourcesTitle}</h3>
             <ol className="mt-2 space-y-1">
