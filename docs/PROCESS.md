@@ -443,3 +443,17 @@ Felipe reviewed the UI in the browser and asked for four changes. The builder ag
 **Browser check** (scratch `playwright-core`, dev server on its own port, `/api/chat` mocked with `page.route`, no model calls): EN/ES × 390/1280 px for the strip closed and open, Ask Lumi empty and with four mixed turns (answer with citations, emergency, medical with "Add to my notebook", abstained with the gap preview open), Start over (also mid-request), and a guide article. Plus crisis and fallback in Spanish, the dawn theme, JavaScript off for the strip, reduced motion, keyboard focus on "More" and "Start over", and the header/content edge alignment. 94 checks, 0 failures, no horizontal overflow, console clean. The eight affected README stills were reshot.
 
 **Checks.** `pnpm lint` ✓, `pnpm typecheck` ✓, `pnpm test` ✓ (37 files, 646 tests), `pnpm test:kb` ✓ (5 files, 156 tests), `pnpm build` ✓. All exit codes 0.
+
+**Round 2 (Felipe, Ask Lumi only).** He liked round 1 and asked for two more changes:
+
+1. **No side column on Ask Lumi.** The chat card spans the full `max-w-6xl` width, with the chips (before the first question) and the boundaries note below it, in one column at every width. The answer measure went from 68ch to 76ch.
+2. **The conversation scrolls inside the card.** The turns sit in a capped, keyboard-scrollable region (`section` + `aria-label`, `tabIndex={0}`, inset focus ring, `overscroll-behavior: contain`), and the composer stays at the card's bottom. "Start over" moved to a small card header row (Lumi mark + "Lumi", reusing the unused `help.lumiSays`), outside the scroll area. New turns and responses scroll the area, not the page, so the newest question is at the top.
+
+What the check caught along the way:
+- The page-level "bring the card on screen" first ran only when a turn was added, so the response then grew the card and pushed the composer below the fold. It now also runs when the response arrives.
+- At 390 px the Spanish emergency card (about 430 px) didn't fit a `50dvh` area under a ~290 px composer, so "Call 911" sat below the fold. The phone height is now `max(16rem, 100dvh − 24rem)` (the 24rem includes the page's 1.5rem scroll padding, which `scrollIntoView` respects). Emergency and crisis cards go to the top of the area when they don't fit under the question.
+- `next dev` refuses a second dev server in the same directory (the coordinator's preview on 3500 holds the lock), so the check ran on a production build served with `next start` on 3400.
+
+**Browser check, round 2:** EN/ES × 390/1280 px: empty state, 1 turn, then 5 mixed turns (answer, medical with "Add to my notebook", abstained with the gap preview open and its textarea focused inside the area, fallback, emergency as the 5th). Also a very long question followed by an emergency under reduced motion, measured with no wait, plus crisis in Spanish on a phone and the dawn theme. It checked that the newest question or the urgent card is in view, "Call 911" is visible in the area, the composer is on screen, there's no empty box, and the region label and `aria-live` are there. It also checked keyboard focus, arrow keys and End, that the mouse wheel at the end leaves the page still, Start over, no overflow and a clean console. 106 checks, 0 failures.
+
+**Checks, round 2.** `pnpm lint` ✓, `pnpm typecheck` ✓, `pnpm test` ✓ (37 files, 646 tests), `pnpm test:kb` ✓ (5 files, 156 tests), `pnpm build` ✓. All exit codes 0.

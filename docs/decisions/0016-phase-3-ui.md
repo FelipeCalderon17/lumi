@@ -30,7 +30,12 @@ The brief asks for one slice done deeply and reasonable placeholders for the res
   - `crisis`: 988 first, then a gentle link to Parent Circles.
   - `abstained`: runs the gap flow (below).
 - **The conversation is session-only:** a list in this tab's memory, never persisted (ADR 0005).
-- **One chat card:** the turns ("You asked" + the question, then Lumi's response) and the composer share one surface card, so an answer never floats on the page background. Calm safety cards inside it are a borderless raised panel (no box in a box), and ember cards keep their outline. A compact "Start over" sits in the card's top-right corner once there is a turn. The separate "lives only in this tab" note row was removed (Felipe's UI feedback, round 1); the processing notice still says Lumi doesn't save the conversation.
+- **One chat card, one column:** the turns ("You asked" + the question, then Lumi's response) and the composer share one full-width surface card, so an answer never floats on the page background. The quick-start chips (before the first question) and the boundaries note sit below the card. Answer text keeps a 76ch measure inside it. Calm safety cards are a borderless raised panel (no box in a box), and ember cards keep their outline. The separate "lives only in this tab" note row was removed (Felipe's UI feedback, round 1); the processing notice still says Lumi doesn't save the conversation.
+- **The conversation scrolls inside the card** (UI feedback, round 2), so the card stops growing and the composer stays at its bottom, always visible:
+  - The turns sit in a capped scroll area: `min(60vh, 40rem)` on larger screens; on phones `max(16rem, 100dvh − 24rem)`, the height left once the card header, the composer and the page's scroll padding are on screen, so the whole card fits the viewport. With one short answer the card stays short.
+  - It's a labelled `<section>` (a region landmark, `help.conversationLabel`) with `tabIndex={0}` and an inset focus ring, so keyboard users can scroll it with the arrow keys. `aria-live="polite"` stays on the list. `overscroll-behavior: contain` keeps the page still when the area hits its end. A soft inset shadow at the top shows there's more above (it never covers text or catches clicks).
+  - When a turn is added and when its response arrives, the **area** scrolls (instantly under reduced motion) so the newest question is at its top. If that would leave the response below the area's fold, the response start goes to the top instead. Emergency and crisis cards go to the top whenever they don't fit whole under the question, so the call buttons show without scrolling (where the card fits the area). The page itself only scrolls if the card isn't fully on screen (`scrollIntoView({ block: "nearest" })`).
+  - A compact "Start over" sits in the card's header row, outside the scroll area, once there is a turn.
 - **The gap flow** (ADR 0005):
   - An editable preview, redacted with the server's own function (moved to the Node-free `src/server/gaps/redact.ts`), plus the disclosure and a consent checkbox.
   - Every save status is handled. `uncertain` offers a retry with the same id and token, and a delete.
@@ -51,7 +56,7 @@ The brief asks for one slice done deeply and reasonable placeholders for the res
 
 **Guides:** the KB articles themselves, as a library and article pages. Citations link there.
 
-**Page width:** every page, Ask Lumi and guide articles included, uses the same `max-w-6xl px-5` container as the header and footer, so the edges line up. Long text keeps a reading measure (68ch) inside it. On large screens the extra width becomes a side column: the quick-start chips and the boundaries note on Ask Lumi; the Ask Lumi card and "More on this topic" (same category) on a guide. Both stack on phones.
+**Page width:** every page, Ask Lumi and guide articles included, uses the same `max-w-6xl px-5` container as the header and footer, so the edges line up. Long text keeps a reading measure (68ch) inside it. Ask Lumi is a single column at every width (round 2: a wide card that grows less in height). On large screens a guide article gets a side column with the Ask Lumi card and "More on this topic" (same category); it stacks on phones.
 
 **Placeholders done honestly**
 - Community, Volunteer and Donate are **mocks**, each with a "Demo" badge and a line saying nothing is sent.

@@ -71,7 +71,7 @@ Loaded with `next/font` (self-hosted at build, no runtime requests to Google).
 ## Space, shape, layout
 
 - 4px base grid; Tailwind's spacing scale. Generous vertical rhythm. Pages breathe.
-- One page container everywhere: `max-w-6xl px-5`, the same as the header and footer, so edges line up. Running text keeps a reading measure (~68ch) inside it; on large screens the spare width becomes a side column (Ask Lumi, guide articles), never stretched text.
+- One page container everywhere: `max-w-6xl px-5`, the same as the header and footer, so edges line up. Running text keeps a reading measure (~68ch) inside it; on large screens the spare width becomes a side column (guide articles) or a wide card with readable text inside (Ask Lumi), never stretched text.
 - Radius: `rounded-soft` (14px) for cards, `rounded-pill` for buttons and chips. No sharp corners, no heavy shadows. Depth comes from the background halo and a soft amber glow on the primary action only.
 - Placeholders (donate, volunteer) use **dashed** borders: visibly "not built yet", honest about the prototype.
 - Mobile first. Touch targets ≥ 44px. The chat input sits within thumb reach.
