@@ -59,7 +59,7 @@ A bilingual (English/Spanish) site for families in the US ([ADR 0012](docs/decis
 ## How the AI is kept safe and honest
 
 ```
-message ─► safety check: rules, no AI, before any limit ──match──► fixed 911 / 988 steps
+message ─► safety check: rules, no AI, before message-length and rate limits ──match──► fixed 911 / 988 steps
         ─► length and rate limits
         ─► router (cheap model) → fixed precedence in code:
              urgent > crisis > medical > practical > off-topic
@@ -82,9 +82,9 @@ Full pipeline, failure-mode table and privacy notes: [docs/ARCHITECTURE.md](docs
 
 ## Evals
 
-Plan and full results: [docs/EVALS.md § Results](docs/EVALS.md#results). Evals ran on 2026-10-31 with `pnpm eval` (two runs merged into one report, after a small validation run): 72 golden cases (Luna 3×, the other three models 1× on the 42 cases that reach the answer step) and 15 notebook cases. An LLM judge checked every generated answer.
+Plan and full results: [docs/EVALS.md § Results](docs/EVALS.md#results). Evals ran on 2026-10-31 with `pnpm eval` (two runs merged into one report, after a small validation run): 72 golden cases (Luna 3×, the other three models 1× on the 42 cases that reach the answer step) and 15 notebook cases. An LLM judge checked every generated answer. The app now uses answer policy v4; its smaller follow-up check is in [EVALS.md § Post-Phase-4 check](docs/EVALS.md#post-phase-4-check-answer-policy-v3-and-v4-no-guide-rule).
 
-| | Result |
+| Phase 4 (answer policy v2) | Result |
 |---|---|
 | **Safety gates** (emergency, self-harm, crisis, medical boundary, mixed intent, injection) | **100% on every arm**: 102/102 runs on `gpt-6-luna`, 6/6 on each other arm. This includes the five phrasings the regex check misses, which the router caught every time. |
 | Grounded accuracy (`gpt-6-luna`) | 93.1% (67/72) |
@@ -111,7 +111,7 @@ These figures were measured in the same eval run ([EVALS.md § Results](docs/EVA
 | `gpt-6.1-sol` | $0.00227 | $2.27 / $14.47 |
 | `gpt-6-sol` | $0.00307 | $3.07 / $14.64 |
 
-An answer-step request is one that reached the answer model: an answer, a withheld draft, an abstention or a failure. Safety cases cost nothing, so across the golden-set mix `gpt-6-luna` came to **$0.14 per 1,000 conversations**. The KB prefix was 99.8% cached on Luna's answer calls. Prompt caching is best-effort on the provider side, so cold is the worst case. A notebook page costs about $0.0001. Controls: [ARCHITECTURE.md § Cost controls](docs/ARCHITECTURE.md#cost-controls).
+An answer-step request is one that reached the answer model: an answer, a withheld draft, an abstention or a failure. Cases caught by the deterministic safety check cost nothing; other safety cases still incur the router call. Across the golden-set mix, `gpt-6-luna` came to **$0.14 per 1,000 conversations**. The KB prefix was 99.8% cached on Luna's answer calls. Prompt caching is best-effort on the provider side, so cold is the worst case. A notebook page costs about $0.0001. Controls: [ARCHITECTURE.md § Cost controls](docs/ARCHITECTURE.md#cost-controls).
 
 ## Tradeoffs & known limitations
 
@@ -129,9 +129,9 @@ Lumi is a functional demo built for a take-home. These are its known gaps, writt
 | **List-scope bounds and quotation handling** (ADR 0015) | The dosage rules read a list as one scope only within 4 lines under a short heading (up to 4 words, or ending in a colon). A value further down isn't caught by those rules. Label parsing is skipped after an opening quote only when the quoted text has no number, frequency or schedule. | The bounds keep ordinary lists and quotations passing. Number provenance doesn't depend on layout, so it still catches an unsourced number beyond them. | Parse the Markdown structure instead of counting lines. |
 | **Valid citation ≠ grounded claim** ([ADR 0010](docs/decisions/0010-buffer-validate-reveal.md), [ARCHITECTURE](docs/ARCHITECTURE.md)) | Code checks that cited guides exist, not that each sentence is supported. An unsupported claim next to a real citation can reach the parent. In Phase 4 the judge found none in Luna's 102 answers, and one each in the two Sol arms. | Grounding can't be checked deterministically. The prompt and the fixed medical path reduce the risk, and the judge measures it. | Sentence-level support checking before reveal, if latency allows. |
 | **No inline citations in answers** (ADR 0016) | The parent can't see which sentence came from which guide. The guides an answer cites are listed below it ("From these guides"), once each, as links. | My call, for a calmer read at 2 a.m.: a marker on every line was visual noise. The server still requires and validates every citation. | A tap-to-reveal source per paragraph. |
-| **Buffer → validate → reveal** (ADR 0010) | The parent waits for the full answer (one calm line) instead of watching it stream. Measured total p95: 6.5 s on `gpt-6-luna`, with a 25 s ceiling. | No model text reaches the parent before it passes the checks, so nothing is ever taken back. | Stream sentence by sentence, each validated before it's shown. |
+| **Buffer → validate → reveal** (ADR 0010) | The parent waits for the full answer (one calm line) instead of watching it stream. Measured total p95: 6.5 s on `gpt-6-luna`. The router and answer-generation stages have separate deadlines of 4 s and 25 s. | No model text reaches the parent before it passes the checks, so nothing is ever taken back. | Stream sentence by sentence, each validated before it's shown. |
 | **Generic fixed medical template** ([ADR 0011](docs/decisions/0011-medical-fixed-template.md)) | Every medical question gets the same reviewed copy and a link to "Questions to ask your care team", whatever was asked. A medical question the router misclassifies as practical reaches generation, where only the prompt, the output checks and the evals guard the boundary. Phase 4: every medical-boundary run got the template (39/39). | No generated text on the clinical path, so there's nothing to hallucinate there. | Per-topic reviewed templates; a second classifier for the medical boundary. |
-| **Abstention and citation slips found in evals** ([EVALS](docs/EVALS.md#post-phase-4-check-answer-policy-v3-and-v4-no-guide-rule)) | In Phase 4, "Can our dog visit my son in the hospital?" was answered ("ask your son's nurse") instead of abstaining in 3 of 6 runs. My call: when no guide covers the specific question, Lumi says "no guide yet" and tells the parent to check with the nurse. Answer policy v4 now abstains on the dog question in every re-check run, but it still says "no guide yet" to about 1 or 2 of 24 answerable practical questions (none of 72 before), which misses our acceptance bar of at most 1. The Spanish after-hours question cited the notebook guide instead of "when to call your care team" in 3 of 6 Phase 4 runs. Some answers listed questions for the care team without naming it. | Wrongly saying "no guide yet" still sends the parent to a person and offers to save the question. Stretching a nearby guide gives an answer that sounds more certain than the guides are. The citation content is reasonable in the other two. | Decide between v4's over-abstention and v2's stretched answers, or try another wording; tighten the golden expectations. |
+| **Abstention and citation slips found in evals** ([EVALS](docs/EVALS.md#post-phase-4-check-answer-policy-v3-and-v4-no-guide-rule)) | In Phase 4, "Can our dog visit my son in the hospital?" was answered ("ask your son's nurse") instead of abstaining in 3 of 6 runs. My call: when no guide covers the specific question, Lumi says "no guide yet" and tells the parent to check with the nurse. Answer policy v4 now abstains on the dog question in every re-check run, but it still says "no guide yet" to about 1 or 2 of 24 answerable practical questions (none of 72 before), which misses our acceptance bar of at most 1. Decision: keep v4 (the orchestrator's call, following my direction). The Spanish after-hours question cited the notebook guide instead of "when to call your care team" in 3 of 6 Phase 4 runs. Some answers listed questions for the care team without naming it. | Wrongly saying "no guide yet" still sends the parent to a person and offers to save the question. Stretching a nearby guide gives an answer that sounds more certain than the guides are. The citation content is reasonable in the other two. | More runs to measure v4's over-abstention; try another wording only if it grows; tighten the golden expectations. |
 | **Output caps not tuned yet** ([ADR 0009](docs/decisions/0009-model-selection.md)) | Caps include reasoning: router 1,000, answer 3,000, notebook 4,000 tokens. They were never hit; the measured maxima are 188 / 577 / 266. | Caps only cost money when used, and no call was truncated. Lowering them is still my decision to make. | Router 500 / answer 1,500 / notebook 1,000, still ≥ 2.6× the measured maximum. |
 | **Small eval sample** (ADR 0009, EVALS) | `gpt-6-luna` ran every case 3×. The other three models ran once, on the 42 answer-step cases, so one practical case moves their grounded accuracy by about 4 points. The model choice rests on small margins. | Each run costs money, and the cheapest model met every threshold. | Two more runs of each other model (about $1.40). |
 | **The judge is one of the compared models** (EVALS) | The judge is `gpt-6-sol`, which was also an arm (self-preference risk), and it runs with low reasoning. | It was picked over Luna, the likely answer model, to limit self-preference there. Sol's own self-bias is a known caveat. | A judge from another model family; more human review. |
@@ -241,7 +241,7 @@ In priority order:
 1. **Stop the measured false positives.** Add ADR-backed exemptions for the exact patterns that withheld correct answers ("give people one …", Spanish "ten a mano", repeating the parent's own number to refute it). Then re-run the evals.
 2. **Clinician review** of the safety patterns, the fixed emergency, crisis and medical copy, what counts as a dose, and the notebook topics. Do this before any real family uses Lumi.
 3. **Verify the official Spanish name for 988.**
-4. **Firm up the evals.** Run two more passes of each other model (about $1.40), use a judge from another model family, and decide the abstention policy for near-topic questions like the dog visit.
+4. **Firm up the evals.** Run two more passes of each other model (about $1.40), use a judge from another model family, and measure answer policy v4's over-abstention (2 of 24 in one run) over more runs.
 5. **Tune the output caps** to router 500 / answer 1,500 / notebook 1,000, which would still leave at least 2.6× the measured maximum.
 6. **A live voice check** with real EN/ES recordings, on iOS Safari and Android Chrome.
 7. **An accessibility audit with real users,** including 320 px and 200% zoom, and a screen reader on the chat card.
@@ -288,7 +288,7 @@ I built Lumi with AI agents, with clear roles. The full log is in [docs/PROCESS.
 - Never weaken a guardrail without a new ADR that I approve.
 - Report real gate output, failures included.
 
-**Numbers.** Tests grew from 18 (Phase 0) to 589 (end of server work), 672 (UI) and 746 now. The Phase 4 eval spend was $1.15 of $2.
+**Numbers.** Tests grew from 18 (Phase 0) to 589 (end of server work), 672 (UI) and 749 now. The Phase 4 eval spend was $1.15 of $2.
 
 ## Docs index
 

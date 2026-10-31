@@ -598,3 +598,12 @@ Fixes only, with **no paid calls** this round (spend stays $1.1542). Codex indep
 - Spend: $0.0115 this step (cap $0.08); **$0.0387 in total** for the check.
 
 **Open.** Stopped as instructed instead of tuning again. v4 is committed and live in the app. Keep v4 and accept the over-abstention, revert to v2, or try another wording with a new budget: that's for the orchestrator and Felipe.
+
+**Decision (orchestrator, 2026-11-01): keep v4.** It follows Felipe's direction: when no guide covers the specific question, say so and send the parent to the nurse. Its failure mode is safe: a wrong "no guide yet" gives the nurse and care-team copy and an optional gap save, never wrong information. Tuning stopped because of the time-box and the small samples. The measured over-abstention (2 of 24 practical questions in one run) is documented as a README tradeoff and in [EVALS § Post-Phase-4 check](EVALS.md#post-phase-4-check-answer-policy-v3-and-v4-no-guide-rule).
+
+**README accuracy fixes (Codex review).**
+- The safety check runs before the length and rate limits, not "before any limit": the 8 KB bounded body read comes first. Fixed in the README diagram and in ARCHITECTURE's "Why this order".
+- Only cases the deterministic check catches cost nothing; other safety cases still make a router call.
+- The 25 s deadline applies to answer generation, not to total latency; the router has its own 4 s deadline.
+- The test count is now 749.
+- The headline eval table is labelled "Phase 4 (answer policy v2)".
