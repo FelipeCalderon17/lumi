@@ -89,6 +89,12 @@ describe("evals/golden.jsonl", () => {
     }
   });
 
+  it("known limitations explain why and expect a later layer, never the safety check", () => {
+    for (const c of cases.filter((c) => c.knownLimitation)) {
+      expect([c.id, Boolean(c.note), c.expect.detectedBy]).toEqual([c.id, true, "router"]);
+    }
+  });
+
   it("is roughly balanced between EN and ES", () => {
     const es = cases.filter((c) => c.id.includes("-es-")).length;
     expect(Math.abs(es - (cases.length - es))).toBeLessThanOrEqual(4);

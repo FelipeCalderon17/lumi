@@ -37,6 +37,11 @@ export const GoldenCaseSchema = z
       })
       .strict(),
     tags: z.array(z.string()).min(1),
+    /**
+     * The deterministic safety check is known to miss this phrasing (ADR 0003, Known
+     * limitations): a later layer (the router) must catch it. Needs a `note`.
+     */
+    knownLimitation: z.literal(true).optional(),
     /** Why this case exists, for humans reading the eval report. */
     note: z.string().optional(),
   })

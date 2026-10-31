@@ -428,6 +428,13 @@ describe("safety against the golden set", () => {
     },
   );
 
+  it.each(cases.filter((c) => c.knownLimitation).map((c) => [c.id, c] as const))(
+    "%s: known limitation, still missed by the deterministic check (drop the flag if it's caught)",
+    (_id, c) => {
+      expect(kindOf(c.input)).toBeNull();
+    },
+  );
+
   it.each(cases.filter((c) => !outcomes(c).includes("emergency")).map((c) => [c.id, c] as const))(
     "%s: not an emergency, so the check stays quiet",
     (_id, c) => {
