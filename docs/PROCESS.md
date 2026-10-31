@@ -337,7 +337,7 @@ The last Phase 2 round (Felipe's time-box). Codex re-review 6 found:
   - The 6 notebook assertions now pass **vacuously**: they're guarded by `result.type === "notebook"`, which no longer exists, and they import `hasQuantityLike` / `checkNotebook`, which are gone. They're obsolete, and the repo tests above replace them.
 - **Broad harness** (`/tmp/lumi-review-7.after-fixes.out`): 22 failures, all assertions on the old notebook contract, which is an intended contract change.
   - Every dosage assertion passes.
-  - Of the 70 adversarial dosage probes, 4 are still revealed, all documented limitations: "Give II", "Give Ⅱ", "Paracetamol half", "Take a break, then 5".
+  - Of the 69 adversarial dosage probes, 4 are still revealed, all documented limitations: "Give II", "Give Ⅱ", "Paracetamol half", "Take a break, then 5".
   - "Bring a tablet with headphones" is also revealed; that's the intended device exemption.
 
 **Checks.** Node 24.19.0. `pnpm lint` ✓, `pnpm typecheck` ✓, `pnpm test` ✓ (28 files, 552 tests, up from 534), `pnpm test:kb` ✓ (5 files, 132 tests), `pnpm build` ✓. All exit codes 0.
