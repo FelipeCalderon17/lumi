@@ -240,18 +240,29 @@ async function readAll(stream: ReadableStream<Uint8Array>): Promise<string> {
 describe("http.ndjsonStream", () => {
   it("sends progress and the terminal event, closes, but keeps draining (ledger work)", async () => {
     let drained = false;
+    let releaseLedger: () => void = () => {};
+    const ledgerWrite = new Promise<void>((resolve) => {
+      releaseLedger = resolve;
+    });
+    let markDrained: () => void = () => {};
+    const drainedSignal = new Promise<void>((resolve) => {
+      markDrained = resolve;
+    });
     async function* events(): AsyncGenerator<ChatEvent> {
       yield { type: "progress", stage: "reading_guides" };
       yield { type: "crisis", language: "en" };
-      await new Promise((resolve) => setTimeout(resolve, 20));
+      await ledgerWrite;
       drained = true;
+      markDrained();
     }
+    // The stream closes after the terminal event while the "ledger write" is still pending.
     const text = await readAll(ndjsonStream(events()));
     expect(text).toBe(
       '{"type":"progress","stage":"reading_guides"}\n{"type":"crisis","language":"en"}\n',
     );
     expect(drained).toBe(false);
-    await new Promise((resolve) => setTimeout(resolve, 40));
+    releaseLedger();
+    await drainedSignal;
     expect(drained).toBe(true);
   });
 

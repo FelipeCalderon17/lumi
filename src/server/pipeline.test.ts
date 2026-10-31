@@ -66,6 +66,16 @@ describe("pipeline transport (contract)", () => {
 const route = (intents: string[], language = "en", topic = "hospital-logistics") =>
   jsonModel({ language, intents, topic });
 
+// Ordinary tests get generous deadlines so parallel CI load never turns them into
+// fallback(timeout). Only the tests that exercise a timeout pass SHORT deadlines explicitly.
+const GENEROUS = {
+  routerMs: 5_000,
+  answerFirstTokenMs: 5_000,
+  answerTotalMs: 5_000,
+  ledgerWriteMs: 5_000,
+};
+const SHORT = 50;
+
 function setup(
   opts: {
     router?: LanguageModel;
@@ -74,6 +84,7 @@ function setup(
     chatMax?: number;
     modelCallsMax?: number;
     getKnowledgeBase?: ChatDeps["getKnowledgeBase"];
+    timeouts?: Partial<NonNullable<ChatDeps["timeouts"]>>;
   } = {},
 ) {
   const rows: UsageEntry[] = [];
@@ -91,7 +102,7 @@ function setup(
         maxKeys: 1,
       }),
     },
-    timeouts: { routerMs: 50, answerFirstTokenMs: 50, answerTotalMs: 200, ledgerWriteMs: 50 },
+    timeouts: { ...GENEROUS, ...opts.timeouts },
   };
   return { deps, rows, router, answer };
 }
@@ -450,44 +461,66 @@ describe("pipeline.runPipeline (failures)", () => {
   });
 
   it("router timeout (mocked) → fallback(timeout)", async () => {
-    const { deps } = setup({ router: hangingModel() });
+    const { deps } = setup({ router: hangingModel(), timeouts: { routerMs: SHORT } });
     const events = await collect(startChat(ask("Where do I park?"), testCtx(), deps));
     expect(last(events)).toEqual({ type: "fallback", reason: "timeout", language: "en" });
   });
 
   it("answer stalls → fallback(timeout) in the router's language", async () => {
-    const { deps } = setup({ router: route(["practical"], "es"), answer: hangingModel() });
+    const { deps } = setup({
+      router: route(["practical"], "es"),
+      answer: hangingModel(),
+      timeouts: { answerFirstTokenMs: SHORT, answerTotalMs: SHORT * 4 },
+    });
     const events = await collect(startChat(ask("¿Dónde estaciono?", "en"), testCtx(), deps));
     expect(last(events)).toEqual({ type: "fallback", reason: "timeout", language: "es" });
   });
 
-  it("database down (ledger throws or hangs) → response unaffected and not delayed", async () => {
-    for (const ledger of [
-      { record: async () => Promise.reject(new Error("ECONNREFUSED")) },
-      { record: () => new Promise<void>(() => {}) },
-    ]) {
+  it("database down (ledger slow or throws) → the terminal event is sent before the ledger write settles", async () => {
+    for (const settle of ["resolve", "reject"] as const) {
+      const order: string[] = [];
+      // One controllable gate for every ledger write (router + answer rows).
+      let release: () => void = () => {};
+      const gate = new Promise<void>((resolve, reject) => {
+        release = () => (settle === "resolve" ? resolve() : reject(new Error("ECONNREFUSED")));
+      });
+      gate.catch(() => {});
+      const ledger: UsageLedger = {
+        record: () => {
+          order.push("ledger:start");
+          return gate;
+        },
+      };
       const { deps } = setup({ ledger });
       const start = startChat(ask("What should I pack?"), testCtx(), deps);
       if (start.kind !== "stream") throw new Error("expected a stream");
-      const started = Date.now();
-      let terminalAt = 0;
-      for await (const event of start.events) {
-        if (isTerminal(event)) {
-          terminalAt = Date.now() - started;
-          expect(event.type).toBe("answer");
-        }
-      }
-      const drainedAt = Date.now() - started;
-      expect(terminalAt).toBeLessThan(40);
-      // The hanging write is abandoned at ledgerWriteMs (50 ms in these tests).
-      expect(drainedAt).toBeLessThan(500);
+      const iterator = start.events[Symbol.asyncIterator]();
+      let event = await iterator.next();
+      while (!event.done && !isTerminal(event.value)) event = await iterator.next();
+      expect(event.value).toMatchObject({ type: "answer" });
+      order.push("terminal");
+      // Draining runs the ledger write; it can't finish until we release the write.
+      const drained = iterator.next().then(() => order.push("drained"));
+      await new Promise((resolve) => setImmediate(resolve));
+      expect(order).toEqual(["terminal", "ledger:start", "ledger:start"]);
+      release();
+      await drained;
+      expect(order).toEqual(["terminal", "ledger:start", "ledger:start", "drained"]);
     }
+  });
+
+  it("database down (ledger hangs) → the write is abandoned at ledgerWriteMs and the stream drains", async () => {
+    const { deps } = setup({
+      ledger: { record: () => new Promise<void>(() => {}) },
+      timeouts: { ledgerWriteMs: SHORT },
+    });
+    const events = await collect(startChat(ask("What should I pack?"), testCtx(), deps));
+    expect(last(events)).toMatchObject({ type: "answer" });
   });
 
   it("client disconnect (request signal aborted) → model call aborted, ledger outcome cancelled", async () => {
     const request = new AbortController();
     const { deps, rows } = setup({ answer: stallingStreamModel(["Bring"]) });
-    deps.timeouts = { ...deps.timeouts, answerFirstTokenMs: 5_000, answerTotalMs: 5_000 };
     setTimeout(() => request.abort(), 20);
     const events = await collect(
       startChat(ask("What should I pack?"), testCtx({ signal: request.signal }), deps),

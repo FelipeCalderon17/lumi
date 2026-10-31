@@ -199,7 +199,7 @@ describe("answer.generateAnswer (mocked model)", () => {
   it("a stream that stalls after the first token → timeout at the total deadline", async () => {
     const step = await generateAnswer(input, testCtx(), {
       model: stallingStreamModel(["Bring a "]),
-      firstTokenMs: 1_000,
+      firstTokenMs: 5_000,
       totalMs: 30,
     });
     expect(step.result).toEqual({ ok: false, reason: "timeout" });
