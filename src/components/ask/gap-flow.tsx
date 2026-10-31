@@ -124,7 +124,8 @@ export function GapFlow({
     setPhase(previous === "uncertain" ? "uncertain" : "saved");
   }
 
-  const box = "mt-5 rounded-soft border border-dashed border-line p-5";
+  // Dashed: visibly a separate, opt-in step. Muted (not `line`) so it reads on the raised panel.
+  const box = "mt-5 rounded-soft border border-dashed border-muted/45 p-4 sm:p-5";
 
   if (phase === "declined") return null;
 

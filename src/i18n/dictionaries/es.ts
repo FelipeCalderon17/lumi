@@ -172,7 +172,6 @@ export const es: Dictionary = {
     youAsked: "Preguntaste",
     lumiSays: "Lumi",
     conversationLabel: "Tus preguntas y las respuestas de Lumi",
-    sessionNote: "Esta conversación vive solo en esta pestaña. Desaparece cuando la cierras.",
     startOver: "Empezar de nuevo",
     tooLong: "Es un poco larga para Lumi. ¿Puedes acortarla a la pregunta principal?",
     sourcesTitle: "De estas guías",

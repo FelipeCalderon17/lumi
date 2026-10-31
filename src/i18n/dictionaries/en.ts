@@ -181,7 +181,6 @@ export const en = {
     youAsked: "You asked",
     lumiSays: "Lumi",
     conversationLabel: "Your questions and Lumi's answers",
-    sessionNote: "This conversation lives only in this tab. It's gone when you close it.",
     startOver: "Start over",
     tooLong: "That's a bit long for Lumi. Could you shorten it to the main question?",
     sourcesTitle: "From these guides",

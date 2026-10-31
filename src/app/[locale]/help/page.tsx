@@ -15,12 +15,12 @@ export default async function HelpPage({ params }: PageProps<"/[locale]/help">) 
   const t = getDictionary(locale);
 
   return (
-    <section className="mx-auto max-w-3xl px-5 pt-8 sm:pt-12">
-      <h1 className="text-5xl leading-tight sm:text-6xl">{t.help.title}</h1>
-      <p className="mt-4 text-[1.15rem] text-muted">{t.help.lede}</p>
-      <p className="mt-4 border-l-2 border-glow/60 pl-4 text-[0.98rem] text-muted">
-        {t.help.boundaries}
-      </p>
+    <section className="mx-auto max-w-6xl px-5 pt-8 sm:pt-12">
+      <div className="max-w-3xl">
+        <h1 className="text-5xl leading-tight sm:text-6xl">{t.help.title}</h1>
+        <p className="mt-4 text-[1.15rem] text-muted">{t.help.lede}</p>
+      </div>
+      {/* The chat card, the boundaries note and the quick-start chips (side column on large screens). */}
       <AskLumi locale={locale} t={t} />
     </section>
   );

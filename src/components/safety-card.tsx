@@ -6,6 +6,8 @@ type Tone = "ember" | "calm";
 /**
  * Fixed, reviewed safety copy (ADR 0003, 0011) as a card. Emergency cards are ember with a
  * dot and a heading (colour never carries the meaning alone) and get call buttons.
+ * It sits inside the Ask Lumi chat card, so calm cards are a soft raised panel without a
+ * border (no box-in-a-box); ember cards keep their outline.
  */
 export function SafetyCard({
   title,
@@ -27,8 +29,8 @@ export function SafetyCard({
   const Heading = `h${headingLevel}` as const;
   return (
     <div
-      className={`rounded-soft border p-5 sm:p-6 ${
-        tone === "ember" ? "border-ember/60 bg-ember/8" : "border-line bg-surface"
+      className={`rounded-soft border p-4 sm:p-6 ${
+        tone === "ember" ? "border-ember/60 bg-ember/8" : "border-transparent bg-raised/60"
       }`}
     >
       <Heading className="flex items-start gap-3 font-display text-[1.45rem] leading-snug">
