@@ -1,6 +1,8 @@
 # 0015 — Structural, fail-closed output checks: the dosage gate and a notebook with no AI prose
 
-**Status:** Proposed — pending Felipe's sign-off after Codex verification · revised 2026-10-30 (Phase 2 final fixes, Codex re-review 6). First accepted 2026-10-30 after Codex re-review 4; revision 2 after re-review 5.
+**Status:** Proposed — pending Felipe's sign-off · revised 2026-10-31 (Phase 2 last fixes, Codex verification). First accepted 2026-10-30 after Codex re-review 4; revision 2 after re-review 5; revision 3 after re-review 6.
+
+*Codex verification of revision 3:* the **notebook** part is **verified by Codex** and unchanged. The dosage part still had blockers (list and quote formatting, use/usa with a later frequency, normalized phone digits). Felipe approved a **number-provenance layer** on top of the dosage rules, with nothing removed (layer g below).
 
 *Revision 3, on Felipe's direction after re-review 6:*
 - **Dosage:** label values count whatever follows them, list lines under a heading are one scope, use/usa get the backward check, and Unicode digits are normalised. Remaining vocabulary gaps are listed as known limitations, not closed.
@@ -71,14 +73,23 @@ Then citation markers are removed and explicit device tablets are masked. Words 
   - After a strong separator (`:` `—` `–` `|` or a spaced hyphen), a value that **starts** with a quantity, frequency or schedule is withheld **whatever follows**: "Paracetamol: half as needed", "Paracetamol: media si lo necesita", "Morphine: ½ as needed".
   - After a comma, the value must be a run of such words that ends the clause or meets a condition word (as, if, when, for, then, si, cuando, para…): "Acetaminophen, half if needed".
   - With no separator: up to 2 words, then such a run with a frequency or schedule in it ("Paracetamol at night if needed").
-  - Not after a separator followed by an opening quote: 'decir: "Uno de mis hijos…"' is a quotation (a KB line).
+  - Not after a separator followed by an opening quote, **if the quoted text has no number, frequency or schedule**: 'decir: "Uno de mis hijos…"' is a quotation (a KB line; "uno de" is a partitive, not a count). 'Paracetamol: "half the usual amount"' is withheld (Codex verification).
 - **(d) Schedules.** EN/ES times of day tied to a dose: at bedtime, at night, in the morning(s)/evening(s), with/before/after meals, after breakfast/lunch/dinner, morning and night; al acostarse, al despertar, por la mañana/noche, en las mañanas, antes/después de comer, después del desayuno, en ayunas…
 - **(e) use/usa (revised).**
   - They count once something sits between the verb and the frequency or schedule ("Use insulin daily").
   - A frequency or schedule **before** them counts as for any verb ("At bedtime, use it", "Al acostarse, usa eso").
   - A frequency right after the verb belongs to a relative clause ("anything you use every day", "lo que uses a diario").
-  - With a neuter relative object ("use what…", "usa lo que…"), a later **frequency** is still read as the inner verb's ("Usa lo que de verdad vayas a mantener al día", a KB line). A **schedule** never is: "Use what was prescribed at bedtime" and "Usa lo que te recetaron por la noche" are withheld.
+  - Anything later counts, also after a neuter relative object (Codex verification): "Use what was prescribed daily", "Use whatever was prescribed every morning" and "Use what was prescribed at bedtime" are withheld. "mantener/ponerse al día" means "up to date" and isn't a frequency, so "Usa lo que de verdad vayas a mantener al día" (a KB line) passes.
 - **(f) List scope (new).** A heading line (up to 4 words, or ending in a colon) and the next **4** lines that are list items (`-` `•` `*` `1.` `1)`) or bare lines form one scope. An item that starts with a quantity, frequency or schedule is withheld: "Paracetamol\n- half\n- at bedtime", "ibuprofeno\nmedia\npor la noche". The scope ends at a line that is neither a list item nor bare.
+
+**(g) Number provenance (new, Codex verification; chat answers only, in `finalizeAnswer`).** Every **number** and every **frequency or schedule** in a generated answer must also appear in at least one article the answer cites. If not, the answer is withheld with the usual fallback.
+- **Shared normalizer** (`numberProvenanceKeys` in `content-rules.ts`): NFKC; Unicode decimal digits to ASCII; Roman numerals II–XII as standalone uppercase tokens (a bare "I" is the EN pronoun); written numbers EN/ES (zero…twenty, the tens, hundred, thousand, dozen; cero/un/una/uno…veinte, the tens, cien, mil); "once" is 11 in both languages (accepted EN false positive); half/media/medio/mitad → 1/2, third/tercio → 1/3, quarter/cuarto → 1/4, double/doble/twice → 2x, triple/thrice → 3x; "1,000"/"1.000" → 1000.
+- **Formatting-independent:** the answer and the cited articles (title + body) are each reduced to a **set** of number tokens and frequency/schedule phrase keys. Words are read across sentence and line breaks ("at\nbedtime" is "at bedtime"), and numbers inside a phrase are normalized ("every two hours" = "every 2 hours"). Lists, quotes, newlines and punctuation don't matter. The answer's set must be a subset of the union of the cited articles' sets.
+- **Excluded:** citation markers ("[1]") and the service numbers 911 and 988.
+- The KB contains no dosing, so a dose number can never be sourced, whatever the formatting. All ten Codex verification blockers are withheld by this layer on its own (`answer/index.test.ts`), and every KB line, cited to its own article, still passes (`kb-content.test.ts`).
+- **Accepted cost:** a benign number the cited article doesn't contain is withheld ("Pack 2 changes of clothes [n]"). The check is **set membership, not context**: a number or schedule anywhere in a cited article passes. "1" is in almost every article (one/un/una), and some articles contain "2", "10", "daily", "at night" or "antes de dormir". The rate is measured in Phase 4 (EVALS.md).
+
+**Phone check, normalized (Codex verification).** The phone rules read the same normalized text (NFKC, Unicode digits to ASCII, Unicode hyphens to "-"), keeping the 911/988 and room-number exceptions: "Call ５５５－１２３－４５６７", Arabic-Indic and mixed-script numbers, and "Llama al ２１１" are withheld.
 
 **Narrow exemptions only:**
 - harmless objects after take/give, with a frequency or schedule right after them ("take a break every 2 hours", "take a walk after breakfast");
@@ -88,13 +99,12 @@ Then citation markers are removed and explicit device tablets are masked. Words 
 
 There's no list of drug names. An unknown drug name is caught by the shape around it.
 
-**This is a finite detector, not a closed one.** It recognises the shapes and vocabulary listed above. A dose phrased outside them passes this check, and the other layers (the KB has no doses, the answer prompt, the fixed medical template for medical questions, the router, and the judge in evals) have to catch it. Known residual vocabulary, tested as still passing (`content-rules.test.ts`, "known limitations"):
-- a drug name and a bare quantity with no separator: "Paracetamol half";
-- Roman numerals: "Give II", "Give Ⅱ" (NFKC turns "Ⅱ" into "II", which no rule reads as a number);
-- a harmless take/give clause followed by a quantity: "Take a break, then 5";
-- a frequency after a relative object of use/usa: "Use what was prescribed daily" (schedules are caught, frequencies aren't);
-- fractions and multiples not listed: "a fifth", "quadruple", "un quinto";
-- schedule phrasings not listed: "first thing", "with supper", "al mediodía";
+**This is a finite detector, not a closed one.** It recognises the shapes and vocabulary listed above. A dose phrased outside them passes the dosage rules. In a chat answer, number provenance (g) still withholds it if it has a number or schedule the cited article lacks, and the other layers (the KB has no doses, the answer prompt, the fixed medical template for medical questions, the router, and the judge in evals) have to catch it. Known residual vocabulary, tested as still passing the dosage rules (`content-rules.test.ts`, "known limitations"):
+- a drug name and a bare quantity with no separator: "Paracetamol half" (provenance withholds it: no article contains a half);
+- Roman numerals: "Give II", "Give Ⅱ" (NFKC turns "Ⅱ" into "II", which no dosage rule reads as a number; provenance withholds it unless the cited article contains a 2);
+- a harmless take/give clause followed by a quantity: "Take a break, then 5" (provenance withholds it: no article contains a 5);
+- fractions and multiples not listed: "a fifth", "quadruple", "un quinto" (not read by provenance either);
+- schedule phrasings not listed: "first thing", "with supper", "al mediodía" (not read by provenance either);
 - a list value more than 4 lines below its heading, or a heading over 4 words without a colon.
 
 ## Consequences
@@ -111,6 +121,7 @@ There's no list of drug names. An unknown drug name is caught by the shape aroun
   - "Give each child a few minutes alone with you".
 
   The set is seeded with known triggers, so 25% isn't a representative rate. The KB passes (tested). The withheld rate on real answers is measured in Phase 4.
+- **Accepted over-withholding (provenance).** Any benign number, frequency or schedule the cited article lacks gets the fallback (see g). The seeded probe above measures the dosage rules only; the provenance rate on real answers is measured in Phase 4.
 - The citation check, buffer → validate → reveal and the fixed medical template are unchanged. The dosage gate stays a **backstop** behind the policy and the router.
 
 ## With more time

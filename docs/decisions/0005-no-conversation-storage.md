@@ -1,6 +1,6 @@
 # 0005 — No conversation storage; consented, previewed gaps with retention
 
-**Status:** Accepted · 2026-10-30 · *Revised 2026-10-30 after Codex review 1: stopped claiming anonymity; added an editable preview, a staff-access disclosure, a topic label, 30-day retention and a delete path. Revised again after Codex review 2: the gap note describes the lazy purge honestly, and naming OpenAI is recorded as an explicit exception to the no-real-organisations rule. Revised after Codex re-review 6: notebook notes sent for classification, `store: false`, Lumi's storage policy vs. provider processing, staff tombstones and what a tombstone keeps.*
+**Status:** Accepted · 2026-10-30 · *Revised 2026-10-30 after Codex review 1: stopped claiming anonymity; added an editable preview, a staff-access disclosure, a topic label, 30-day retention and a delete path. Revised again after Codex review 2: the gap note describes the lazy purge honestly, and naming OpenAI is recorded as an explicit exception to the no-real-organisations rule. Revised after Codex re-review 6: notebook notes sent for classification, `store: false`, Lumi's storage policy vs. provider processing, staff tombstones and what a tombstone keeps. Wording fix after Codex verification: tombstone retention is lazy and counted from `created_at`, not a hard 30-day ceiling.*
 
 ## Context
 Parents may describe their child's situation in detail. Storing that creates risk (breaches, retention, consent) with little value for a prototype. Staff still need to know what the KB is missing.
@@ -21,7 +21,7 @@ An earlier version said gaps were saved "without your name". That overstated it:
   - A parent delete blanks the question and leaves a tombstone on the id, so a save that was still in flight can't store it afterwards (added after Codex re-review 3).
   - A staff delete is the same soft tombstone, an `UPDATE` and never a `DELETE`, so a parent retry with the original id and token can't store the question again (added after Codex re-review 4).
   - **What a tombstone keeps:** the id, the delete-token hash, the language, the consent flag (always true), `deleted = true` and `created_at`. The question is blanked (`""`) and the topic reset to `other`. A tombstone the parent creates before the save lands has language `en` as a placeholder.
-  - Tombstones are hidden from staff and purged with the same 30-day retention. Only the purge physically removes rows.
+  - Tombstones are hidden from staff and purged with the same lazy 30-day retention, counted from the row's original `created_at` (not the delete time). Only the purge physically removes rows.
 
 ## Consequences
 - Very little personal data at rest. Questions older than 30 days are deleted on the next question save or staff list request; they may remain stored longer if neither occurs.
@@ -30,7 +30,7 @@ An earlier version said gaps were saved "without your name". That overstated it:
 - Once the tab is closed, the parent can't delete their question themselves. Questions older than 30 days are deleted on the next question save or staff list request; staff can also delete them.
 - Analytics on unanswered questions depend on parents opting in, so the sample is biased. The ledger's `abstained` outcome count (numbers only) gives the overall rate.
 - The topic label comes back from the client with the submission, so it's a triage hint, not trusted data.
-- A tombstone keeps a little metadata (id, token hash, language, date) for up to 30 days after a delete. It has no question text, and it's needed so a delete can't be undone by a late or retried save.
+- A tombstone keeps a little metadata (id, token hash, language, date) until the purge removes it. That isn't a hard 30-day ceiling: the purge is lazy (next question save or staff list request), and expiry is counted from the row's original `created_at`, not from the delete. It has no question text, and it's needed so a delete can't be undone by a late or retried save.
 - Notebook notes and chat questions leave the device for the provider call. "Not stored by Lumi" is accurate; "never leaves your phone" would not be, and the copy must not say it.
 
 ## Alternatives

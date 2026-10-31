@@ -85,7 +85,10 @@ Event names on the chat stream are the Phase 0 contract, confirmed as final by F
 - **Buffer → validate → reveal** ([ADR 0010](decisions/0010-buffer-validate-reveal.md)). No model text reaches the parent until it has passed the completion check, citation integrity and the output checks. The wait is shown as a calm progress state and measured in the evals (p50/p95).
 - **Structural, fail-closed output checks** ([ADR 0015](decisions/0015-structural-output-checks.md)). Text is normalised first (NFKC, Unicode digits to ASCII, dotted abbreviations joined). The dosage gate is **layered**:
   - **verb rules:** an administration verb followed by any quantity, frequency or schedule, or with a frequency or schedule before it; a quantity right before a dose unit or form;
-  - **verb-independent backstops:** medication context with a quantity, frequency or schedule; a quantity with a frequency; label values ("Paracetamol: half as needed", whatever follows the value); list lines under a heading as one scope; use/usa with a schedule before them or after a relative object.
+  - **verb-independent backstops:** medication context with a quantity, frequency or schedule; a quantity with a frequency; label values ("Paracetamol: half as needed", whatever follows the value); list lines under a heading as one scope; use/usa with a frequency or schedule before them or after their object;
+  - **number provenance** (chat answers): every number, frequency and schedule in the answer must also appear in an article it cites, compared as normalized token sets, so formatting doesn't matter. Benign numbers missing from the cited guide are withheld too (an accepted false positive, measured in Phase 4).
+
+  Phone checks read the same normalized text.
 
   There's no list of drug names, and only narrow exemptions. It **over-withholds on purpose**, since the KB has no dosing (measured: 10 of 40 seeded harmless sentences, `evals/dosage-benign.test.ts`). It's a **finite** detector: phrasings outside its shapes and vocabulary pass, and they're listed in ADR 0015 and EVALS.md. The notebook isn't a check at all: the model writes no displayed text.
 

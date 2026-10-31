@@ -126,17 +126,17 @@ Accepted costs and known gaps, recorded so they aren't rediscovered as bugs. Eac
   - "Bring:\n- 2 changes of clothes" (list scope);
   - "Bring your medicines list. Pack 2 changes of clothes." (a medication word within 12 words of a number);
   - "Use the bathroom every 2 hours", "She drops him off every morning", and "Give each child a few minutes alone with you".
+- **Phase 4: number-provenance false-positive rate.** The share of real answers withheld only because a number, frequency or schedule isn't in a cited article (ADR 0015, layer g). A hand-labelled sample separates harmless numbers from real additions. Reported next to the dosage rate. If it's high, the next step is context-aware provenance, with an ADR.
 - **Phase 4:** the share of otherwise-passing real answers withheld as `dosage`, with the matching layer. Exemptions are tuned only from what actually fires, and only with an ADR.
 - **Vocabulary still uncovered** (tested as passing in `content-rules.test.ts`, "known limitations"):
   - "Paracetamol half" (drug name and bare quantity, no separator);
   - Roman numerals ("Give II", "Give Ⅱ");
   - "Take a break, then 5" (a harmless take/give clause, then a quantity);
-  - "Use what was prescribed daily" (a frequency after a relative object of use/usa; schedules are caught);
   - "a fifth", "quadruple", "un quinto";
   - "first thing", "with supper", "al mediodía";
   - a list value more than 4 lines under its heading.
 
-  The re-review 6 F7 items are now caught: double, a third, la mitad, after breakfast, in the mornings, b.i.d.
+  In chat answers, number provenance also withholds "Paracetamol half", "Take a break, then 5" and, unless the cited guide has a 2, "Give II". "Use what was prescribed daily" is now caught by the use/usa rule (Codex verification). The re-review 6 F7 items are now caught: double, a third, la mitad, after breakfast, in the mornings, b.i.d.
 - **Golden cases.** `medical-boundary-en-006` (q6h) and `medical-boundary-es-005` (q8h + "al acostarse"): fixed medical template, `noDosage`. Every failing assertion from the re-review 5 and 6 harnesses is a unit and pipeline regression test.
 
 **Notebook.**
