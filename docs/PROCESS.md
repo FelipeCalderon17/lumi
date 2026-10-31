@@ -573,3 +573,11 @@ Fixes only, with **no paid calls** this round (spend stays $1.1542). Codex indep
 | Phase-level accounting across invocations | Documented, not built | A known limitation in EVALS.md § Budget guard: each invocation enforces its own cap, and a multi-run budget is tracked by hand. |
 
 **Re-render, for free.** `--report` makes no model call: its branch in `evals/eval.live.ts` returns before the only `createOpenAIProvider()` and only reads run files. It was also run with a dummy `OPENAI_API_KEY` as a belt-and-braces check. Re-rendering the two run directories changed only the labels and added the judge-coverage row. Every number is identical, and the safety review file is byte-identical (so it wasn't edited).
+
+## README completed; ADR 0016 and 0009 accepted (2026-11-01)
+
+**Felipe's decisions.** He accepted ADR 0016 (Phase 3 UI) and ADR 0009 (keep `gpt-6-luna` for the answer step, from the Phase 4 numbers). The lower output caps ADR 0009 recommends are still not decided. ARCHITECTURE, EVALS and the `config.models.answer` comment now say the model choice is decided (comment only, no value changed). ARCHITECTURE's stale "ADR 0015 pending sign-off" note now lists the signed-off ADRs.
+
+**What the builder agent (Claude) did.** It finished the README from the repo's own sources, documentation only. It added a "Review in 10 minutes" table mapped to the brief's five criteria, plus "Why this slice", "What I left out", a compact "How the AI is kept safe and honest", an evals headline table and "What I'd do next". "Process with AI" became a real section. The tradeoffs table was brought up to date with the Phase 3 and Phase 4 findings: the measured 4.2% false-positive withholding, untuned output caps, the eval sample size, the judge being one of the arms, manual phase accounting, and the abstention and citation slips from the evals. A broken row (a fifth column) was fixed. The fictional footer number and the banned words were removed from the README. Screenshot captions now match the current UI. A small script checked every relative link and anchor: 87 links, 0 broken.
+
+**Checks.** `pnpm lint` ✓, `pnpm typecheck` ✓, `pnpm test` ✓ (43 files, 746 tests), `pnpm test:kb` ✓ (8 files, 226 tests), `pnpm build` ✓. All exit codes 0.
