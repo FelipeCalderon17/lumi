@@ -134,7 +134,7 @@ export function AskLumi({ locale, t }: { locale: Locale; t: Dictionary }) {
       )}
 
       <form
-        className={`rounded-soft border border-line bg-surface p-4 shadow-[0_30px_60px_-40px_rgb(0_0_0/0.55)] sm:p-5 ${started ? "mt-8" : ""}`}
+        className={`rounded-soft border border-line bg-surface p-4 shadow-[0_30px_60px_-40px_rgb(0_0_0/0.55)] transition-[border-color,box-shadow] duration-200 has-[textarea:focus]:border-glow has-[textarea:focus]:ring-3 has-[textarea:focus]:ring-glow/45 sm:p-5 ${started ? "mt-8" : ""}`}
         onSubmit={(event) => {
           event.preventDefault();
           void ask(input);

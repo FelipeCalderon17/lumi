@@ -50,7 +50,8 @@ export function VolunteerBoard({ t }: { t: Dictionary }) {
   const pick = (opportunity: Opportunity["id"]) => {
     setForm((f) => ({ ...f, opportunity }));
     setDoneName(null);
-    formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    formRef.current?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
     setTimeout(() => nameRef.current?.focus({ preventScroll: true }), 300);
   };
 
