@@ -264,16 +264,23 @@ export const config = {
     concurrency: 4,
     judge: {
       reasoning: "low",
-      /** Reasoning included. A judge call that hits it counts as a judge error, not a verdict. */
-      maxOutputTokens: 4_000,
+      /**
+       * Reasoning included. A judge call that hits it counts as a judge error, not a verdict.
+       * The validation run measured 109–169 output tokens per call, so this is >10× headroom.
+       */
+      maxOutputTokens: 2_000,
       timeoutMs: 90_000,
     },
     /** Pre-run estimate only (the actual cost always comes from provider usage). */
     estimate: {
-      /** Conservative: the measured answer prefix is ~4 characters per token. */
-      charsPerToken: 3,
-      /** Expected output (reasoning included) per call; the runtime guard reserves the caps. */
-      outputTokens: { router: 150, answer: 800, judge: 1_200, notebook: 300 },
+      /** Conservative: the measured answer prefix is 4.5–4.8 characters per token (EN/ES). */
+      charsPerToken: 4,
+      /**
+       * Expected output (reasoning included) per call; the runtime guard reserves the caps.
+       * Measured on gpt-6-luna (Phase 4 validation): router 22–44, answer 220–320, judge
+       * 109–169. The answer stays high because the bigger arms may reason longer.
+       */
+      outputTokens: { router: 150, answer: 800, judge: 400, notebook: 300 },
       /** Share of a repeated prefix assumed cached in the "warm" estimate. */
       warmCachedShare: 0.9,
       /** OpenAI only caches prompts from this many tokens, so the router prompt never is. */
