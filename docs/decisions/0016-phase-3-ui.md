@@ -24,7 +24,7 @@ The brief asks for one slice done deeply and reasonable placeholders for the res
   - `too_long` shows inline and keeps the text.
   - A new question, "Start over" or leaving the page aborts the request in flight.
 - While waiting, the page shows one calm line with a slow glow: "Looking through our family guides…".
-- Every terminal event is rendered from the reviewed dictionary copy. Model text appears only in `answer`, rendered by a tiny Markdown reader that never produces HTML. Citation handles become links to `/[locale]/guides/[id]`, followed by a Sources list.
+- Every terminal event is rendered from the reviewed dictionary copy. Model text appears only in `answer`, rendered by a tiny Markdown reader that never produces HTML. Answers show **plain text**: the citation markers are removed from the display (`stripCitations`, UI feedback round 4), and the guides the answer cites are listed once below it, in order, as links to `/[locale]/guides/[id]` ("From these guides"). The model must still cite, and the server still validates every citation; only the display changed.
 - The other events:
   - `medical`: adds "+ Add to my notebook" (the question becomes a note).
   - `crisis`: 988 first, then a gentle link to Parent Circles.
@@ -36,6 +36,7 @@ The brief asks for one slice done deeply and reasonable placeholders for the res
   - It's a labelled `<section>` (a region landmark, `help.conversationLabel`) with `tabIndex={0}` and an inset focus ring, so keyboard users can scroll it with the arrow keys. `aria-live="polite"` stays on the list. `overscroll-behavior: contain` keeps the page still when the area hits its end. A soft inset shadow at the top shows there's more above (it never covers text or catches clicks).
   - When a turn is added and when its response arrives, the **area** scrolls (instantly under reduced motion) so the newest question is at its top. If that would leave the response below the area's fold, the response start goes to the top instead. Emergency and crisis cards go to the top whenever they don't fit whole under the question, so the call buttons show without scrolling (where the card fits the area). The page itself only scrolls if the card isn't fully on screen (`scrollIntoView({ block: "nearest" })`).
   - A compact "Start over" sits in the card's header row, outside the scroll area, once there is a turn.
+- **No inline citations in answers** (UI feedback, round 4): Felipe found a pill on every line ("7" after each bullet) too much. One pill per guide was considered, then dropped in favour of no pills at all, for a calmer read. The "From these guides" list below each answer is now the only place sources appear. Tradeoff: the parent can't see which sentence came from which guide.
 - **The gap flow** (ADR 0005):
   - An editable preview, redacted with the server's own function (moved to the Node-free `src/server/gaps/redact.ts`), plus the disclosure and a consent checkbox.
   - Every save status is handled. `uncertain` offers a retry with the same id and token, and a delete.
@@ -54,7 +55,7 @@ The brief asks for one slice done deeply and reasonable placeholders for the res
 - Print uses a print stylesheet: ink on white, a header with the date, and no navigation or buttons.
 - Share uses the Web Share API where available, and otherwise copies to the clipboard. There's also a plain "Copy". Shared and copied text starts with the full fixed safety notice (title, body and every step, in the page's language) when one applies, then the notes verbatim.
 
-**Guides:** the KB articles themselves, as a library and article pages. Citations link there.
+**Guides:** the KB articles themselves, as a library and article pages. An answer's Sources list links there.
 
 **Page width:** every page, Ask Lumi and guide articles included, uses the same `max-w-6xl px-5` container as the header and footer, so the edges line up. Long text keeps a reading measure (68ch) inside it. Ask Lumi is a single column at every width (round 2: a wide card that grows less in height). On large screens a guide article gets a side column with the Ask Lumi card and "More on this topic" (same category); it stacks on phones.
 
@@ -87,13 +88,13 @@ The brief asks for one slice done deeply and reasonable placeholders for the res
 
 **Polish**
 - **Phone landing:** the headline, lede and "Ask Lumi a question" come before the illustration below `lg`. At 390 × 844 the button ends at about 570–620 px, above the fold.
-- **Citation pills:** `collapseRepeatedCitations` is presentation only, and only for answers. A run of consecutive citations to the same single guide (across sentences, bullets and paragraphs) shows one pill at its end. A grouped citation ("[1, 3]"), a change of guide or a heading ends the run. An answer that cites one guide throughout shows a single pill. The Sources list and the citation checks are untouched.
-- **Ask box focus:** when the textarea has focus, the box gets an amber border and a 3 px ring.
+- **Citation pills** (superseded in UI feedback round 4: answers no longer show inline pills, see above): `collapseRepeatedCitations` was presentation only, and only for answers. A run of consecutive citations to the same single guide (across sentences, bullets and paragraphs) shows one pill at its end. A grouped citation ("[1, 3]"), a change of guide or a heading ends the run. An answer that cites one guide throughout shows a single pill. The Sources list and the citation checks are untouched.
+- **Ask box focus:** when the textarea has focus, the box gets an amber border and a 3 px ring. (After the one-card layout, the ring is on the whole chat card while the composer has focus; the gap flow's textarea doesn't trigger it.)
 - **Volunteer:** scrolling to the sign-up form uses `behavior: "auto"` under `prefers-reduced-motion`.
 
 **Tradeoffs accepted in this revision**
 - The safety regexes now also ship in the browser bundle. They're public in the repo anyway, and they're small. A client that skips them only hurts itself, because the server still checks every note before preparing.
-- A collapsed run leaves earlier sentences without their own pill. The claim's source is the next pill in the run, which is always the same single guide, so the association stays correct but less explicit.
+- (Superseded in round 4, when inline pills were removed.) A collapsed run leaves earlier sentences without their own pill. The claim's source is the next pill in the run, which is always the same single guide, so the association stays correct but less explicit.
 - Notes typed with stray trailing spaces or blank lines print that way. That's the cost of "the parent's own words, exactly".
 - The by-date page shows server notices by kind, without pointing at a note, when only the server matched. This can only happen if the server and client rules diverge, which they can't with a shared module.
 
