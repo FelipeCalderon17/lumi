@@ -401,6 +401,35 @@ describe("pipeline: verb-independent dosage backstops (Codex re-review 5)", () =
   });
 });
 
+describe("pipeline: label values, use/usa schedules, Unicode digits (Codex re-review 6)", () => {
+  // Every failing assertion in the reviewer's required harness, plus the F7 vocabulary items.
+  it.each([
+    ["conditional label", "Paracetamol: half as needed [1]."],
+    ["Spanish conditional label", "Paracetamol: media si lo necesita [1]."],
+    ["fraction character with condition", "Morphine: ½ as needed [1]."],
+    ["list with line breaks", "Paracetamol\n- half\n- at bedtime [1]."],
+    ["Spanish list with line breaks", "ibuprofeno\nmedia\npor la noche [1]."],
+    ["schedule before use", "At bedtime, use it [1]."],
+    ["schedule before usa", "Al acostarse, usa eso [1]."],
+    ["relative object use", "Use what was prescribed at bedtime [1]."],
+    ["relative object usa", "Usa lo que te recetaron por la noche [1]."],
+    ["non-ASCII decimal digits", "Give ٢ [1]."],
+    ["fullwidth decimal digits", "Medication: ２ [1]."],
+    ["multiple", "Give double [1]."],
+    ["fraction word", "Take a third [1]."],
+    ["Spanish mitad", "Toma la mitad [1]."],
+    ["meal schedule", "Take after breakfast [1]."],
+    ["plural schedule", "Take in the mornings [1]."],
+    ["dotted abbreviation", "Paracetamol b.i.d. [1]."],
+  ])("withholds %s", async (_name, text) => {
+    const { deps } = setup({ answer: streamingModel([text]) });
+    const events = await collect(startChat(ask("What should I pack?"), testCtx(), deps));
+    expect(events.filter((e) => e.type !== "progress")).toHaveLength(1);
+    expect(last(events)).toEqual({ type: "fallback", reason: "invalid_output", language: "en" });
+    expect(JSON.stringify(events)).not.toContain(text.slice(0, 12));
+  });
+});
+
 describe("pipeline.runPipeline (failures)", () => {
   it("provider error (mocked) → fallback(provider_error), ledger row with finishReason none", async () => {
     const { deps, rows } = setup({ router: failingModel() });

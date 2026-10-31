@@ -42,14 +42,31 @@ const N11 =
  *      "Capsules.\nTwice daily", "Take medicine at bedtime".
  *   b. a QUANTITY with a FREQUENCY, no medication word needed: "Paracetamol 500 every 6 hours",
  *      "5 — twice daily". The numbers inside a frequency ("every 2 hours") don't count.
- *   c. LABEL / LIST fragments: a clause of up to 4 words, a separator (: — – , or a spaced
- *      hyphen) and a tail that is nothing but quantity, frequency or schedule words
- *      ("acetaminophen: half", "Morphine — 5 — twice daily"); or, with no separator, up to 2
- *      words and such a tail with a frequency or schedule in it ("Paracetamol every 6 hours").
+ *   c. LABEL / LIST fragments (Codex re-review 6: whatever follows the value). A label is a
+ *      clause of up to 4 words before a separator. After a strong separator (: — – | or a
+ *      spaced hyphen), a value that STARTS with a quantity, frequency or schedule is withheld,
+ *      whatever follows it ("Paracetamol: half as needed", "Morphine: ½ as needed"). After a
+ *      comma, the value must be a run of quantity, frequency or schedule words that ends the
+ *      clause or is followed by a condition ("Acetaminophen, half if needed"). With no
+ *      separator: up to 2 words and such a run with a frequency or schedule in it
+ *      ("Paracetamol every 6 hours", "Paracetamol at night if needed").
  *   d. use/usa count like the other verbs once something sits between the verb and the
- *      frequency or schedule ("Use insulin daily", "Usa insulina diariamente"); right after
- *      it, the frequency belongs to a relative clause ("anything you use every day", "lo que
- *      uses a diario": KB lines).
+ *      frequency or schedule ("Use insulin daily", "Usa insulina diariamente"), and a
+ *      frequency or schedule BEFORE them counts as for any verb ("At bedtime, use it"). Right
+ *      after the verb, the frequency belongs to a relative clause ("anything you use every
+ *      day", "lo que uses a diario": KB lines). With a neuter relative as the object ("use
+ *      what…", "usa lo que…") a later FREQUENCY is still taken as the inner verb's ("Usa lo
+ *      que de verdad vayas a mantener al día"), but a SCHEDULE never is ("Use what was
+ *      prescribed at bedtime").
+ *   e. LIST SCOPE: a short heading line (up to 4 words, or ending in a colon) and the next
+ *      LIST_SCOPE_LINES lines that are list items (- • * 1. 1)) or bare lines are one scope: an
+ *      item that starts with a quantity, frequency or schedule is withheld ("Paracetamol\n-
+ *      half\n- at bedtime", "ibuprofeno\nmedia\npor la noche").
+ * Before any of this the text is normalised (NFKC, every Unicode decimal digit to ASCII, the
+ * fraction slash to "/", dotted clinical abbreviations like "b.i.d." to "bid"), so "Give ٢" and
+ * "Medication: ２" are read as "Give 2" and "Medication: 2".
+ * This is a FINITE detector: phrasings outside its vocabulary still pass (EVALS.md, Tracked
+ * limitations). The KB and the prompt are the first layers, not this check.
  * "After" means the rest of the sentence or the next DOSE_WINDOW_WORDS words across sentence and
  * line breaks. "Before" (a, b) means the same sentence, or a nearby fragment that is nothing but
  * quantity, frequency or schedule words ("Twice daily.\nCapsules"). Narrow exemptions only: a
@@ -65,13 +82,13 @@ const E = String.raw`(?![\p{L}\p{N}])`;
 
 /** Dose units, EN + ES, abbreviated and spelled out. */
 export const DOSE_UNITS =
-  "mg|mgs|mcg|µg|ug|ml|mls|cc|iu|ui|g|gr|grams?|gramos?|milligrams?|micrograms?|millilit(?:er|re)s?|miligramos?|microgramos?|mililitros?|international units?|unidad(?:es)? internacionales|units?|unidad(?:es)?|drops?|gotas?|teaspoons?(?:ful)?|tsp|tablespoons?(?:ful)?|tbsp|cucharaditas?|cucharadas?|puffs?|inhalaci(?:o|ó)n(?:es)?";
+  "mg|mgs|mcg|µg|μg|ug|ml|mls|cc|iu|ui|g|gr|grams?|gramos?|milligrams?|micrograms?|millilit(?:er|re)s?|miligramos?|microgramos?|mililitros?|international units?|unidad(?:es)? internacionales|units?|unidad(?:es)?|drops?|gotas?|teaspoons?(?:ful)?|tsp|tablespoons?(?:ful)?|tbsp|cucharaditas?|cucharadas?|puffs?|inhalaci(?:o|ó)n(?:es)?";
 /** Dose forms. A tablet is only the device in an explicit construction (see DEVICE_TABLET). */
 export const DOSE_FORMS =
   "tablets?|pills?|capsules?|doses?|tabletas?|pastillas?|comprimidos?|c[aá]psulas?|dosis";
 /** Units that only ever mean a dose, so they're withheld even without a number. */
 const BARE_DOSE_UNITS =
-  "mg|mgs|mcg|µg|ml|mls|milligrams?|micrograms?|millilit(?:er|re)s?|miligramos?|microgramos?|mililitros?";
+  "mg|mgs|mcg|µg|μg|ml|mls|milligrams?|micrograms?|millilit(?:er|re)s?|miligramos?|microgramos?|mililitros?";
 
 /** Written numbers, EN + ES, including ES "once" (11): EN "once" is a count of one anyway. */
 export const WRITTEN_NUMBERS =
@@ -131,6 +148,11 @@ const QUANTITY_WORD = new RegExp(
   `^(?:[-+−]?\\d+(?:[.,:/]\\d+)*[½¼¾⅓⅔]?\\p{L}*|[½¼¾⅓⅔]|${WRITTEN_NUMBERS}|medio|media)$`,
   "u",
 );
+/** Multiples and "mitad": quantities on their own ("Give double", "Toma la mitad"). */
+const MULTIPLE_WORD = /^(?:double|triple|doble|mitad|mitades)$/u;
+/** Fractions that are only a quantity after a count ("a third", "un tercio"; not "the third floor"). */
+const FRACTION_WORD = /^(?:thirds?|tercios?)$/u;
+const FRACTION_COUNT = /^(?:a|one|two|un|una|dos)$/u;
 const ARTICLE_WORD = /^(?:a|an|un|una)$/u;
 const UNIT_OR_FORM_WORD = new RegExp(`^(?:${DOSE_UNITS}|${DOSE_FORMS})$`, "u");
 const SERVICE_NUMBERS = new Set<string>(["911", "988"]);
@@ -184,6 +206,21 @@ const SCHEDULES = [
   "at lunch",
   "at dinner",
   "on an empty stomach",
+  // Codex re-review 6 (F7).
+  "in the mornings",
+  "in the evenings",
+  "in the afternoons",
+  "at nights",
+  "before breakfast",
+  "after breakfast",
+  "with breakfast",
+  "before lunch",
+  "after lunch",
+  "before dinner",
+  "after dinner",
+  "with dinner",
+  "morning and night",
+  "morning and evening",
   "al acostarse",
   "antes de acostarse",
   "antes de dormir",
@@ -205,6 +242,20 @@ const SCHEDULES = [
   "antes de las comidas",
   "despues de las comidas",
   "en ayunas",
+  "al despertar",
+  "al despertarse",
+  "al levantarse",
+  "en las mananas",
+  "en las tardes",
+  "en las noches",
+  "antes del desayuno",
+  "despues del desayuno",
+  "con el desayuno",
+  "antes de la cena",
+  "despues de la cena",
+  "con la cena",
+  "despues del almuerzo",
+  "manana y noche",
 ].map((phrase) => phrase.split(" "));
 const SCHEDULE_WORDS = new Set(SCHEDULES.flat());
 
@@ -226,10 +277,58 @@ const CITATION_MARKER = /\[\d+(?:\s*,\s*\d+)*\]/g;
 const SENTENCE_BREAK = /[!?\n;]+|\.(?!\d)/;
 /** A word; a sign counts only when it starts a number ("-5"), not in "twenty-five". */
 const WORD = /(?:(?<![\p{L}\p{N}])[-+−](?=\p{N}))?[\p{L}\p{N}½¼¾⅓⅔]+(?:[.,/:]\p{N}+)*/gu;
-/** Between a label and its value: a colon, a dash, a comma, or a hyphen with a space beside it. */
-const LABEL_SEPARATOR = /[:—–,]|(?:^|\s)-|-(?:\s|$)/u;
+/**
+ * Between a label and its value: a colon, a dash, a bar, a comma, or a hyphen with a space
+ * beside it ("Tylenol - 5"; not "555-123" or "twenty-five").
+ */
+const LABEL_SEPARATOR = /[:—–|,]|\s-|-\s/u;
+/**
+ * Separators that only ever introduce a value: whatever follows the value doesn't matter. Not
+ * when a quote opens after it: 'decir: "Uno de mis hijos…"' quotes words, not a value (KB line).
+ */
+const STRONG_SEPARATOR = /^[^"“”«'‘’]*(?:[:—–|]|\s-|-\s)[^"“”«'‘’]*$/u;
 /** Where a label starts: the start of the sentence, or after one of these. */
-const CLAUSE_BOUNDARY = /[:—–,]|(?:^|\s)-|-(?:\s|$)/u;
+const CLAUSE_BOUNDARY = LABEL_SEPARATOR;
+/** A condition or comment after a value: "half as needed", "500 si hace falta", "half, then…". */
+const CONDITION_WORD =
+  /^(?:as|if|when|whenever|for|until|unless|then|while|si|cuando|para|hasta|luego|mientras|salvo)$/u;
+/** Backstop e: how many list lines under a heading form one scope, and a heading's length. */
+const LIST_SCOPE_LINES = 4;
+const LIST_HEADING_WORDS = 4;
+/** A list marker at the start of a line: "- ", "• ", "* ", "1. ", "1) ". */
+const LIST_MARKER = /^\s*(?:[-•*·]|\d{1,2}[.)])\s+/u;
+
+/**
+ * Dotted clinical abbreviations ("b.i.d.", "t. i. d.", "q.6.h."): the dots would split them into
+ * sentences, so they're joined before anything else ("bid", "tid", "q6h").
+ */
+const DOTTED_ABBREVIATION =
+  /(?<![\p{L}\p{N}])(?:b\.\s?i\.\s?d|t\.\s?i\.\s?d|q\.\s?i\.\s?d|q\.\s?o\.\s?d|q\.\s?h\.\s?s|q\.\s?a\.\s?m|q\.\s?p\.\s?m|p\.\s?r\.\s?n|q\.\s?d|q\.?\s?\d+\s?\.?\s?h)\.?(?![\p{L}\p{N}])/giu;
+
+/** The ASCII value of any Unicode decimal digit: Nd digits come in runs of ten, 0 to 9. */
+function asciiDigit(digit: string): string {
+  if (digit >= "0" && digit <= "9") return digit;
+  let code = digit.codePointAt(0) ?? 0;
+  let offset = 0;
+  while (offset < 100 && /\p{Nd}/u.test(String.fromCodePoint(code - 1))) {
+    code--;
+    offset++;
+  }
+  return String(offset % 10);
+}
+
+/**
+ * What every dosage check reads (Codex re-review 6, F3): NFKC (fullwidth "２", "ｍｇ", "½" →
+ * "1⁄2"), every Unicode decimal digit to ASCII ("٢" → "2"), the fraction slash to "/", and dotted
+ * abbreviations joined.
+ */
+export function normalizeForDosage(text: string): string {
+  return text
+    .normalize("NFKC")
+    .replace(/\p{Nd}/gu, asciiDigit)
+    .replace(/⁄/gu, "/")
+    .replace(DOTTED_ABBREVIATION, (m) => m.replace(/[.\s]/gu, ""));
+}
 
 /**
  * The only device exemption: an explicit construction. "tablet (iPad)", "tablet computer",
@@ -253,7 +352,8 @@ type DoseWord = { word: string; sentence: number; start: number; end: number };
 function isQuantityAt(words: readonly DoseWord[], i: number): boolean {
   const w = words[i]?.word ?? "";
   if (SERVICE_NUMBERS.has(w)) return false;
-  if (QUANTITY_WORD.test(w)) return true;
+  if (QUANTITY_WORD.test(w) || MULTIPLE_WORD.test(w)) return true;
+  if (FRACTION_WORD.test(w)) return FRACTION_COUNT.test(words[i - 1]?.word ?? "");
   if (!ARTICLE_WORD.test(w) || !UNIT_OR_FORM_WORD.test(words[i + 1]?.word ?? "")) return false;
   // Same exclusions as ARTICLE_QUANTITY: "a pill organizer", "una unidad de oncología".
   const [then, more] = [words[i + 2]?.word ?? "", words[i + 3]?.word ?? ""];
@@ -283,6 +383,11 @@ function frequencyEnd(words: readonly DoseWord[], i: number): number {
   if (w === undefined) return -1;
   if (FREQUENCY_WORD.test(w)) return i;
   if (next === undefined) return -1;
+  // "3x/day", "2x a week".
+  if (/^\d+x$/u.test(w)) {
+    if (PERIOD.test(next)) return i + 1;
+    return PER_WORD.test(next) && after !== undefined && PERIOD.test(after) ? i + 2 : -1;
+  }
   // "a diario".
   if (w === "a" && next === "diario") return i + 1;
   if (w === "every" || w === "each" || w === "cada") {
@@ -404,6 +509,8 @@ function analyse(words: readonly DoseWord[]) {
 function isBareWord(w: string): boolean {
   return (
     QUANTITY_WORD.test(w) ||
+    MULTIPLE_WORD.test(w) ||
+    FRACTION_WORD.test(w) ||
     TIMES_WORD.test(w) ||
     PER_WORD.test(w) ||
     PERIOD.test(w) ||
@@ -414,9 +521,25 @@ function isBareWord(w: string): boolean {
   );
 }
 
+/** The words of one line, split into sentences, for the list-scope check. */
+function lineWords(line: string): DoseWord[] {
+  return line
+    .split(SENTENCE_BREAK)
+    .map(maskDeviceTablets)
+    .flatMap((s, sentence) =>
+      [...s.matchAll(WORD)].map((m) => ({
+        word: fold(m[0]),
+        sentence,
+        start: m.index,
+        end: m.index + m[0].length,
+      })),
+    );
+}
+
 /** Every dosage match, most specific rule first. */
 function dosageMatches(text: string): string[] {
-  const sentences = text.replace(CITATION_MARKER, " ").split(SENTENCE_BREAK).map(maskDeviceTablets);
+  const clean = normalizeForDosage(text).replace(CITATION_MARKER, " ");
+  const sentences = clean.split(SENTENCE_BREAK).map(maskDeviceTablets);
   const matches = sentences.flatMap((s) => [...s.matchAll(DOSAGE)].map((m) => m[0]));
   const words: DoseWord[] = sentences.flatMap((s, sentence) =>
     [...s.matchAll(WORD)].map((m) => ({
@@ -457,40 +580,24 @@ function dosageMatches(text: string): string[] {
     // Rules 1–2 and d: administration verbs.
     const use = USE_VERB.test(word);
     if ((ADMIN_VERB.test(word) || use) && harmlessObjectAt(words, i) === -1) {
+      let hit: (j: number) => boolean = (j) =>
+        isQuantityAt(words, j) || isFrequencyAt(words, j, false) || scheduleEnd(words, j) !== -1;
       if (use) {
         // A frequency or schedule right after use/usa belongs to a relative clause ("anything
-        // you use every day"): skip past it. When the object is itself a relative clause ("usa
-        // lo que vayas a mantener al día"), any frequency in it is the inner verb's.
+        // you use every day"): skip past it. When the object is a neuter relative ("usa lo que
+        // vayas a mantener al día"), a later frequency is the inner verb's; a schedule after
+        // it still counts ("Use what was prescribed at bedtime").
         const end = Math.max(frequencyEnd(words, i + 1), scheduleEnd(words, i + 1));
         const [w1, w2] = [words[i + 1]?.word ?? "", words[i + 2]?.word ?? ""];
         const relative = NEUTER_RELATIVE.test(w1) || NEUTER_RELATIVE.test(`${w1} ${w2}`);
-        const from = relative
-          ? Number.POSITIVE_INFINITY
-          : end !== -1 && sameSentence(i, end)
-            ? end + 1
-            : i + 1;
-        found(
-          i,
-          after(
-            i,
-            (j) =>
-              isQuantityAt(words, j) ||
-              (j >= from && (isFrequencyAt(words, j, true) || scheduleEnd(words, j) !== -1)),
-          ),
-        );
-      } else if (
-        !found(
-          i,
-          after(
-            i,
-            (j) =>
-              isQuantityAt(words, j) ||
-              isFrequencyAt(words, j, false) ||
-              scheduleEnd(words, j) !== -1,
-          ),
-        )
-      ) {
-        // Before the verb, in the same sentence: "Every 8 hours, give it", "At bedtime, give it".
+        const from = end !== -1 && sameSentence(i, end) ? end + 1 : i + 1;
+        hit = (j) =>
+          isQuantityAt(words, j) ||
+          (j >= from &&
+            (scheduleEnd(words, j) !== -1 || (!relative && isFrequencyAt(words, j, true))));
+      }
+      if (!found(i, after(i, hit))) {
+        // Before the verb, in the same sentence: "Every 8 hours, give it", "At bedtime, use it".
         for (let j = i - 1; j >= 0 && sameSentence(i, j); j--) {
           if (isFrequencyAt(words, j, true) || scheduleEnd(words, j) !== -1) {
             found(i, j);
@@ -516,24 +623,62 @@ function dosageMatches(text: string): string[] {
   for (const [i, w] of words.entries()) bySentence[w.sentence]?.push({ ...w, i });
   for (const [s, sentence] of sentences.entries()) {
     const ws = bySentence[s] ?? [];
-    // The bare tail: the longest run of bare words that ends the sentence.
-    let k = ws.length;
-    while (k > 0 && isBareWord(ws[k - 1]?.word ?? "")) k--;
-    if (k === 0 || k === ws.length) continue;
-    const tail = ws.slice(k).map((w) => w.i);
-    if (!tail.some(at.signal)) continue;
     const gap = (m: number) => sentence.slice(ws[m - 1]?.end ?? 0, ws[m]?.start ?? 0);
-    let labelStart = k - 1;
-    while (labelStart > 0 && !CLAUSE_BOUNDARY.test(gap(labelStart))) labelStart--;
-    const label = ws.slice(labelStart, k).map((w) => w.i);
-    if (label.some((i) => harmlessObjectAt(words, i) !== -1)) continue;
-    const separated = LABEL_SEPARATOR.test(gap(k));
-    const timed = tail.some((i) => at.frequencyStart(i) || (at.signal(i) && !at.quantity(i)));
-    if (
-      (separated && label.length <= LABEL_WORDS_WITH_SEPARATOR) ||
-      (!separated && label.length <= LABEL_WORDS_WITHOUT_SEPARATOR && timed)
-    ) {
-      matches.push(`${ws[labelStart]?.word} … ${ws.at(-1)?.word}`);
+    for (let m = 1; m < ws.length; m++) {
+      const first = ws[m]?.i ?? -1;
+      // The label: back to the start of the sentence or the previous separator.
+      let labelStart = m - 1;
+      while (labelStart > 0 && !CLAUSE_BOUNDARY.test(gap(labelStart))) labelStart--;
+      const label = ws.slice(labelStart, m).map((w) => w.i);
+      if (label.some((i) => harmlessObjectAt(words, i) !== -1)) continue;
+      const separated = LABEL_SEPARATOR.test(gap(m));
+      if (label.length > (separated ? LABEL_WORDS_WITH_SEPARATOR : LABEL_WORDS_WITHOUT_SEPARATOR))
+        continue;
+      // A strong separator and a value that starts with a signal: whatever follows.
+      if (STRONG_SEPARATOR.test(gap(m)) && at.signal(first)) {
+        matches.push(`${ws[labelStart]?.word} … ${ws[m]?.word}`);
+        continue;
+      }
+      // Otherwise the value is a run of bare words that ends the clause or meets a condition.
+      if (!isBareWord(ws[m]?.word ?? "") || (!separated && isBareWord(ws[m - 1]?.word ?? "")))
+        continue;
+      let end = m + 1;
+      while (end < ws.length && isBareWord(ws[end]?.word ?? "") && !CLAUSE_BOUNDARY.test(gap(end)))
+        end++;
+      const closed =
+        end === ws.length ||
+        CONDITION_WORD.test(ws[end]?.word ?? "") ||
+        (separated && CLAUSE_BOUNDARY.test(gap(end)));
+      const run = ws.slice(m, end).map((w) => w.i);
+      const timed = run.some((i) => at.frequencyStart(i) || (at.signal(i) && !at.quantity(i)));
+      if (closed && run.some(at.signal) && (separated || timed)) {
+        matches.push(`${ws[labelStart]?.word} … ${ws[end - 1]?.word}`);
+      }
+    }
+  }
+
+  // e: list scope. A short heading and the list lines under it: an item that starts with a
+  // quantity, frequency or schedule is a dose ("Paracetamol\n- half\n- at bedtime").
+  const lines = clean.split("\n");
+  for (const [h, heading] of lines.entries()) {
+    const headingWords = [...heading.matchAll(WORD)].map((m) => fold(m[0]));
+    if (headingWords.length === 0 || LIST_MARKER.test(heading)) continue;
+    if (headingWords.length > LIST_HEADING_WORDS && !heading.trimEnd().endsWith(":")) continue;
+    for (const line of lines.slice(h + 1, h + 1 + LIST_SCOPE_LINES)) {
+      const marked = LIST_MARKER.test(line);
+      const item = lineWords(line.replace(LIST_MARKER, ""));
+      const at1 = analyse(item);
+      if (item.length === 0) break;
+      const startsWithSignal = at1.signal(0);
+      // An unmarked line counts only if it's nothing but quantity, frequency or schedule words,
+      // or such words and then a condition ("Half as needed").
+      const firstOther = item.findIndex((w) => !isBareWord(w.word));
+      const bareItem = firstOther === -1 || CONDITION_WORD.test(item[firstOther]?.word ?? "");
+      if (!marked && !bareItem) break;
+      if (startsWithSignal) {
+        matches.push(`${headingWords[0]} … ${item[0]?.word}`);
+        break;
+      }
     }
   }
   return matches;

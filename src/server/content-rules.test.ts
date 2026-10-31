@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { AI_PROCESSOR_NAME, findContentViolations } from "./content-rules";
+import { AI_PROCESSOR_NAME, findContentViolations, normalizeForDosage } from "./content-rules";
 
 const rules = (text: string) => findContentViolations(text).map((v) => v.rule);
 
@@ -336,12 +336,132 @@ describe("content-rules.findContentViolations", () => {
       "write down your medicine list",
       "bring the list of medicines your care team gave you",
       "If you're ever unsure about a medicine, how much to give or when, call your care team.",
-      "Note: one thing to remember.",
       "In an emergency, 911.",
       "Pack 2 or 3 changes of clothes. Kept for 30 days.",
     ]) {
       expect([text, rules(text)]).toEqual([text, []]);
     }
+  });
+
+  it("regression (Codex re-review 6, F1): a label value counts whatever follows it", () => {
+    for (const text of [
+      "Paracetamol: half as needed",
+      "Paracetamol: media si lo necesita",
+      "Morphine: ½ as needed",
+      "Paracetamol: half for pain",
+      "Paracetamol: half, then rest",
+      "Paracetamol — half. Rest afterward",
+      "Paracetamol: 500 when needed",
+      "Paracetamol: 500 si hace falta",
+      "Acetaminophen, half if needed", // comma: a bare run, then a condition
+      "Paracetamol at night if needed", // no separator: a timed run, then a condition
+      "Paracetamol por la mañana si lo necesita",
+      "Acetaminophen: one third",
+      "Acetaminophen: a third",
+    ]) {
+      expect([text, withheld(text)]).toEqual([text, true]);
+    }
+  });
+
+  it("regression (Codex re-review 6, F1): list lines under a heading are one scope", () => {
+    for (const text of [
+      "Paracetamol\n- half\n- at bedtime",
+      "Paracetamol\n• half\n• at bedtime",
+      "Paracetamol\n1. half\n2. at bedtime",
+      "ibuprofeno\nmedia\npor la noche",
+      "Paracetamol\nHalf as needed",
+      "Paracetamol\n500\nMorning and night",
+      "Here is what the care team wrote about it:\n- a note\n- half at bedtime",
+    ]) {
+      expect([text, withheld(text)]).toEqual([text, true]);
+    }
+    // The scope is bounded: a value more than LIST_SCOPE_LINES lines under the heading, or after
+    // a line that's neither a list item nor bare, isn't in it.
+    for (const text of [
+      "Paracetamol\n- a\n- b\n- c\n- d\n- half",
+      "Paracetamol\nThat's a long name to spell, so take your time with it.\nHalf of us forget",
+    ]) {
+      expect([text, rules(text)]).toEqual([text, []]);
+    }
+  });
+
+  it("regression (Codex re-review 6, F2): use/usa with a schedule before, or after a relative", () => {
+    for (const text of [
+      "At bedtime, use it",
+      "Al acostarse, usa eso",
+      "Daily, use insulin",
+      "Use what was prescribed at bedtime",
+      "Usa lo que te recetaron por la noche",
+    ]) {
+      expect([text, withheld(text)]).toEqual([text, true]);
+    }
+    // A frequency inside the relative clause is still the inner verb's (KB lines).
+    for (const text of [
+      "Toothbrush, toiletries and anything you use every day.",
+      "Cepillo de dientes, artículos de aseo y lo que uses a diario.",
+      "Usa lo que de verdad vayas a mantener al día.",
+    ]) {
+      expect([text, rules(text)]).toEqual([text, []]);
+    }
+  });
+
+  it("regression (Codex re-review 6, F3): any Unicode decimal digit is read as ASCII", () => {
+    expect(normalizeForDosage("٢ ２ ۵ ५ 𝟚 ½")).toBe("2 2 5 5 2 1/2");
+    expect(normalizeForDosage("b.i.d. t. i. d. q.d. p.r.n.")).toBe("bid tid qd prn");
+    for (const text of [
+      "Give ٢",
+      "Medication: ２",
+      "Give ५ ml",
+      "Dale ۲ pastillas",
+      "Give 5 ｍｇ",
+    ]) {
+      expect([text, withheld(text)]).toEqual([text, true]);
+    }
+    expect(rules("Call ٩١١ now.")).toEqual([]); // still the service number
+  });
+
+  it("regression (Codex re-review 6, F7): multiples, fractions, meal and plural schedules, dotted abbreviations", () => {
+    for (const text of [
+      "Give double",
+      "Dose: double",
+      "Double the dose",
+      "Take a third",
+      "Tómate un tercio",
+      "Toma la mitad",
+      "Take after breakfast",
+      "Take in the mornings",
+      "Insulin in the mornings",
+      "Toma al despertar",
+      "Medicine — morning and night",
+      "Medicina: mañana y noche",
+      "Paracetamol b.i.d.",
+      "Morphine 3x/day",
+    ]) {
+      expect([text, withheld(text)]).toEqual([text, true]);
+    }
+    for (const text of ["Take the elevator to the third floor.", "Take a walk after breakfast."]) {
+      expect([text, rules(text)]).toEqual([text, []]);
+    }
+  });
+
+  it("known limitations and accepted over-withholding (EVALS.md, Tracked limitations)", () => {
+    // Still pass: vocabulary the finite detector doesn't cover.
+    for (const text of ["Paracetamol half", "Give II", "Give Ⅱ", "Take a break, then 5"]) {
+      expect([text, withheld(text)]).toEqual([text, false]);
+    }
+    // Withheld although harmless: the price of failing closed.
+    for (const text of [
+      "Note: one thing to remember.",
+      "Room: 211",
+      "Floor: 3",
+      "Bring:\n- 2 changes of clothes",
+      "She drops him off every morning",
+      "Use the bathroom every 2 hours",
+    ]) {
+      expect([text, withheld(text)]).toEqual([text, true]);
+    }
+    expect(rules("Room: 211")).toContain("phone_number");
+    expect(rules("Room 211")).toEqual([]);
   });
 
   it("flags claim and tone words as whole words only", () => {
