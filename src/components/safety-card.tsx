@@ -8,6 +8,9 @@ type Tone = "ember" | "calm";
  * dot and a heading (colour never carries the meaning alone) and get call buttons.
  * It sits inside the Ask Lumi chat card, so calm cards are a soft raised panel without a
  * border (no box-in-a-box); ember cards keep their outline.
+ * Urgent (ember) cards put their call buttons DIRECTLY under the heading, before the body and
+ * steps, so they're on screen without scrolling, even on a phone inside the chat's scroll area.
+ * Calm cards keep their actions at the end.
  */
 export function SafetyCard({
   title,
@@ -27,6 +30,7 @@ export function SafetyCard({
   headingLevel?: 2 | 3;
 }) {
   const Heading = `h${headingLevel}` as const;
+  const urgent = tone === "ember";
   return (
     <div
       className={`rounded-soft border p-4 sm:p-6 ${
@@ -42,9 +46,10 @@ export function SafetyCard({
         )}
         {title}
       </Heading>
-      {body && <p className="mt-3">{body}</p>}
+      {urgent && actions && <div className="mt-4 flex flex-wrap gap-2">{actions}</div>}
+      {body && <p className={urgent && actions ? "mt-4" : "mt-3"}>{body}</p>}
       {steps && (
-        <ol className="mt-3 space-y-2">
+        <ol className={urgent && actions && !body ? "mt-4 space-y-2" : "mt-3 space-y-2"}>
           {steps.map((step, i) => (
             <li key={step} className="flex gap-3">
               <span
@@ -58,7 +63,7 @@ export function SafetyCard({
           ))}
         </ol>
       )}
-      {actions && <div className="mt-5 flex flex-wrap gap-2">{actions}</div>}
+      {!urgent && actions && <div className="mt-5 flex flex-wrap gap-2">{actions}</div>}
       {children}
     </div>
   );

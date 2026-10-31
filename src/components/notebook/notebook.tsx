@@ -377,12 +377,6 @@ export function SafetyNotices({ kinds, t }: { kinds: readonly EmergencyKind[]; t
               />
               {copy.title}
             </p>
-            <p className="mt-2">{copy.body}</p>
-            <ul className="mt-2 list-disc space-y-1 pl-5">
-              {copy.steps.map((step) => (
-                <li key={step}>{step}</li>
-              ))}
-            </ul>
             <div className="mt-3 flex flex-wrap gap-2 print:hidden">
               <a
                 href="tel:911"
@@ -396,6 +390,12 @@ export function SafetyNotices({ kinds, t }: { kinds: readonly EmergencyKind[]; t
                 </a>
               )}
             </div>
+            <p className="mt-3">{copy.body}</p>
+            <ul className="mt-2 list-disc space-y-1 pl-5">
+              {copy.steps.map((step) => (
+                <li key={step}>{step}</li>
+              ))}
+            </ul>
           </div>
         );
       })}
