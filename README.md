@@ -166,14 +166,14 @@ Plan and full results: [docs/EVALS.md § Results](docs/EVALS.md#results). First 
 
 Measured in the Phase 4 eval run ([EVALS.md § Results](docs/EVALS.md#results)), router included, priced from the token counts with the catalog in `src/server/config.ts`:
 
-| Answer model | Per answered question, warm cache | Per 1,000, warm / cold |
+| Answer model | Per answer-step request, warm cache | Per 1,000 answer-step requests, warm / cold |
 |---|---|---|
 | **`gpt-6-luna`** (default) | **$0.00022** | **$0.22** / $0.80 |
 | `gpt-6.1-terra` | $0.00115 | $1.15 / $7.07 |
 | `gpt-6.1-sol` | $0.00227 | $2.27 / $14.47 |
 | `gpt-6-sol` | $0.00307 | $3.07 / $14.64 |
 
-Across the golden-set mix (safety cases cost nothing), `gpt-6-luna` came to **$0.14 per 1,000 conversations**. The KB prefix was 99.8% cached on Luna's answer calls. A notebook page costs about $0.0001. The ledger stores token counts only; cost is derived from the price catalog when it's read ([ADR 0013](docs/decisions/0013-store-tokens-derive-cost.md)). Prompt caching is best-effort on the provider side, so cold is the worst case. Controls are described in [ARCHITECTURE.md § Cost controls](docs/ARCHITECTURE.md#cost-controls).
+An answer-step request is one that reached the answer model (an answer, a withheld draft, an abstention or a failure). Across the golden-set mix (safety cases cost nothing), `gpt-6-luna` came to **$0.14 per 1,000 conversations**. The KB prefix was 99.8% cached on Luna's answer calls. A notebook page costs about $0.0001. The ledger stores token counts only; cost is derived from the price catalog when it's read ([ADR 0013](docs/decisions/0013-store-tokens-derive-cost.md)). Prompt caching is best-effort on the provider side, so cold is the worst case. Controls are described in [ARCHITECTURE.md § Cost controls](docs/ARCHITECTURE.md#cost-controls).
 
 ## What I'd do next
 

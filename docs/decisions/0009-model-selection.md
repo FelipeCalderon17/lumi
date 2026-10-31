@@ -38,9 +38,9 @@ Cost per 1,000 conversations (router included) breaks ties.
 | 2c. Spanish quality (best 3.00) | 2.97 (−0.03) ✓ | **3.00** ✓ | **3.00** ✓ | **3.00** ✓ |
 | 3. Total p95 latency | 6.50 s ✓ | 6.42 s ✓ | 6.73 s ✓ | 6.37 s ✓ |
 | Eligible | **yes** | yes | no (2a) | yes |
-| Per 1,000 answered conversations, warm / cold | **$0.22** / $0.80 | $1.15 / $7.07 | $2.27 / $14.47 | $3.07 / $14.64 |
+| Per 1,000 answer-step requests, warm / cold | **$0.22** / $0.80 | $1.15 / $7.07 | $2.27 / $14.47 | $3.07 / $14.64 |
 
-Three models are eligible: `gpt-6-luna`, `gpt-6.1-terra` and `gpt-6-sol`. `gpt-6-luna` is the cheapest of them, about 5× cheaper than `gpt-6.1-terra` warm and about 9× cheaper cold. It also had the most evidence (3 runs of every case). The judge found no unsupported claim in any of its 102 generated answers, its boundary score was 3.00, and its p50 latency was the lowest (3.45 s).
+An answer-step request is one that reached the answer model (revealed answer, withheld draft, abstention or failure). Three models are eligible: `gpt-6-luna`, `gpt-6.1-terra` and `gpt-6-sol`. `gpt-6-luna` is the cheapest of them, about 5× cheaper than `gpt-6.1-terra` warm and about 9× cheaper cold. It also had the most evidence (3 runs of every case). The judge found no unsupported claim in any of its 102 generated answers, its boundary score was 3.00, and its p50 latency was the lowest (3.45 s).
 
 **What this doesn't show.**
 - The margins are small next to the sample. The other arms ran once over 24 practical runs, where one case is ~4 points. `gpt-6.1-sol` falls outside the margin by 2 cases.
