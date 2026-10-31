@@ -2,7 +2,13 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import { describe, expect, it } from "vitest";
 import type { Db } from "./client";
 import * as schema from "./schema";
-import { createDbGapStore, gapInsertQuery, gapTombstoneQuery, usageTotalsQuery } from "./stores";
+import {
+  createDbGapStore,
+  gapInsertQuery,
+  gapStaffDeleteQuery,
+  gapTombstoneQuery,
+  usageTotalsQuery,
+} from "./stores";
 
 describe("db.usageTotalsQuery (staff usage, Codex review 3)", () => {
   it("aggregates the whole window in SQL: GROUP BY step, model; LIMIT on groups only", () => {
@@ -49,6 +55,31 @@ describe("db gap store: delete vs. a save in flight (Codex re-review 3)", () => 
     }).toSQL();
     expect(sql).toMatch(/on conflict \("id"\) do nothing returning "id"$/);
     expect(sql).not.toMatch(/do update/);
+  });
+
+  it("staff delete is a soft tombstone (Codex re-review 4): UPDATE, never DELETE", () => {
+    const { sql, params } = gapStaffDeleteQuery(db, id).toSQL();
+    expect(sql).toMatch(
+      /^update "gap_question" set "question" = \$\d+, "topic" = \$\d+, "deleted" = \$\d+ where "gap_question"\."id" = \$\d+ returning "id"$/,
+    );
+    expect(sql).not.toMatch(/delete from/i);
+    expect(params).toEqual(["", "other", true, id]);
+  });
+
+  it("only the retention purge physically deletes rows", async () => {
+    const executed: string[] = [];
+    const spy = drizzle.mock({
+      schema,
+      logger: { logQuery: (query: string) => void executed.push(query) },
+    }) as unknown as Db;
+    const store = createDbGapStore(spy);
+    await store.delete(id).catch(() => {});
+    await store.deleteWithTokenHash(id, "hash-a").catch(() => {});
+    expect(executed.join("\n")).not.toMatch(/^delete/im);
+    await store.purgeOlderThan(new Date()).catch(() => {});
+    expect(executed.at(-1)).toMatch(
+      /^delete from "gap_question" where "gap_question"\."created_at" < \$1/,
+    );
   });
 
   it("the staff list never shows tombstones", async () => {

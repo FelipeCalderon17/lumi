@@ -124,6 +124,20 @@ export function gapTombstoneQuery(db: Db, id: string, deleteTokenHash: string) {
     .returning({ id: gapQuestion.id });
 }
 
+/**
+ * Staff delete (Codex re-review 4): the same soft tombstone as the parent delete. The question
+ * is blanked and the row marked deleted, but the id and token hash stay, so the parent's retry
+ * with its original credentials hits the tombstone instead of saving the question again. Only
+ * the retention purge removes rows. Idempotent: an already-tombstoned row stays blank.
+ */
+export function gapStaffDeleteQuery(db: Db, id: string) {
+  return db
+    .update(gapQuestion)
+    .set({ question: "", topic: "other", deleted: true })
+    .where(eq(gapQuestion.id, id))
+    .returning({ id: gapQuestion.id });
+}
+
 export function createDbGapStore(db: Db): GapStore {
   return {
     async insert(row) {
@@ -154,11 +168,8 @@ export function createDbGapStore(db: Db): GapStore {
         .limit(limit);
     },
     async delete(id) {
-      const deleted = await db
-        .delete(gapQuestion)
-        .where(eq(gapQuestion.id, id))
-        .returning({ id: gapQuestion.id });
-      return deleted.length > 0;
+      const tombstoned = await gapStaffDeleteQuery(db, id);
+      return tombstoned.length > 0;
     },
     async deleteWithTokenHash(id, deleteTokenHash) {
       const tombstoned = await gapTombstoneQuery(db, id, deleteTokenHash);

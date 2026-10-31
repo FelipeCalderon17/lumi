@@ -215,6 +215,37 @@ describe("gaps.saveGap", () => {
     expect(rows).toHaveLength(1);
   });
 
+  it("regression (Codex re-review 4): a staff delete from a stale list keeps the tombstone", async () => {
+    const memory = memoryGapStore();
+    const saved = await saveGap(submission, memory.store);
+    if (saved.status !== "saved") throw new Error(saved.status);
+    const staleList = await listGapsForStaff(memory.store);
+    expect(staleList.map((g) => g.id)).toEqual([saved.id]);
+    // The parent deletes; then staff deletes the same id from the list they loaded earlier.
+    expect(await deleteGapWithToken(saved.id, saved.deleteToken, memory.store)).toEqual({
+      status: "deleted",
+    });
+    expect(await memory.store.delete(staleList[0]?.id ?? "")).toBe(true);
+    // A retry with the original credentials can't bring the question back.
+    const retry = { id: saved.id, deleteToken: saved.deleteToken };
+    expect(await saveGap({ ...submission, retry }, memory.store)).toEqual({ status: "failed" });
+    expect(memory.rows.map((r) => [r.id, r.question, r.deleted])).toEqual([[saved.id, "", true]]);
+    expect(await listGapsForStaff(memory.store)).toEqual([]);
+  });
+
+  it("a staff delete alone is a tombstone too: the id and token hash stay, the question goes", async () => {
+    const memory = memoryGapStore();
+    const saved = await saveGap(submission, memory.store);
+    if (saved.status !== "saved") throw new Error(saved.status);
+    expect(await memory.store.delete(saved.id)).toBe(true);
+    expect(memory.rows.map((r) => [r.question, r.deleted, r.deleteTokenHash])).toEqual([
+      ["", true, hashDeleteToken(saved.deleteToken)],
+    ]);
+    const retry = { id: saved.id, deleteToken: saved.deleteToken };
+    expect(await saveGap({ ...submission, retry }, memory.store)).toEqual({ status: "failed" });
+    expect(await memory.store.delete(crypto.randomUUID())).toBe(false);
+  });
+
   it("a retry id that belongs to another row writes nothing → 'failed'", async () => {
     const { store, rows } = memoryGapStore();
     const first = await saveGap(submission, store);

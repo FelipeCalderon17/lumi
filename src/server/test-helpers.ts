@@ -186,9 +186,10 @@ export function memoryGapStore(now: () => Date = () => new Date()) {
         .map(({ deleteTokenHash: _hash, deleted: _deleted, ...record }) => record);
     },
     async delete(id) {
-      const index = rows.findIndex((r) => r.id === id);
-      if (index === -1) return false;
-      rows.splice(index, 1);
+      // Same as the SQL update: a soft tombstone that keeps the id and token hash.
+      const existing = rows.find((r) => r.id === id);
+      if (!existing) return false;
+      Object.assign(existing, { question: "", topic: "other", deleted: true });
       return true;
     },
     async deleteWithTokenHash(id, hash) {

@@ -16,7 +16,9 @@ import { LANGUAGES, type Language } from "../types";
  * Retention: rows older than config.gaps.retentionDays are deleted (purged on every save/list).
  * Delete path: staff can delete any row; the parent gets a one-time delete token on save
  * (only its hash is stored) to remove it from the same tab. The id and token exist before the
- * insert, so even an `uncertain` save hands them back.
+ * insert, so even an `uncertain` save hands them back. Both deletes are the same soft
+ * tombstone (question blanked, `deleted` set, id and token hash kept); only the retention
+ * purge removes rows, so a retry with the original credentials can't bring a question back.
  *
  * Parent delete vs. a save still in flight (Codex re-review 3): the delete is an upsert of a
  * tombstone on the same primary key. If the row is there, its question is blanked and it's
@@ -76,7 +78,11 @@ export interface GapStore {
   }): Promise<"inserted" | "exists" | "deleted" | "conflict">;
   /** Stored questions, newest first. Never tombstones. */
   listRecent(limit: number): Promise<GapRecord[]>;
-  /** Staff delete (of a row staff can see, so it has already committed). */
+  /**
+   * Staff delete (of a row staff can see, so it has already committed): blanks the question
+   * and tombstones the row, keeping the id and token hash. `true` if the id is stored, also
+   * when the parent had already tombstoned it.
+   */
   delete(id: string): Promise<boolean>;
   /**
    * Parent delete, one atomic upsert: blanks and tombstones the row if the token hash matches,
