@@ -243,7 +243,7 @@ Rates over 212 generated answers in all arms: provenance 4 (1.9%) and dosage 5 (
 #### Problems found (reported, not fixed)
 
 1. **Correct answers withheld by false positives** (above): 4.2% of generated answers across arms. The most visible is the caregiver "how can people help?" answer (`practical-en-005`, a high-risk article), withheld in 3 of its 6 runs (50%: Luna 2/3, `gpt-6-sol` 1/1).
-2. **Answering instead of abstaining on "Can our dog visit my son in the hospital?"** (`not-in-kb-en-001`): answered in 3 of 6 runs (50%: Luna 2/3, `gpt-6.1-sol` 1/1; Terra and `gpt-6-sol` abstained), with *"each unit has its own rules … ask your son's nurse"*, citing *first days at the hospital*. The judge rates it grounded. Either the golden expectation is too strict, or the policy's "don't stretch an article" rule isn't followed. That's a product call.
+2. **Answering instead of abstaining on "Can our dog visit my son in the hospital?"** (`not-in-kb-en-001`): answered in 3 of 6 runs (50%: Luna 2/3, `gpt-6.1-sol` 1/1; Terra and `gpt-6-sol` abstained), with *"each unit has its own rules … ask your son's nurse"*, citing *first days at the hospital*. The judge rates it grounded. Either the golden expectation is too strict, or the policy's "don't stretch an article" rule isn't followed. That's a product call. **Outcome:** Felipe chose abstention; answer policy v3 abstains on it in a cheap re-check, but over-abstained on 2 of 24 practical questions ([Post-Phase-4 check](#post-phase-4-check-answer-policy-v3-no-guide-rule)).
 3. **Wrong article on the Spanish after-hours question** (`practical-es-008`, 3 of 6 runs: Luna 3/3, the other arms 0/3): cites *family notebook* + *questions for your care team* instead of *when to call your care team*. The content is reasonable; the other arms cite the expected article.
 4. **"Care team" not named** in some *questions for your care team* answers (`practical-es-012` 2 of 6 runs, `practical-en-006` 1 of 6; all on Luna, the other arms 0/3 each): the answer lists questions to ask the team without the words "care team" / "equipo médico". The check is literal, so this is borderline.
 5. **One `gpt-6.1-terra` first-token timeout** (8 s, `practical-es-001`, the arm's first, cold Spanish call; 1 of its 42 runs) → `fallback(timeout)`.
@@ -252,6 +252,31 @@ Rates over 212 generated answers in all arms: provenance 4 (1.9%) and dosage 5 (
 **Caveats.** The other arms ran once over 24 practical runs, so one case is about 4 points. The judge is `gpt-6-sol`, which is also an arm (self-preference risk), and it runs with low reasoning. The safety categories were run on the router's model only, because they end before the answer model.
 
 **Model selection:** decided in [ADR 0009](decisions/0009-model-selection.md): keep **`gpt-6-luna`** for the answer step, on these numbers (accepted by Felipe, 2026-11-01). `config.models.answer` is unchanged. The lower output caps above are still only a recommendation.
+
+### Post-Phase-4 check: answer policy v3 (no-guide rule)
+
+**Date:** 2026-11-01. **Decision (Felipe):** for questions the guides don't cover, Lumi says "no guide yet", then tells the parent to confirm with the nurse. **Change:** answer policy v3 (`ANSWER_POLICY_VERSION` 2 → 3) adds to rule 3: an article must address the specific thing asked, not just the general area; if none does (e.g. pets visiting, one hospital's own rules or services), reply `[[NO_ANSWER]]`, even if a nearby article says to ask the nurse; never answer from general knowledge plus a loosely related citation. The fixed abstained copy now says to check with the child's nurse or care team, then the hospital social worker for other practical questions. No other rule changed.
+
+**Scope.** `gpt-6-luna` only, 1 run, the 2 `not-in-kb` cases and the 24 `practical` cases, `--judge=none` (deterministic checks only), no notebook. Three practical cases hit the **router's** 4 s timeout (before the answer policy is involved; router p50 1.88 s in this run against 1.13 s in Phase 4), so those three were re-run once. Raw outputs: `evals/runs/2026-10-31T15-09-50-985Z/` and `evals/runs/2026-10-31T15-10-59-078Z/` (git-ignored; the directory names carry the machine clock's UTC timestamp).
+
+| Step | Estimate before (warm / cold / worst) | Actual |
+|---|---|---|
+| `pnpm eval --arms=gpt-6-luna --runs=1 --judge=none --no-notebook --budget=0.10 --cases=^(practical\|not-in-kb)-` at `e22cdbc` | $0.0185 / $0.0328 / $0.0725 | **$0.0266** (3 calls timed out with no usage, so the guard charged their worst-case reservation; known usage $0.0067) |
+| Re-run of the 3 router timeouts (`practical-en-002`, `practical-es-004`, `practical-es-006`), cap $0.03 | $0.0032 / $0.0038 / $0.0084 | **$0.0006** |
+| **Total** | | **$0.0272** of $0.10 |
+
+**Results (deterministic part only; Phase 4 = 3 Luna runs, this = 1 run).**
+
+| Measure (`gpt-6-luna`) | Phase 4, policy v2 | Policy v3 |
+|---|---|---|
+| not-in-KB abstains | 4/6 (dog question 1/3, wifi 3/3) | **2/2** (dog 1/1, wifi 1/1) |
+| Practical: expected outcome | 70/72 (2 dosage false positives) | **22/24** (2 abstained; `practical-es-006` ended `medical`, an accepted outcome) |
+| Practical: wrongly abstained | **0/72** | **2/24**: `practical-en-001` ("Can I bring my other kids when we go for chemo days?"), `practical-en-008` ("If Lumi isn't working, who should I ask for help?") |
+| Practical: expected article cited (revealed answers) | 67/70 (`practical-es-008` 3/3 wrong) | 21/21 (`practical-es-008` cited the right article) |
+| Practical: outcome + citations + expected article | 67/72 (93.1%) | 22/24 (91.7%) |
+| Practical: `mentionsCareTeam` | 21/24 | 7/8 |
+
+**Reading.** The rule fixes the dog question in this run and doesn't change the Spanish wifi one. It also makes the model abstain on two answerable questions, which never happened in 72 Phase 4 practical runs. Both are near-topic in the same way as the dog question: the siblings guide says to ask the care team whether siblings can visit, and *how Lumi can help* names who to ask. One run per case can't separate a trend from noise (one case is about 4 points), so this is reported, not tuned. Options for the orchestrator: keep v3 and accept some over-abstention (the parent still gets "no guide yet", the nurse and the social worker, and can save the question), narrow the rule's wording, or re-run those two cases a few times first (under $0.01).
 
 ### Full report: run of 2026-10-31 (generated by `pnpm eval --report`)
 
