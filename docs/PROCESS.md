@@ -619,3 +619,7 @@ Fixes only, with **no paid calls** this round (spend stays $1.1542). Codex indep
 - Browser check (production build, local Postgres with real rows, EN and ES, 1280 and 390): the answer and transcribe rows show "≥ $X" with their counts, the totals show "At least $X" with "6 calls with unknown usage", router and notebook show plain amounts. It caught one bug, now fixed: the cost cells' `sr-only` text is absolutely positioned and escaped the table's scroll container, widening the mobile page (the scroller is now `relative`).
 
 **Checks.** `pnpm lint` ✓, `pnpm typecheck` ✓, `pnpm test` ✓ (43 files, 756 tests), `pnpm test:kb` ✓ (8 files, 226 tests), `pnpm build` ✓. All exit codes 0.
+
+## Ask Lumi: scroll chaining restored (2026-11-01)
+
+Felipe reversed the earlier "contain the overscroll" decision: the conversation area no longer sets `overscroll-behavior: contain`, so at its top or bottom the scroll continues to the page; everything else about the area is unchanged (ADR 0016, revision 3).

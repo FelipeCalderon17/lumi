@@ -1,6 +1,6 @@
 # 0016 — Phase 3 UI: one deep slice, honest mocks, on-device state
 
-**Status:** Accepted (Felipe, 2026-11-01) · 2026-10-31 · *Phase 3 (UI). Revised after Codex's Phase 3 review (revision 1) and final verification (revision 2).*
+**Status:** Accepted (Felipe, 2026-11-01) · 2026-10-31 · *Phase 3 (UI). Revised after Codex's Phase 3 review (revision 1) and final verification (revision 2); scroll chaining restored (revision 3).*
 
 ## Context
 The brief asks for one slice done deeply and reasonable placeholders for the rest. The server side (Phases 0–2) is done: the chat pipeline, notebook classification, voice, gaps, staff and the ledger. Phase 3 is the site a stressed parent actually sees, often on a phone at 2 a.m. It must also look like something FutureProofing would proudly show a client, without any "AI template" look. Nothing in this phase may weaken a server guardrail.
@@ -33,7 +33,7 @@ The brief asks for one slice done deeply and reasonable placeholders for the res
 - **One chat card, one column:** the turns ("You asked" + the question, then Lumi's response) and the composer share one full-width surface card, so an answer never floats on the page background. The quick-start chips (before the first question) and the boundaries note sit below the card. Answer text keeps a 76ch measure inside it. Calm safety cards are a borderless raised panel (no box in a box), and ember cards keep their outline. The separate "lives only in this tab" note row was removed (Felipe's UI feedback, round 1); the processing notice still says Lumi doesn't save the conversation.
 - **The conversation scrolls inside the card** (UI feedback, round 2), so the card stops growing and the composer stays at its bottom, always visible:
   - The turns sit in a capped scroll area: `min(60vh, 40rem)` on larger screens; on phones `max(16rem, 100dvh − 24rem)`, the height left once the card header, the composer and the page's scroll padding are on screen, so the whole card fits the viewport. With one short answer the card stays short.
-  - It's a labelled `<section>` (a region landmark, `help.conversationLabel`) with `tabIndex={0}` and an inset focus ring, so keyboard users can scroll it with the arrow keys. `aria-live="polite"` stays on the list. `overscroll-behavior: contain` keeps the page still when the area hits its end. A soft inset shadow at the top shows there's more above (it never covers text or catches clicks).
+  - It's a labelled `<section>` (a region landmark, `help.conversationLabel`) with `tabIndex={0}` and an inset focus ring, so keyboard users can scroll it with the arrow keys. `aria-live="polite"` stays on the list. At its top or bottom, the wheel, trackpad or touch scroll continues to the page (default scroll chaining; see Revision 3). A soft inset shadow at the top shows there's more above (it never covers text or catches clicks).
   - When a turn is added and when its response arrives, the **area** scrolls (instantly under reduced motion) so the newest question is at its top. If that would leave the response below the area's fold, the response start goes to the top instead. Emergency and crisis cards go to the top whenever they don't fit whole under the question, so the call buttons show without scrolling (where the card fits the area). The page itself only scrolls if the card isn't fully on screen (`scrollIntoView({ block: "nearest" })`).
   - A compact "Start over" sits in the card's header row, outside the scroll area, once there is a turn.
 - **No inline citations in answers** (UI feedback, round 4): Felipe found a pill on every line ("7" after each bullet) too much. One pill per guide was considered, then dropped in favour of no pills at all, for a calmer read. The "From these guides" list below each answer is now the only place sources appear. Tradeoff: the parent can't see which sentence came from which guide.
@@ -105,6 +105,9 @@ The brief asks for one slice done deeply and reasonable placeholders for the res
 **Sources list without numbers.** With no inline markers in answers, the circled citation numbers in "From these guides" matched nothing. The list now shows plain linked guide titles in order, with a small decorative sage dot. `role="list"` keeps list semantics in Safari, which drops them for unstyled lists.
 
 **Smaller fixes.** `stripCitations` keeps exactly one space where a marker sat between two words or formatted runs ("Ask [2]**the social worker**" used to render as "Askthe social worker"). It collapses only before punctuation or at the start or end of a line, item or run. The emergency strip's 911/988 links are now 44 px tap targets on phones, and the Spanish strip still fits two rows at 390 px.
+
+## Revision 3: scroll chaining restored (Felipe, 2026-11-01)
+The chat scrolls internally, and at its top or bottom the scroll continues to the page. The conversation area no longer sets `overscroll-behavior: contain` (it uses the default, `auto`), so it doesn't trap the page scroll. Internal scrolling, keyboard focus and arrow keys, keeping the newest turn and urgent cards in view, the themed scrollbar and the max heights are unchanged.
 
 ## Consequences
 - The deep slice is complete end to end, and every failure ends in calm, fixed copy with 911.
