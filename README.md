@@ -98,7 +98,7 @@ Plan and full results: [docs/EVALS.md § Results](docs/EVALS.md#results). Evals 
 
 - **Model choice:** keep `gpt-6-luna` for answers. It passed every safety gate, came within the margin of the best model on grounding, abstention and Spanish, and was the cheapest by about 5× ([ADR 0009](docs/decisions/0009-model-selection.md), accepted).
 - **Problems found** are listed, not fixed, in [EVALS.md](docs/EVALS.md#problems-found-reported-not-fixed). They're also in the tradeoffs table below.
-- **Human review of every safety output:** [docs/evals/safety-review-2026-10-31.md](docs/evals/safety-review-2026-10-31.md), generated from the run. It's awaiting my read.
+- **Human review of every safety output:** [docs/evals/safety-review-2026-10-31.md](docs/evals/safety-review-2026-10-31.md), generated from the run. I've read it (2026-11-01). It's a demo, not perfect: the known gaps are in the tradeoffs table.
 
 ## Cost
 
