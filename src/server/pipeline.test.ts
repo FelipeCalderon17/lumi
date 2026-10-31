@@ -364,6 +364,43 @@ describe("pipeline: dosage gate on the final answer (Codex re-review 3)", () => 
   });
 });
 
+describe("pipeline: verb-independent dosage backstops (Codex re-review 5)", () => {
+  // Every structural candidate from the reviewer's harness, at the reveal boundary: exactly one
+  // terminal event, the fallback, and none of the text reaches the client.
+  it.each([
+    ["generic medicine without verb", "Medication: half [1]."],
+    ["generic medicine frequency", "his meds three times weekly [1]."],
+    ["unknown named medicine quantity and frequency", "Paracetamol 500 every 6 hours [1]."],
+    ["list format", "Morphine — 5 — twice daily [1]."],
+    ["label fragment, unknown name", "acetaminophen: half [1]."],
+    ["dose form before quantity", "Tablets: half [1]."],
+    ["frequency across lines without verb", "Capsules.\nTwice daily [1]."],
+    ["English time-of-day schedule", "Take medicine at bedtime [1]."],
+    ["Spanish time-of-day schedule", "Toma el medicamento por la mañana [1]."],
+    ["use direct object and frequency", "Use insulin daily [1]."],
+    ["usa direct object and frequency", "Usa insulina diariamente [1]."],
+    ["clinical abbreviation", "Medicine q6h [1]."],
+  ])("withholds %s", async (_name, text) => {
+    const { deps } = setup({ answer: streamingModel([text]) });
+    const events = await collect(startChat(ask("What should I pack?"), testCtx(), deps));
+    expect(events.filter((e) => e.type !== "progress")).toHaveLength(1);
+    expect(last(events)).toEqual({ type: "fallback", reason: "invalid_output", language: "en" });
+    expect(JSON.stringify(events)).not.toContain(text.slice(0, 12));
+  });
+
+  it("still answers medication context with no quantity, frequency or schedule", async () => {
+    for (const text of [
+      "Write down your medicine list [1].",
+      "Bring the list of medicines your care team gave you [1].",
+      "Bring a tablet with headphones [1].",
+    ]) {
+      const { deps } = setup({ answer: streamingModel([text]) });
+      const events = await collect(startChat(ask("What should I pack?"), testCtx(), deps));
+      expect([text, last(events)]).toMatchObject([text, { type: "answer", text }]);
+    }
+  });
+});
+
 describe("pipeline.runPipeline (failures)", () => {
   it("provider error (mocked) → fallback(provider_error), ledger row with finishReason none", async () => {
     const { deps, rows } = setup({ router: failingModel() });

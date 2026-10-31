@@ -214,9 +214,132 @@ describe("content-rules.findContentViolations", () => {
     expect(rules("marca el 311")).toEqual(["phone_number"]);
   });
 
-  it("known gaps (no verb, no unit, no form): listed so a change is visible", () => {
-    // Rare phrasings go to the golden set / evals, not to more patterns (Felipe, re-review 4).
-    for (const text of ["acetaminophen: half [1]", "his meds three times weekly"]) {
+  it("regression (Codex re-review 5): every verbless and schedule example is withheld", () => {
+    for (const text of [
+      "acetaminophen: half",
+      "his meds three times weekly",
+      "Paracetamol 500 every 6 hours",
+      "Morphine — 5 — twice daily",
+      "Medication: half",
+      "Tablets: half",
+      "Capsules.\nTwice daily",
+      "Take medicine at bedtime",
+      "Toma el medicamento por la mañana",
+      "Use insulin daily",
+      "Usa insulina diariamente",
+      "q6h",
+      // The rest of the reviewer's probes.
+      "Medicamento: media [1].",
+      "Medicine — 5 — twice daily [1].",
+      "medicinas: dos veces por semana [1].",
+      "The medicine.\nThree times weekly [1].",
+      "Medications:\n- half\n- twice daily [1].",
+      "Paracetamol\n500\nevery 6 hours [1].",
+      "Las pastillas: media [1].",
+      "Pills — 5 — twice daily [1].",
+      "The tablet with headphones: half [1].",
+      "Take a break, then swallow medication daily [1].",
+      "Swallow medicine three times daily [1].",
+      "Take medication in the morning [1].",
+      "Toma medicina por las noches [1].",
+      "Tómese la medicina diariamente [1].",
+      "Take medicine every eight hours [1].",
+      "Take medicine 3x/day [1].",
+      "Medicine q6h [1].",
+    ]) {
+      expect([text, withheld(text)]).toEqual([text, true]);
+    }
+  });
+
+  it("backstop a: medication context + quantity, frequency or schedule, no verb needed", () => {
+    for (const text of [
+      "his meds, 2",
+      "the prescription twice a week",
+      "el remedio cada 8 horas",
+      "el jarabe con las comidas",
+      "drops before bed",
+      "Syrup: after meals",
+      "the patch every 3 days",
+      "Twice daily.\nCapsules.", // a bare fragment before the medication word
+      "Medicine. Do it twice daily.", // after it, across a sentence break, within the window
+    ]) {
+      expect([text, withheld(text)]).toEqual([text, true]);
+    }
+  });
+
+  it("backstop b: a quantity + a frequency, no medication word needed", () => {
+    for (const text of [
+      "500 every 6 hours",
+      "5 — twice daily",
+      "half, then three times weekly",
+      "2 bid",
+      "Every 6 hours: 500",
+      "10, once a day",
+    ]) {
+      expect([text, withheld(text)]).toEqual([text, true]);
+    }
+  });
+
+  it("backstop c: label or list fragments", () => {
+    for (const text of [
+      "acetaminophen: half",
+      "Acetaminophen, half.",
+      "Ibuprofen – 1 and a half",
+      "Tylenol - 5",
+      "Paracetamol every 6 hours.",
+      "Children's Tylenol twice daily.",
+      "Amoxicillin at bedtime.",
+      "Paracetamol: every 6 hours",
+    ]) {
+      expect([text, withheld(text)]).toEqual([text, true]);
+    }
+  });
+
+  it("schedules after an administration verb, after it or before it in the sentence", () => {
+    for (const text of [
+      "Give it at bedtime",
+      "Dale el jarabe antes de dormir",
+      "Toma la pastilla en ayunas",
+      "At bedtime, give it.",
+      "Por la noche, dale el jarabe.",
+    ]) {
+      expect([text, withheld(text)]).toEqual([text, true]);
+    }
+  });
+
+  it("clinical frequency abbreviations: q-forms, tid and qid alone; bid with anything else", () => {
+    for (const text of ["q6h", "q8h", "qd", "qid", "tid", "qhs", "Medicine bid", "1 bid"]) {
+      expect([text, withheld(text)]).toEqual([text, true]);
+    }
+  });
+
+  it("use/usa: withheld with an object before the frequency; KB relative clauses pass", () => {
+    for (const text of ["Use insulin daily", "Use it twice a day", "Usa la crema por la noche"]) {
+      expect([text, withheld(text)]).toEqual([text, true]);
+    }
+    for (const text of [
+      "anything you use every day",
+      "lo que uses a diario",
+      "Usa lo que de verdad vayas a mantener al día.",
+      "Lumi uses the guides in this library. A linked guide may not support every statement.",
+    ]) {
+      expect([text, rules(text)]).toEqual([text, []]);
+    }
+  });
+
+  it("counterexamples from the brief pass: no quantity, frequency or schedule with the medicine", () => {
+    for (const text of [
+      "take 2 snacks",
+      "room 211",
+      "take a break every 2 hours",
+      "bring a tablet with headphones",
+      "write down your medicine list",
+      "bring the list of medicines your care team gave you",
+      "If you're ever unsure about a medicine, how much to give or when, call your care team.",
+      "Note: one thing to remember.",
+      "In an emergency, 911.",
+      "Pack 2 or 3 changes of clothes. Kept for 30 days.",
+    ]) {
       expect([text, rules(text)]).toEqual([text, []]);
     }
   });
