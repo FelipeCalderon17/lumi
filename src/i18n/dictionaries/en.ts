@@ -495,6 +495,7 @@ export const en = {
     loadFailed: "We couldn't reach the staff service. Please try again.",
     expired: "Your session ended. Please sign in again.",
     signOut: "Sign out",
+    signOutFailed: "Couldn't sign you out. Try again.",
     gapsTitle: "Unanswered questions",
     gapsLede:
       "Questions Lumi couldn't answer, shared by parents who chose to. Saved questions may contain names or identifying details. No conversation history is stored. Use them to decide which guides to write next.",

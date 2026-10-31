@@ -490,6 +490,7 @@ export const es: Dictionary = {
     loadFailed: "No pudimos conectar con el servicio del equipo. Inténtalo de nuevo.",
     expired: "Tu sesión terminó. Vuelve a entrar, por favor.",
     signOut: "Salir",
+    signOutFailed: "No pudimos cerrar tu sesión. Inténtalo de nuevo.",
     gapsTitle: "Preguntas sin respuesta",
     gapsLede:
       "Preguntas que Lumi no pudo responder, compartidas por familias que decidieron hacerlo. Las preguntas guardadas pueden contener nombres o datos que identifiquen a una familia. No se guarda el historial de conversación. Sirven para decidir qué guías escribir.",
