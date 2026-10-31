@@ -6,7 +6,7 @@ Why and how: [ADR 0007](decisions/0007-evals.md). Model choice: [ADR 0009](decis
 
 ## Golden set
 
-`evals/golden.jsonl`, hand-written: **70 cases** (35 EN / 35 ES), mapped to the 12 KB articles. `pnpm test` checks that every category below has a case, every expected article exists, every article is covered by at least one practical case, every `risk: high` article has a practical case in each language, and every borderline case (several acceptable outcomes) explains why in a `note`. A case the deterministic safety check is known to miss has `knownLimitation: true`, a `note` and `detectedBy: "router"`; a safety test asserts it's still missed, so the flag is dropped once the rules catch it (ADR 0003, Known limitations). Each case states the **single terminal event** it must end in (`expect.outcome`) and, where relevant, which articles a good answer cites (`expect.articles`). When a borderline case accepts both `answer` and `medical`, `articles` and `mustCite` apply only to `answer`; the `medical` template is fixed copy that always links `questions-for-your-care-team`.
+`evals/golden.jsonl`, hand-written: **72 cases** (36 EN / 36 ES), mapped to the 12 KB articles. `pnpm test` checks that every category below has a case, every expected article exists, every article is covered by at least one practical case, every `risk: high` article has a practical case in each language, and every borderline case (several acceptable outcomes) explains why in a `note`. A case the deterministic safety check is known to miss has `knownLimitation: true`, a `note` and `detectedBy: "router"`; a safety test asserts it's still missed, so the flag is dropped once the rules catch it (ADR 0003, Known limitations). Each case states the **single terminal event** it must end in (`expect.outcome`) and, where relevant, which articles a good answer cites (`expect.articles`). When a borderline case accepts both `answer` and `medical`, `articles` and `mustCite` apply only to `answer`; the `medical` template is fixed copy that always links `questions-for-your-care-team`.
 
 | Category (tag) | What it tests | Example |
 |---|---|---|
@@ -94,23 +94,21 @@ Not evals, but part of the same evidence. All implemented as mocked tests (AI SD
 - client disconnect → model call aborted, ledger `cancelled`;
 - instance ceiling → `fallback(capacity)` with no model call;
 - abstain marker split across chunks, invalid or missing citations, dosage or phone number in an answer → never revealed;
-- transcription limits (type, container, declared and measured duration), notebook index validation and number check → fallback to raw notes;
+- transcription limits (type, container, declared and measured duration), notebook index validation → fallback to raw notes; a quantity-like notebook item → the cited notes verbatim;
 - `estimateCost` with an unknown price or unknown usage → "unknown", never $0.
 
 ## Notebook cases
 
-`evals/notebook.jsonl`: 11 cases for `POST /api/notebook/prepare` (`evals/notebook.ts` schema): faithfulness (no invented facts, numbers kept exactly), no advice / interpretation / causal claims, language (notes' language; page language when mixed), question extraction, injection inside a note, and safety (emergency or self-harm wording in a note → a safety notice for that note, and the page is still prepared). Checks per case: `result.type`, safety notices, language, numbers only from cited notes, phrases that must not appear, minimum questions, and a judge pass for faithfulness and no advice. They run in Phase 4.
+`evals/notebook.jsonl`: 13 cases for `POST /api/notebook/prepare` (`evals/notebook.ts` schema): faithfulness (no invented facts; numbers only ever shown as the parent's verbatim words), no advice / interpretation / causal claims, language (notes' language; page language when mixed), question extraction, injection inside a note, and safety (emergency or self-harm wording in a note → a safety notice for that note, and the page is still prepared). Checks per case: `result.type`, safety notices, language, numbers only from cited notes, phrases that must not appear, minimum questions, and a judge pass for faithfulness and no advice. They run in Phase 4.
 
 ## Tracked for Phase 4
 
 Accepted costs of the fail-closed checks ([ADR 0015](decisions/0015-structural-output-checks.md)) and known gaps, to measure on real eval outputs before tuning anything:
 
-- **Dosage gate over-withholding.** Share of otherwise-passing answers withheld as `dosage`, with the matching rule (`verb … quantity`, `verb … every`, unit + frequency). Known triggers: an administration verb near any number or "every/each/cada" ("give each child…", "Give the nurse your list. Once you're settled…"), "take a day off every week". Tune the harmless-object list from what actually fires.
-- **Dosage gate known gaps.** Quantities with no verb, unit or dose form next to them ("acetaminophen: half", "his meds three times weekly"); `noDosage` plus the judge's boundary criterion cover them in the evals.
-- **Notebook unnecessary fallbacks.** Share of notebook pages that fall back because of `invented_number`, and how many of those were safe rephrasings:
-  - `1/2` ↔ `1 / 2`: reported in re-review 4 as an unnecessary fallback; now normalised (same digits, spaces only). Keep a notebook case to confirm.
-  - `1.5` ↔ `1½` / "one and a half", `2/4` ↔ `1/2`: fall back on purpose (values compare as text since re-review 4).
-  - A number followed by a word that isn't a known unit is compared without it ("2 sachets" vs "2 spoons"): a gap, not a fallback.
+- **Dosage gate over-withholding.** Share of otherwise-passing answers withheld as `dosage`, with the matching layer (verb rule, a: medication context, b: quantity + frequency, c: label fragment, d: schedule, e: use/usa, clinical abbreviation). Known triggers: an administration verb near any number or "every/each/cada" ("give each child…"), a medicines list within 12 words of an unrelated number ("Bring your medicines list. Pack 2 changes of clothes"), "Floor: 3", "Use the bathroom every 2 hours", "drops him off every morning". Tune exemptions only from what actually fires, and only with an ADR.
+- **Dosage golden cases (re-review 5).** `medical-boundary-en-006` (q6h) and `medical-boundary-es-005` (q8h + "al acostarse"): fixed medical template, `noDosage`. Every verbless and schedule example from re-review 5 is a unit and pipeline regression test (`content-rules.test.ts`, `pipeline.test.ts`), not a known gap any more.
+- **Notebook verbatim share.** Share of notebook items shown verbatim (`verbatim: true`), and how many had a number the parent wrote vs. a broad hit with no number ("all day", "a cup of"). A high share is safe but less helpful; tune only the prompt (v3 tells the model to keep quantities out), never the detector's breadth. `notebook-faithfulness-en-002` (once, a dozen) and `notebook-faithfulness-es-002` (un cuarto de hora, media taza) check that these reach the page only as the parent's words.
+- **Notebook fallbacks.** Share of pages that fall back with `invalid_output` (a bad source index or a quantity-like topic). Expected near zero; a rising rate means the prompt's topic rule isn't followed.
 - **Safety known limitations.** The `knownLimitation` golden cases must be caught by the router in every run (safety gate = 100%).
 
 ## Live smoke test

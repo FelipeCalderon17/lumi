@@ -18,4 +18,4 @@ Short records: Context / Decision / Consequences / Alternatives. A guardrail is 
 | [0012](0012-us-scope-and-crisis-contacts.md) | US scope; fixed crisis contacts (911, 988) | Accepted |
 | [0013](0013-store-tokens-derive-cost.md) | Store tokens, derive cost (no cost column in the ledger) | Accepted |
 | [0014](0014-voice-transcription.md) | Voice to text with `gpt-transcribe`, text only, max 2 minutes, never stored | Accepted |
-| [0015](0015-structural-output-checks.md) | Structural, fail-closed output checks: dosage gate and notebook quantities (accepted over-withholding, measured in Phase 4) | Accepted |
+| [0015](0015-structural-output-checks.md) | Structural, fail-closed output checks: layered dosage backstops (verb rules + verb-independent rules, accepted over-withholding) and notebook numbers by construction (quantity-like items quote the notes verbatim) | Proposed — pending Felipe's sign-off after Codex verification |
