@@ -1,6 +1,6 @@
 # 0015 — Structural, fail-closed output checks: the dosage gate and a notebook with no AI prose
 
-**Status:** Proposed — pending Felipe's sign-off · revised 2026-10-31 (Phase 2 last fixes, Codex verification). First accepted 2026-10-30 after Codex re-review 4; revision 2 after re-review 5; revision 3 after re-review 6.
+**Status:** Accepted — signed off by Felipe Calderón on 2026-10-31 after Codex verification (APPROVED WITH DOCUMENTED LIMITATIONS) · revised 2026-10-31 (Phase 2 last fixes, Codex verification). First accepted 2026-10-30 after Codex re-review 4; revision 2 after re-review 5; revision 3 after re-review 6.
 
 *Codex verification of revision 3:* the **notebook** part is **verified by Codex** and unchanged. The dosage part still had blockers (list and quote formatting, use/usa with a later frequency, normalized phone digits). Felipe approved a **number-provenance layer** on top of the dosage rules, with nothing removed (layer g below).
 
