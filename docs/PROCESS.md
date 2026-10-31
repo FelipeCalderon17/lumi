@@ -430,3 +430,16 @@ The builder agent (Claude) built every page and flow on top of the approved serv
 **Live usage for the check** (from the ledger): 19 `gpt-6-luna` calls (router 10, answer 6, notebook 3) and 1 `gpt-transcribe` call (4 s), about $0.003 derived. Fixed-copy outcomes were checked live first. For the README stills they replay the same event shape.
 
 **Checks.** Node 24.19.0. `pnpm lint` ✓, `pnpm typecheck` ✓, `pnpm test` ✓ (37 files, 646 tests, up from 589), `pnpm test:kb` ✓ (5 files, 156 tests), `pnpm build` ✓. All exit codes 0.
+
+## Phase 3 UI feedback round 1 (Felipe)
+
+Felipe reviewed the UI in the browser and asked for four changes. The builder agent (Claude) made them in a separate worktree (`ui-feedback-1`), fixes only, no server changes.
+
+1. **Emergency strip "More":** the glyph arrow looked bad, and the opened panel overlapped the header. Cause: the panel was absolutely positioned inside the strip, and `body > *` gives every top-level element its own stacking context at `z-index: 1`, so it painted under the `z-20` header. The panel now expands in flow (the strip grows, opaque, same container), the summary sits in the first row's corner, and the chevron is an SVG. Still `<details>` (checked with JavaScript off), still `print:hidden`. A first try reserved room for "More" on the whole row, which pushed the Spanish 988 line onto a third row on phones; now only the first row reserves it.
+2. **Session note removed:** the "This conversation lives only in this tab" row and `help.sessionNote` (EN + ES) are gone. "Start over" moved into the chat card's top-right corner (shown once there is a turn) and still aborts the request in flight.
+3. **One chat card:** the conversation and the composer share the same surface card. Calm safety cards became a borderless raised panel inside it, and the gap flow's dashed border uses `muted` so it still reads on that panel. Inner padding is tighter on phones.
+4. **Same width as Home:** Ask Lumi and guide articles use `max-w-6xl px-5`. Ask Lumi gets a side column on large screens (chips, boundaries note, sticky); guide articles keep a 68ch body with a side column (the Ask Lumi card and "More on this topic", new copy `guides.relatedTitle`).
+
+**Browser check** (scratch `playwright-core`, dev server on its own port, `/api/chat` mocked with `page.route`, no model calls): EN/ES × 390/1280 px for the strip closed and open, Ask Lumi empty and with four mixed turns (answer with citations, emergency, medical with "Add to my notebook", abstained with the gap preview open), Start over (also mid-request), and a guide article. Plus crisis and fallback in Spanish, the dawn theme, JavaScript off for the strip, reduced motion, keyboard focus on "More" and "Start over", and the header/content edge alignment. 94 checks, 0 failures, no horizontal overflow, console clean. The eight affected README stills were reshot.
+
+**Checks.** `pnpm lint` ✓, `pnpm typecheck` ✓, `pnpm test` ✓ (37 files, 646 tests), `pnpm test:kb` ✓ (5 files, 156 tests), `pnpm build` ✓. All exit codes 0.

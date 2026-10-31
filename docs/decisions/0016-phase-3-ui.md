@@ -14,8 +14,9 @@ The brief asks for one slice done deeply and reasonable placeholders for the res
 - Shared utilities (`btn-lantern`, `btn-quiet`, `btn-ember`, `field`, `eyebrow`, `link`) live in `globals.css`, not a component library.
 
 **Safety layer 3 on every page**
-- A calm strip above the header: "Emergency? Call 911" and "In crisis? Call or text 988" as `tel:` links. "More" opens the full reviewed banner lines and call/text buttons.
-- It's static HTML from `safety.strip` / `safety.actions`, so it works without JavaScript, the AI or the API. On phones it's two short rows.
+- A calm strip above the header: "Emergency? Call 911" and "In crisis? Call or text 988" as `tel:` links. "More" (a `<details>` with an SVG chevron) opens the full reviewed banner lines and the Call 911 / Call 988 / Text 988 buttons.
+- The "More" panel expands **in flow**: the strip grows and pushes the page down. An overlay was tried first and painted under the header (every `body > *` is its own stacking context at `z-index: 1`, the header is `z-20`), so the text collided with the logo and the page title. In flow is calmer and can't collide.
+- It's static HTML from `safety.strip` / `safety.actions`, so it works without JavaScript, the AI or the API. On phones it's two short rows, in Spanish too.
 
 **Ask Lumi (the deep slice)**
 - `src/lib/chat-client.ts` reads the NDJSON stream over `fetch` with an `AbortController`. It returns the **first** terminal event and stops reading.
@@ -28,7 +29,8 @@ The brief asks for one slice done deeply and reasonable placeholders for the res
   - `medical`: adds "+ Add to my notebook" (the question becomes a note).
   - `crisis`: 988 first, then a gentle link to Parent Circles.
   - `abstained`: runs the gap flow (below).
-- **The conversation is session-only:** a list in this tab's memory, never persisted (ADR 0005), with "Start over".
+- **The conversation is session-only:** a list in this tab's memory, never persisted (ADR 0005).
+- **One chat card:** the turns ("You asked" + the question, then Lumi's response) and the composer share one surface card, so an answer never floats on the page background. Calm safety cards inside it are a borderless raised panel (no box in a box), and ember cards keep their outline. A compact "Start over" sits in the card's top-right corner once there is a turn. The separate "lives only in this tab" note row was removed (Felipe's UI feedback, round 1); the processing notice still says Lumi doesn't save the conversation.
 - **The gap flow** (ADR 0005):
   - An editable preview, redacted with the server's own function (moved to the Node-free `src/server/gaps/redact.ts`), plus the disclosure and a consent checkbox.
   - Every save status is handled. `uncertain` offers a retry with the same id and token, and a delete.
@@ -48,6 +50,8 @@ The brief asks for one slice done deeply and reasonable placeholders for the res
 - Share uses the Web Share API where available, and otherwise copies to the clipboard. There's also a plain "Copy". Shared and copied text is the notes verbatim.
 
 **Guides:** the KB articles themselves, as a library and article pages. Citations link there.
+
+**Page width:** every page, Ask Lumi and guide articles included, uses the same `max-w-6xl px-5` container as the header and footer, so the edges line up. Long text keeps a reading measure (68ch) inside it. On large screens the extra width becomes a side column: the quick-start chips and the boundaries note on Ask Lumi; the Ask Lumi card and "More on this topic" (same category) on a guide. Both stack on phones.
 
 **Placeholders done honestly**
 - Community, Volunteer and Donate are **mocks**, each with a "Demo" badge and a line saying nothing is sent.
