@@ -65,7 +65,7 @@ Plan and results: [docs/EVALS.md](docs/EVALS.md). _Results TODO._
 
 ## Cost
 
-_TODO: measured cost per conversation (router included), cold vs warm, from the usage ledger and the eval run._ First data point (one smoke run, placeholder prices, [PROCESS.md entry 4](docs/PROCESS.md)): a practical question cost about $0.0008 cold and $0.0002 warm, router included, with the KB prefix ~99% cached from the second English answer on. The ledger stores token counts only; cost is derived from the price catalog when it's read ([ADR 0013](docs/decisions/0013-store-tokens-derive-cost.md)). Prompt caching is best-effort on the provider side, so we report what we measure rather than assume it. Controls are described in [ARCHITECTURE.md § Cost controls](docs/ARCHITECTURE.md#cost-controls).
+_TODO: measured cost per conversation (router included), cold vs warm, from the usage ledger and the eval run._ First data point, **historical** (one smoke run with the earlier model catalog, placeholder prices and notebook prompt v1, [PROCESS.md entry 4](docs/PROCESS.md); not re-run since): a practical question cost about $0.0008 cold and $0.0002 warm, router included, with the KB prefix ~99% cached from the second English answer on. The ledger stores token counts only; cost is derived from the price catalog when it's read ([ADR 0013](docs/decisions/0013-store-tokens-derive-cost.md)). Prompt caching is best-effort on the provider side, so we report what we measure rather than assume it. Controls are described in [ARCHITECTURE.md § Cost controls](docs/ARCHITECTURE.md#cost-controls).
 
 ## What I'd do next
 

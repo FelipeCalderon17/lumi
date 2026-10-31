@@ -22,6 +22,20 @@ A parent may type something that is a medical emergency ("she's not breathing", 
 - The rule id (never the text) is logged so misfires can be tuned.
 - In the notebook, a flagged note is sent to the model with the others. That's acceptable: the emergency copy is already decided by code and shown first, and the model only organises the notes.
 
+## Known limitations
+*Added 2026-10-30 after Codex re-review 3.*
+
+- **It's a regex backstop with finite coverage.** The rules are now written by grammar family rather than by phrasing: {subject / clitic before or after the verb} × {modal, "estar" + gerund, or none} × {an explicit list of each verb's forms}, with a few adverbs and intensifiers allowed in between ("no lo puedo despertar" / "no puedo despertarlo", "me estoy ahogando" / "estoy ahogándome", "me voy a hacer mucho daño", "I am thinking about cutting myself"). That covers far more than single phrases, but it's still a list. Typos ("resprando"), slang we haven't seen, indirect phrasing ("he's gone grey and floppy") and other languages will get through.
+- **The router's `urgent` intent is the second layer.** Anything this check misses still goes to the router, which lists `urgent` and `emotional_crisis` among its intents, and code puts them first. That layer depends on the provider being up; this one doesn't.
+- **911 is always on screen and in the fallback copy.** The 911 line is fixed copy in the UI dictionaries (`emergency.banner`), shown by the emergency banner; Phase 3 puts it on every page, and today it's on the help page. Every fallback message ("Lumi can't answer right now") also ends with "In an emergency, call 911". So even a miss here plus a router failure leaves the parent one line away from 911.
+- **Known false positives, kept on purpose** (recall over precision; each costs one extra emergency screen):
+  - "No, está respirando" (punctuation is dropped, so it reads as "no está respirando");
+  - "I can't wake up early" (matches "can't wake");
+  - "I am not thinking about hurting myself" and "no me voy a hacer daño" (negation isn't parsed);
+  - "me ahogo de calor" and similar figurative uses of "ahogarse";
+  - "he accidentally took his medicine with lunch", "se tomó todas sus medicinas según las instrucciones" (accidental-ingestion and "todas" patterns).
+  They're listed in `src/server/safety/index.test.ts` so a change to them is visible.
+
 ## Alternatives
 - **Let the router classify emergencies.** Rejected as the only layer: depends on the provider being up and on model judgement.
 - **Rate-limit first to save CPU.** Rejected: the check is microseconds, and a rate-limited parent in an emergency must still get the steps.
