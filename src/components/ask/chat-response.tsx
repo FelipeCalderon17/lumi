@@ -36,15 +36,17 @@ export function ChatResponse({
           <Markdown source={event.text} headingOffset={1} hideCitations className="text-[1.1rem]" />
           <div className="mt-6 border-t border-line pt-4">
             <h3 className="eyebrow text-sage">{h.sourcesTitle}</h3>
-            <ol className="mt-2 space-y-1">
+            {/* The only place sources appear (answers show no inline markers). Plain titles in
+                order; the dot is decorative. role="list" keeps list semantics in Safari, which
+                drops them when list-style is none. */}
+            {/* biome-ignore lint/a11y/noRedundantRoles: Safari/VoiceOver drops list semantics for unstyled lists. */}
+            <ol role="list" className="mt-2 space-y-1">
               {event.citations.map((c) => (
                 <li key={c.handle} className="flex gap-3">
                   <span
                     aria-hidden="true"
-                    className="mt-1 inline-flex min-w-6 items-center justify-center rounded-pill border border-sage/60 px-1.5 font-semibold text-[0.78rem] leading-5 text-sage"
-                  >
-                    {c.handle}
-                  </span>
+                    className="mt-[0.7em] size-1.5 shrink-0 rounded-pill bg-sage"
+                  />
                   <Link href={guide(c.articleId)} className="link">
                     {c.title}
                   </Link>
