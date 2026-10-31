@@ -607,3 +607,15 @@ Fixes only, with **no paid calls** this round (spend stays $1.1542). Codex indep
 - The 25 s deadline applies to answer generation, not to total latency; the router has its own 4 s deadline.
 - The test count is now 749.
 - The headline eval table is labelled "Phase 4 (answer policy v2)".
+
+## Staff usage: lower bound instead of a bare "unknown" (2026-11-01)
+
+**Felipe's request.** On the staff usage summary, one timed-out answer call (no usage reported) and a few failed transcriptions (no audio seconds) turned the cost total, the per-1,000 figure and whole rows into "unknown". That follows ADR 0013, but one slow call made the dashboard look broken. Decision: keep the honesty rule and also show what is known, labelled as a lower bound.
+
+**What the builder agent (Claude) did.**
+- Ledger: `estimatedUsd` is unchanged (exact or `"unknown"`). Each group gains `knownUsd` (its known facts priced; `"unknown"` only when the model has no price), and the summary gains `knownUsd`, `knownUsdPer1000Requests`, `callsWithUnknownUsage` (priced groups) and `callsWithUnknownPrice` (calls in unpriced groups). New `knownGroupCost`; `estimateGroupCost` now uses it, same results. Unit tests: all known, a timed-out call, unknown audio duration, an unknown price, zero requests, and the bound staying below the full estimate. A staff test checks the fields reach the overview and `complete` stays true.
+- Staff UI: the cost and per-1,000 tiles show "At least $X" (the words smaller, the amount big) with a muted count line ("1 call with unknown usage", "N calls with no price in the catalog"). Table rows show "≥ $X" (spoken and titled "At least $X") with their count, or "unknown" with "no price in the catalog". A bound of $0 shows "unknown". The derived-cost note says these calls are counted separately. EN and ES copy.
+- ADR 0013 revision note, ARCHITECTURE staff endpoint line, one clause in the README tradeoff row.
+- Browser check (production build, local Postgres with real rows, EN and ES, 1280 and 390): the answer and transcribe rows show "≥ $X" with their counts, the totals show "At least $X" with "6 calls with unknown usage", router and notebook show plain amounts. It caught one bug, now fixed: the cost cells' `sr-only` text is absolutely positioned and escaped the table's scroll container, widening the mobile page (the scroller is now `relative`).
+
+**Checks.** `pnpm lint` ✓, `pnpm typecheck` ✓, `pnpm test` ✓ (43 files, 756 tests), `pnpm test:kb` ✓ (8 files, 226 tests), `pnpm build` ✓. All exit codes 0.
