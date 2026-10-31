@@ -1,58 +1,126 @@
-# 0015 — Structural, fail-closed output checks: the dosage gate and notebook numbers
+# 0015 — Structural, fail-closed output checks: the dosage gate and a notebook with no AI prose
 
-**Status:** Proposed — pending Felipe's sign-off after Codex verification · revised 2026-10-30 (Phase 2 fixes round 4, Codex re-review 5). First accepted 2026-10-30 after Codex re-review 4.
+**Status:** Proposed — pending Felipe's sign-off after Codex verification · revised 2026-10-30 (Phase 2 final fixes, Codex re-review 6). First accepted 2026-10-30 after Codex re-review 4; revision 2 after re-review 5.
 
-*Revision 2, on Felipe's direction after re-review 5: restore the verb-independent safety net, since its removal was judged structural; over-withholding is acceptable because the KB has no dosing; converge with designs that are closed by construction, not with more vocabulary.* Supersedes revision 1's "accepted" gaps (verbless doses, unknown notebook units) and the notebook's exact-span comparison (`notebook/quantities.ts`, removed).
+*Revision 3, on Felipe's direction after re-review 6:*
+- **Dosage:** label values count whatever follows them, list lines under a heading are one scope, use/usa get the backward check, and Unicode digits are normalised. Remaining vocabulary gaps are listed as known limitations, not closed.
+- **Notebook:** redesigned as "AI organizes, the parent's words stay exact". The model no longer writes any text that reaches the page.
+- This revision supersedes revision 2's notebook design (verbatim quotes for quantity-like items, `notebook/quantity-like.ts`, now deleted) and its claim that "no model-written quantity can display".
 
 ## Context
-Two code checks stand between model text and the parent:
-- **The dosage gate** (`src/server/content-rules.ts`, run by `findUnsafeOutput` before an answer is revealed, ADR 0010). The KB has no dosing instructions, so a dose in an answer means the model added it.
-- **The notebook number guarantee** (`src/server/notebook/`, run by `checkNotebook`). The model may only organise and rephrase the parent's notes, so every number on the page must be the parent's.
+Two places put model output in front of a parent:
+- **Chat answers** go through the dosage gate (`src/server/content-rules.ts`, run by `findUnsafeOutput` before an answer is revealed, ADR 0010). The KB has no dosing instructions, so a dose in an answer means the model added it.
+- **The notebook page** (`src/server/notebook/`) turns the parent's notes into a page to bring to an appointment.
 
-Revision 1 replaced word lists with structural rules, but every rule still started from an administration verb. Re-review 5 showed that a verbless line still carries a dose ("acetaminophen: half", "his meds three times weekly", "Capsules.\nTwice daily"), and the notebook's span parser still had to know every unit, sign and spelling ("2 sachets" → "2 spoons", "− 5 °C" → "5 °C", "mg/m²" → "mg/m"). A parser that compares numbers has to be right about every way to write one. Taking numbers out of the model's text doesn't.
+**How the notebook design got here.**
+- **First design:** the model rephrased the notes into observations and questions, and code checked its numbers against the notes. First the check compared quantities exactly; then (revision 2) any item with anything quantity-like showed the cited notes verbatim instead.
+- **What re-review 6 showed:** the guarantee only covered quantities the model *wrote*. A rewrite could silently drop one. "He had 6 seizures overnight" became "He had seizures": a valid, quantity-free item that the check let through, and the note was counted as used. Detection was also never complete. "several", "both", "daily", "IV" and "Comió varias manzanas" all passed as model prose.
+- **The conclusion:** checking AI rewrites can't guarantee that nothing is altered or dropped. Taking the rewriting away does.
 
 ## Decision
 
+### Notebook: AI organizes, the parent's words stay exact
+**The model's job is classification only.** For each note index it returns one topic from a fixed enum (`eating`, `sleep`, `pain_discomfort`, `mood_behavior`, `energy_activity`, `medicines_treatment`, `school_social`, `questions`, `other`) and `isQuestion: boolean`.
+- The Zod schema is strict: `{ assignments: [{ index, topic, isQuestion }] }`, with no other keys and no free text anywhere.
+- `isQuestion` is required because the provider's strict JSON schema doesn't allow optional fields.
+- Prompt v4 asks for exactly this. The notes stay in a delimited `<notes>` data block, with prompt tags stripped.
+
+**Server checks.**
+- The output parses.
+- Every note index is assigned exactly once: no unknown, duplicate or missing index.
+- `finishReason` is `"stop"`.
+- Anything else, including a provider error, a timeout or a rate limit, gives the **fallback**: every note under `other`, in date order.
+
+**Response:** `{ safetyNotices, result: { kind: "organized" | "fallback", groups: [{ topic, notes: [{ index, text, createdAt }] }] } }`. A fallback also carries `reason`.
+- `text` is the note exactly as the device sent it. It isn't trimmed, and prompt tags are stripped only in the copy sent to the model.
+- Groups come in a fixed display order: `questions` first (that's what the parent brings), then the observation topics, then `other`. Only non-empty groups are returned.
+- Notes within a group are in date order (the instant `createdAt` names; ties go by index).
+- A note with `isQuestion: true` goes under `questions` whatever its topic, so questions are always the parent's own words.
+- Topic **labels** come from the dictionaries (`notebook.topics`, EN/ES), never from model text.
+
+**Guarantees, true by construction (no detector involved):**
+- Every input note appears **exactly once**, verbatim, with its `createdAt`, in both organized and fallback pages.
+- **No model-generated prose is shown.** The only model output that affects the page is an enum value per note, which picks a group.
+- So the page can't show an invented, altered or dropped quantity or fact. The worst a bad or injected classification can do is file a note under the wrong heading. Classification accuracy is measured (EVALS.md).
+
+**Safety is unchanged** (ADR 0003). Every recoverable note is scanned before any validation. `safetyNotices` come with organized and fallback results and with 400s, and flagged notes stay on the page.
+
 ### Dosage gate: layered structural backstops, accepted over-withholding
-Citation markers are removed and explicit device tablets are masked first. Words are compared with accents stripped and case folded. "After" means the rest of the sentence or the next **12 words across sentence and line breaks**. "Before" means the same sentence, or a nearby **bare fragment** (a sentence or line made only of quantity, frequency, schedule, unit and filler words, like "Twice daily."). An answer is withheld if any layer matches.
+**Normalisation first.** Before any rule runs, the text is normalised:
+- NFKC (fullwidth "２", "ｍｇ"; "½" becomes "1⁄2");
+- every Unicode decimal digit (`\p{Nd}`) is mapped to ASCII ("٢" becomes "2");
+- the fraction slash becomes "/";
+- dotted clinical abbreviations are joined ("b.i.d." becomes "bid").
 
-Verb rules (kept from revision 1):
-1. An **administration verb** (give, take, administer, dose, apply, inject; da/dale, toma, administra, aplica, inyecta) is followed by a **quantity** of any form: digits, decimals, fractions, signed numbers, written numbers EN/ES, half/medio/media, or an article directly before a dose unit or form.
-2. An administration verb has a **frequency** after it (every/each/cada + anything; once/twice/N times + a/per/al/por + period; daily, diario, diariamente; "a day", "al día", "a diario"; clinical abbreviations q6h, q8h, qd, bid, tid, qid…) or a **schedule** after it. A period-based frequency or a schedule before it in the same sentence counts too ("Every 8 hours, give it", "At bedtime, give it").
-3. A quantity is **directly followed by a dose unit or form** ("5 ml", "a gram", "2 of the pills"), or an unambiguous dose unit or a clinical abbreviation that is never an English or Spanish word stands alone ("mg", "q6h", "tid", "qid"; "bid" is a word, so it counts only with something else).
+Then citation markers are removed and explicit device tablets are masked. Words are compared with accents stripped and case folded.
+- "After" means the rest of the sentence or the next **12 words across sentence and line breaks**.
+- "Before" means the same sentence, or a nearby **bare fragment**: a sentence or line made only of quantity, frequency, schedule, unit and filler words, like "Twice daily.".
+- An answer is withheld if any layer matches.
 
-Verb-independent backstops (new):
-- **(a) Medication context + quantity, frequency or schedule.** Medication context means generic medication words (medicine, medication, meds, drug, prescription, medicina, medicamento, remedio, fármaco), dose forms (tablet, pill, capsule, syrup, injection, patch, drops; pastilla, tableta, cápsula, gotas, jarabe, inyección, parche) and dose units. "his meds three times weekly", "Capsules.\nTwice daily", "Take medicine at bedtime". "Bring the list of medicines your care team gave you" passes: there's no quantity, frequency or schedule.
-- **(b) Quantity + frequency**, no medication word needed: "Paracetamol 500 every 6 hours", "5 — twice daily", "2 bid". The numbers inside a frequency ("every 2 hours", "3 times a day") aren't counted as a quantity.
-- **(c) Label and list fragments.** A clause of up to 4 words, a separator (`:`, `—`, `–`, `,` or a spaced hyphen), then a tail made only of quantity, frequency or schedule words, for example "acetaminophen: half", "Morphine — 5 — twice daily", "Tablets: half". With no separator: up to 2 words and a tail with a frequency or schedule in it ("Paracetamol every 6 hours"). A tail with only a quantity and no separator ("room 211", "Kept for 30 days") passes.
-- **(d) Schedules.** The EN/ES times of day tied to a dose count after an administration verb or near medication context: at bedtime, before bed, in the morning/evening/afternoon, at night, with meals or food, before/after meals or eating, on an empty stomach; al acostarse, antes de dormir, por la mañana/tarde/noche, en la mañana/noche, con las comidas, antes/después de comer, en ayunas.
-- **(e) use/usa** counts like the other verbs once something sits between it and the frequency or schedule: "Use insulin daily" and "Usa insulina diariamente" are withheld. A frequency right after the verb belongs to a relative clause ("anything you use every day", "lo que uses a diario"), and so does one after a neuter relative object ("usa lo que vayas a mantener al día"). Those are KB lines and pass.
+**Verb rules:**
+1. An **administration verb** (give, take, administer, dose, apply, inject; da/dale, toma, administra, aplica, inyecta) followed by a **quantity**. That covers digits, decimals, fractions, signed numbers, written numbers EN/ES, half/medio/media, double/doble/mitad, "a third"/"un tercio", and an article directly before a dose unit or form.
+2. An administration verb with a **frequency** after it, or a **schedule** after it:
+   - frequencies: every/each/cada + anything; once/twice/N times + a/per/al/por + period; "3x/day"; daily, diario, diariamente; "a day", "al día", "a diario"; clinical abbreviations (q6h, qd, bid, tid, qid…);
+   - a period-based frequency or a schedule before the verb in the same sentence counts too ("Every 8 hours, give it", "At bedtime, give it").
+3. A quantity **directly followed by a dose unit or form** ("5 ml", "a gram", "2 of the pills"). An unambiguous dose unit or a clinical abbreviation that is never an English or Spanish word also counts on its own ("mg", "q6h", "tid").
 
-Narrow exemptions only:
-- a short list of harmless objects after take/give, with the frequency directly after them ("take a break every 2 hours", "toma una siesta", "dale un abrazo");
-- an explicit device construction ("a tablet with headphones", "tablet (iPad)", "tableta para juegos") in a sentence with no administration verb and no number before the tablet;
+**Verb-independent backstops:**
+- **(a) Medication context + quantity, frequency or schedule.** Medication context is a generic medication word, a dose form or a dose unit. Examples: "his meds three times weekly", "Capsules.\nTwice daily".
+- **(b) Quantity + frequency**, with no medication word needed: "Paracetamol 500 every 6 hours". The numbers inside a frequency don't count as a quantity.
+- **(c) Label values (revised).** A label is up to 4 words before a separator.
+  - After a strong separator (`:` `—` `–` `|` or a spaced hyphen), a value that **starts** with a quantity, frequency or schedule is withheld **whatever follows**: "Paracetamol: half as needed", "Paracetamol: media si lo necesita", "Morphine: ½ as needed".
+  - After a comma, the value must be a run of such words that ends the clause or meets a condition word (as, if, when, for, then, si, cuando, para…): "Acetaminophen, half if needed".
+  - With no separator: up to 2 words, then such a run with a frequency or schedule in it ("Paracetamol at night if needed").
+  - Not after a separator followed by an opening quote: 'decir: "Uno de mis hijos…"' is a quotation (a KB line).
+- **(d) Schedules.** EN/ES times of day tied to a dose: at bedtime, at night, in the morning(s)/evening(s), with/before/after meals, after breakfast/lunch/dinner, morning and night; al acostarse, al despertar, por la mañana/noche, en las mañanas, antes/después de comer, después del desayuno, en ayunas…
+- **(e) use/usa (revised).**
+  - They count once something sits between the verb and the frequency or schedule ("Use insulin daily").
+  - A frequency or schedule **before** them counts as for any verb ("At bedtime, use it", "Al acostarse, usa eso").
+  - A frequency right after the verb belongs to a relative clause ("anything you use every day", "lo que uses a diario").
+  - With a neuter relative object ("use what…", "usa lo que…"), a later **frequency** is still read as the inner verb's ("Usa lo que de verdad vayas a mantener al día", a KB line). A **schedule** never is: "Use what was prescribed at bedtime" and "Usa lo que te recetaron por la noche" are withheld.
+- **(f) List scope (new).** A heading line (up to 4 words, or ending in a colon) and the next **4** lines that are list items (`-` `•` `*` `1.` `1)`) or bare lines form one scope. An item that starts with a quantity, frequency or schedule is withheld: "Paracetamol\n- half\n- at bedtime", "ibuprofeno\nmedia\npor la noche". The scope ends at a line that is neither a list item nor bare.
+
+**Narrow exemptions only:**
+- harmless objects after take/give, with a frequency or schedule right after them ("take a break every 2 hours", "take a walk after breakfast");
+- an explicit device construction ("a tablet with headphones") in a sentence with no administration verb and no number before the tablet;
 - an article before a compound object or a hospital unit ("a pill organizer", "una unidad de oncología");
-- the service numbers 911 and 988.
+- the service numbers 911 and 988, in any script.
 
-There's no list of drug names. An unknown drug name is caught by the shape around it: a verb, a medication word, a frequency, or a label fragment.
+There's no list of drug names. An unknown drug name is caught by the shape around it.
 
-### Notebook: verbatim quotes by construction
-Model-written text **never displays a quantity**. If an item's text has anything quantity-like, the item shows the **verbatim text of its cited notes** instead, marked `verbatim: true`. That covers any digit (any script, superscripts, vulgar fractions), any written number EN/ES (including once, dozen, cuarto, medio/media, half, ordinals), any sign or minus symbol, any fraction, ratio, percent or degree symbol, any unit, dose form or measure word, and any article before one ("an international unit", "un sobre", "a dollop of"). Items with none of this keep the model's rephrasing (`verbatim: false`). An item that cites no notes, or a note that doesn't exist, makes the whole page fall back to the raw notes. A topic can't be replaced by a quote, so a quantity-like topic also falls back.
-
-Every number on a prepared page is therefore the parent's own text, in their spelling. No code has to parse, normalise or compare a number. The detector (`notebook/quantity-like.ts`) only has to be **broad**: a false positive costs a rephrasing (the parent sees their own note), and a miss is limited to words outside its lists. The prompt (v3) tells the model to keep quantities out of its own words, since those items will be shown verbatim anyway.
+**This is a finite detector, not a closed one.** It recognises the shapes and vocabulary listed above. A dose phrased outside them passes this check, and the other layers (the KB has no doses, the answer prompt, the fixed medical template for medical questions, the router, and the judge in evals) have to catch it. Known residual vocabulary, tested as still passing (`content-rules.test.ts`, "known limitations"):
+- a drug name and a bare quantity with no separator: "Paracetamol half";
+- Roman numerals: "Give II", "Give Ⅱ" (NFKC turns "Ⅱ" into "II", which no rule reads as a number);
+- a harmless take/give clause followed by a quantity: "Take a break, then 5";
+- a frequency after a relative object of use/usa: "Use what was prescribed daily" (schedules are caught, frequencies aren't);
+- fractions and multiples not listed: "a fifth", "quadruple", "un quinto";
+- schedule phrasings not listed: "first thing", "with supper", "al mediodía";
+- a list value more than 4 lines below its heading, or a heading over 4 words without a colon.
 
 ## Consequences
-- **Accepted over-withholding (dosage).** Harmless answers that match a backstop get the fallback. Examples: a medication word within 12 words of an unrelated number ("Bring your medicines list. Pack 2 changes of clothes"); "Floor: 3" (a label fragment); "Use the bathroom every 2 hours"; "She drops him off every morning" ("drops" is a dose unit). The KB passes (tested), so an answer that quotes it closely is revealed. The withheld rate on real answers is **measured in Phase 4** (EVALS.md § Tracked for Phase 4).
-- **Accepted over-quoting (notebook).** Many items become verbatim quotes, for example any item with a time unit ("all day", "an hour"), a measure phrase ("a cup of", "un poco de") or an ordinal ("the second night"). The page is still organised by topic, with dates and questions. The verbatim share is measured in Phase 4.
-- **Residual, by design rather than by gap:**
-  - **Dosage:** the gate recognises doses by shape, not meaning. A dose written as prose with none of the shapes (no number, written quantity, frequency, schedule, medication word, dose form or unit, and no administration verb) isn't a dose instruction it can see. The fixed medical template, the router and the judge's boundary criterion remain the other layers.
-  - **Notebook:** the notebook can drop a quantity (rephrase "Gave 2 sachets" as "You gave her medicine"). That's an omission, not a wrong number, and the parent's note is still listed by date. The judge checks faithfulness.
-- Revision 1's "accepted" gaps are removed. Verbless doses are now caught by backstops a–c, and unknown notebook units no longer matter because nothing is compared.
-- The citation check, buffer → validate → reveal and the fixed medical template are unchanged. These checks stay **backstops** behind the policy and the router.
+- **Accepted: no AI-polished notebook.** There are no summaries and no rephrased questions. The page is the parent's own notes, sorted under fixed headings, with dates. It's less polished than a rewrite, and it can't misstate a note. Classification quality is measured (EVALS.md § Notebook cases).
+- **Accepted: notes are sent to the AI provider for classification.** They're sent with `store: false` and never kept by Lumi (ADR 0005).
+- **Accepted over-withholding (dosage).** Harmless answers that match a backstop get the fallback. Measured on a seeded probe set of 40 harmless sentences (`evals/dosage-benign.test.ts`), 10 are withheld:
+  - "Room: 211" (also caught by the phone rule as an N11 code; "Room 211" passes);
+  - "Floor: 3", "Visiting hours: 9 to 8", "Parking: 2 hours free…";
+  - "Note: one thing to remember." (newly withheld by the revised label rule);
+  - "Bring:\n- 2 changes of clothes" (list scope);
+  - a medicines list within 12 words of an unrelated number;
+  - "Use the bathroom every 2 hours";
+  - "She drops him off every morning" ("drops" is a dose unit);
+  - "Give each child a few minutes alone with you".
+
+  The set is seeded with known triggers, so 25% isn't a representative rate. The KB passes (tested). The withheld rate on real answers is measured in Phase 4.
+- The citation check, buffer → validate → reveal and the fixed medical template are unchanged. The dosage gate stays a **backstop** behind the policy and the router.
+
+## With more time
+- **Notebook:** AI-suggested questions shown **separately** from the parent's notes, clearly labelled as suggestions, with guardrails reviewed by clinicians (what may be suggested, how it's worded, what is never suggested). They would never replace or edit a note.
+- **Dosage:** a model-based dose classifier as an extra layer (never a replacement), fuzzy matching for misspellings, and the vocabulary items above. Each is driven by what fires in Phase 4 evals, and each needs an ADR.
+- **Clinician review** of the fixed medical copy and of what the gate treats as a dose.
 
 ## Alternatives
-- **Keep enumerating phrasings or units.** Rejected: every round found another one.
-- **Keep the span comparison and add more units.** Rejected: it's correct only if the parser knows every unit and spelling. A verbatim quote is correct without knowing any.
-- **A model-based dose classifier.** Possible later as an extra layer. It's another call that can fail or be prompt-injected, so it can't replace a deterministic gate.
-- **Withhold any answer with any number.** Rejected: too many harmless answers (room numbers, ages, "10 minutes alone with you"). The backstops need a number *and* a medication, frequency or label shape.
-- **Notebook: fall back whenever an item has a number.** Rejected: a verbatim quote keeps the organised page, the topics and the questions, and is just as safe.
+- **Keep AI rewriting with a quantity check (revisions 1–2).** Rejected after re-review 6: a check on what the model wrote can't see what it left out ("6 seizures" → "seizures"), and the detector was never complete.
+- **Rewrite, then require every source quantity to reappear.** Rejected: it brings back number parsing (every unit, sign and spelling), and facts other than numbers can still be dropped.
+- **No AI at all: notes by date.** That's the fallback page, and it's always available. Classification adds grouping for almost no risk.
+- **Keep enumerating phrasings (dosage).** Only cheap vocabulary was added this round. Single phrasings go to the known limitations; structural holes get fixed.
+- **Withhold any answer with any number.** Rejected: too many harmless answers (room numbers, ages, "10 minutes alone with you").

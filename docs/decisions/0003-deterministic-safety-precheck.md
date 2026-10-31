@@ -20,7 +20,7 @@ A parent may type something that is a medical emergency ("she's not breathing", 
 - False positives show emergency steps for a non-emergency. That's acceptable, and the rules are tuned with the golden set (including figurative phrases like "this parking is killing me").
 - Keyword lists miss paraphrases. The router's `urgent` / `emotional_crisis` intents are the second layer; this check isn't the only one.
 - The rule id (never the text) is logged so misfires can be tuned.
-- In the notebook, a flagged note is sent to the model with the others. That's acceptable: the emergency copy is already decided by code and shown first, and the model only organises the notes.
+- In the notebook, a flagged note is sent to the model with the others. That's acceptable: the emergency copy is already decided by code and shown first, and the model only classifies the notes (ADR 0015): it writes nothing that is shown.
 
 ## Known limitations
 *Added 2026-10-30 after Codex re-review 3.*

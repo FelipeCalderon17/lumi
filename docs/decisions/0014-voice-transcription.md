@@ -26,6 +26,10 @@ Parents often have their hands full, or find it easier to say a worry out loud t
 - The 2-minute limit cuts off long voice memos. That's on purpose: a short note is easier to edit and safer to send.
 - `durationMs` is client-reported. A client that lies can still only send `maxBytes`, and the provider's measured duration catches the rest. If a provider or model change ever stops reporting duration, every transcription fails closed until that's fixed (visible in the ledger as `unverified_duration`).
 
+## Known limitations
+*Added 2026-10-30 (Phase 2 final fixes), so the README tradeoffs table has a source.*
+- **The live check is pending.** The model was chosen from the provider's docs and types. The only live run so far is two short synthetic recordings (macOS `say`, one EN and one ES) in `pnpm smoke`. Both came back word for word with the language detected. Real voices, accents, noisy hospital rooms and Spanish quality aren't verified. Felipe confirms the model (or switches to `gpt-4o-transcribe`) with a live EN/ES check on real recordings.
+
 ## Alternatives
 - **Browser speech recognition (Web Speech API).** Free and on-device in some browsers, but quality varies, Spanish support is uneven, and in Chrome the audio goes to Google, which is worse to explain.
 - **Streaming transcription (`gpt-live-transcribe`).** Nicer UX, but needs a WebSocket path and more moving parts than a 2-minute note needs.
