@@ -582,13 +582,19 @@ Fixes only, with **no paid calls** this round (spend stays $1.1542). Codex indep
 
 **Checks.** `pnpm lint` ✓, `pnpm typecheck` ✓, `pnpm test` ✓ (43 files, 746 tests), `pnpm test:kb` ✓ (8 files, 226 tests), `pnpm build` ✓. All exit codes 0.
 
-## Answer policy v3: the no-guide rule (2026-11-01)
+## Answer policy v3 and v4: the no-guide rule (2026-11-01)
 
 **Felipe's decisions.** For questions the guides don't cover, Lumi says "no guide yet", then tells the parent to confirm with the nurse (Phase 4 problem 2, the dog question). He also read the safety review and accepted it: *"I'm happy with it — not perfect because it's a demo, knowing the tradeoffs and documenting them."* The review file, EVALS.md and the README now say so.
 
 **What the builder agent (Claude) did.**
 - Answer policy rule 3 gained one passage: an article must address the specific thing asked, not just the general area; otherwise reply `[[NO_ANSWER]]`, even if a nearby article says to ask the nurse; never answer from general knowledge plus a loosely related citation. Abstention only, no other rule touched, and the policy is still static (cached prefix byte-identical per language). `ANSWER_POLICY_VERSION` 2 → 3, with a unit test for the new passage in EN and ES.
 - The fixed abstained body (title unchanged) now says to check with the child's nurse or care team first, then the hospital social worker for other practical questions, in EN and ES. A dictionary test checks that order.
-- Cheap live check on `gpt-6-luna` (1 run, `not-in-kb` + `practical`, no judge, no notebook): **$0.0272** of a $0.10 cap. Both not-in-KB cases abstained (the dog question was answered in 2 of 3 Phase 4 Luna runs). **But 2 of 24 practical questions abstained** (`practical-en-001`, `practical-en-008`), against 0 of 72 before. Expected articles 21/21. Three router timeouts (the router is unchanged) were re-run once. Details: [EVALS § Post-Phase-4 check](EVALS.md#post-phase-4-check-answer-policy-v3-no-guide-rule).
+- Cheap live check on `gpt-6-luna` (1 run, `not-in-kb` + `practical`, no judge, no notebook): **$0.0272** of a $0.10 cap. Both not-in-KB cases abstained (the dog question was answered in 2 of 3 Phase 4 Luna runs). **But 2 of 24 practical questions abstained** (`practical-en-001`, `practical-en-008`), against 0 of 72 before. Expected articles 21/21. Three router timeouts (the router is unchanged) were re-run once. Details: [EVALS § Post-Phase-4 check](EVALS.md#post-phase-4-check-answer-policy-v3-and-v4-no-guide-rule).
 
-**Open.** The over-abstention is reported, not tuned: keep v3, narrow the wording, or re-run those two cases first. That's for the orchestrator and Felipe to decide.
+**Follow-up (orchestrator's decision: disambiguate, then narrow).**
+- v3, 4 cases × 3: dog and wifi abstained 3/3 each, `practical-en-001` answered 3/3, `practical-en-008` abstained 2/3. So the over-abstention is real.
+- **Policy v4** (`ANSWER_POLICY_VERSION` 3 → 4): keeps the no-guide rule and adds the converse (when an article talks about the topic itself, answer and cite it, even if its advice is to ask the care team). The examples are no longer golden cases (a chapel; flowers or toys), so the dog question now measures generalisation.
+- v4, 4 cases × 3: dog 3/3 and wifi 3/3 abstained, `practical-en-001` answered 3/3, `practical-en-008` answered 2/3. v4, 24 practical cases × 1: 22 answered (expected article 22/22), **2 abstained** (`practical-en-008`, and a new one, `practical-en-007`, the 2 a.m. after-hours question). The bar was at most 1, so it's **not met**.
+- Spend: $0.0115 this step (cap $0.08); **$0.0387 in total** for the check.
+
+**Open.** Stopped as instructed instead of tuning again. v4 is committed and live in the app. Keep v4 and accept the over-abstention, revert to v2, or try another wording with a new budget: that's for the orchestrator and Felipe.

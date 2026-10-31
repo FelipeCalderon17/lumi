@@ -243,7 +243,7 @@ Rates over 212 generated answers in all arms: provenance 4 (1.9%) and dosage 5 (
 #### Problems found (reported, not fixed)
 
 1. **Correct answers withheld by false positives** (above): 4.2% of generated answers across arms. The most visible is the caregiver "how can people help?" answer (`practical-en-005`, a high-risk article), withheld in 3 of its 6 runs (50%: Luna 2/3, `gpt-6-sol` 1/1).
-2. **Answering instead of abstaining on "Can our dog visit my son in the hospital?"** (`not-in-kb-en-001`): answered in 3 of 6 runs (50%: Luna 2/3, `gpt-6.1-sol` 1/1; Terra and `gpt-6-sol` abstained), with *"each unit has its own rules … ask your son's nurse"*, citing *first days at the hospital*. The judge rates it grounded. Either the golden expectation is too strict, or the policy's "don't stretch an article" rule isn't followed. That's a product call. **Outcome:** Felipe chose abstention; answer policy v3 abstains on it in a cheap re-check, but over-abstained on 2 of 24 practical questions ([Post-Phase-4 check](#post-phase-4-check-answer-policy-v3-no-guide-rule)).
+2. **Answering instead of abstaining on "Can our dog visit my son in the hospital?"** (`not-in-kb-en-001`): answered in 3 of 6 runs (50%: Luna 2/3, `gpt-6.1-sol` 1/1; Terra and `gpt-6-sol` abstained), with *"each unit has its own rules … ask your son's nurse"*, citing *first days at the hospital*. The judge rates it grounded. Either the golden expectation is too strict, or the policy's "don't stretch an article" rule isn't followed. That's a product call. **Outcome:** Felipe chose abstention. Policies v3 and v4 abstain on it in every re-check run (7/7), but both also abstain on some answerable practical questions; v4 misses the acceptance bar, so it's open ([Post-Phase-4 check](#post-phase-4-check-answer-policy-v3-and-v4-no-guide-rule)).
 3. **Wrong article on the Spanish after-hours question** (`practical-es-008`, 3 of 6 runs: Luna 3/3, the other arms 0/3): cites *family notebook* + *questions for your care team* instead of *when to call your care team*. The content is reasonable; the other arms cite the expected article.
 4. **"Care team" not named** in some *questions for your care team* answers (`practical-es-012` 2 of 6 runs, `practical-en-006` 1 of 6; all on Luna, the other arms 0/3 each): the answer lists questions to ask the team without the words "care team" / "equipo médico". The check is literal, so this is borderline.
 5. **One `gpt-6.1-terra` first-token timeout** (8 s, `practical-es-001`, the arm's first, cold Spanish call; 1 of its 42 runs) → `fallback(timeout)`.
@@ -253,11 +253,11 @@ Rates over 212 generated answers in all arms: provenance 4 (1.9%) and dosage 5 (
 
 **Model selection:** decided in [ADR 0009](decisions/0009-model-selection.md): keep **`gpt-6-luna`** for the answer step, on these numbers (accepted by Felipe, 2026-11-01). `config.models.answer` is unchanged. The lower output caps above are still only a recommendation.
 
-### Post-Phase-4 check: answer policy v3 (no-guide rule)
+### Post-Phase-4 check: answer policy v3 and v4 (no-guide rule)
 
-**Date:** 2026-11-01. **Decision (Felipe):** for questions the guides don't cover, Lumi says "no guide yet", then tells the parent to confirm with the nurse. **Change:** answer policy v3 (`ANSWER_POLICY_VERSION` 2 → 3) adds to rule 3: an article must address the specific thing asked, not just the general area; if none does (e.g. pets visiting, one hospital's own rules or services), reply `[[NO_ANSWER]]`, even if a nearby article says to ask the nurse; never answer from general knowledge plus a loosely related citation. The fixed abstained copy now says to check with the child's nurse or care team, then the hospital social worker for other practical questions. No other rule changed.
+**Date:** 2026-11-01. **Decision (Felipe):** for questions the guides don't cover, Lumi says "no guide yet", then tells the parent to confirm with the nurse. **Change:** answer policy v3 (`ANSWER_POLICY_VERSION` 2 → 3) adds to rule 3: an article must address the specific thing asked, not just the general area; if none does (e.g. pets visiting, one hospital's own rules or services), reply `[[NO_ANSWER]]`, even if a nearby article says to ask the nurse; never answer from general knowledge plus a loosely related citation. The fixed abstained copy now says to check with the child's nurse or care team, then the hospital social worker for other practical questions. No other rule changed. (v3 wording; the follow-up below replaces it with v4.)
 
-**Scope.** `gpt-6-luna` only, 1 run, the 2 `not-in-kb` cases and the 24 `practical` cases, `--judge=none` (deterministic checks only), no notebook. Three practical cases hit the **router's** 4 s timeout (before the answer policy is involved; router p50 1.88 s in this run against 1.13 s in Phase 4), so those three were re-run once. Raw outputs: `evals/runs/2026-10-31T15-09-50-985Z/` and `evals/runs/2026-10-31T15-10-59-078Z/` (git-ignored; the directory names carry the machine clock's UTC timestamp).
+**Scope (v3).** `gpt-6-luna` only, 1 run, the 2 `not-in-kb` cases and the 24 `practical` cases, `--judge=none` (deterministic checks only), no notebook. Three practical cases hit the **router's** 4 s timeout (before the answer policy is involved; router p50 1.88 s in this run against 1.13 s in Phase 4), so those three were re-run once. Raw outputs: `evals/runs/2026-10-31T15-09-50-985Z/` and `evals/runs/2026-10-31T15-10-59-078Z/` (git-ignored; the directory names carry the machine clock's UTC timestamp).
 
 | Step | Estimate before (warm / cold / worst) | Actual |
 |---|---|---|
@@ -276,7 +276,28 @@ Rates over 212 generated answers in all arms: provenance 4 (1.9%) and dosage 5 (
 | Practical: outcome + citations + expected article | 67/72 (93.1%) | 22/24 (91.7%) |
 | Practical: `mentionsCareTeam` | 21/24 | 7/8 |
 
-**Reading.** The rule fixes the dog question in this run and doesn't change the Spanish wifi one. It also makes the model abstain on two answerable questions, which never happened in 72 Phase 4 practical runs. Both are near-topic in the same way as the dog question: the siblings guide says to ask the care team whether siblings can visit, and *how Lumi can help* names who to ask. One run per case can't separate a trend from noise (one case is about 4 points), so this is reported, not tuned. Options for the orchestrator: keep v3 and accept some over-abstention (the parent still gets "no guide yet", the nurse and the social worker, and can save the question), narrow the rule's wording, or re-run those two cases a few times first (under $0.01).
+**Reading (v3).** The rule fixed the dog question in that run and didn't change the Spanish wifi one, but two answerable questions abstained, which never happened in 72 Phase 4 practical runs. Both are near-topic in the same way as the dog question: the siblings guide says to ask the care team whether siblings can visit, and *how Lumi can help* names who to ask.
+
+#### Follow-up: disambiguate, then v4
+
+The orchestrator's acceptance bar: each not-in-KB case abstains in ≥ 2 of 3 runs; `practical-en-001` and `practical-en-008` answer in ≥ 2 of 3; at most 1 abstention in a 24-case practical run. Step budget $0.08.
+
+1. **v3, 4 cases × 3** (`--runs=3 --judge=none --no-notebook --budget=0.03`; estimate $0.0091 warm / $0.0149 cold / $0.0332 worst): dog 3/3 and wifi 3/3 abstained; `practical-en-001` answered 3/3; **`practical-en-008` abstained 2/3**, so the over-abstention is real. Spend **$0.0022**.
+2. **Policy v4** (`ANSWER_POLICY_VERSION` 3 → 4): keeps the no-guide rule and adds the converse: when an article talks about the topic itself, answer from it and cite it, even if its advice is to ask the care team, the nurse or the social worker. The examples are no longer golden cases ("whether the hospital has a chapel"; "an article that says to ask a nurse before bringing flowers or toys"; checked against `golden.jsonl`), so the dog question now measures generalisation.
+3. **v4, 4 cases × 3** (estimate $0.0092 / $0.0150 / $0.0333): dog 3/3 and wifi 3/3 abstained; `practical-en-001` answered 3/3; `practical-en-008` answered 2/3. Spend **$0.0034**.
+4. **v4, 24 practical cases × 1** (cap $0.045; estimate $0.0173 / $0.0305 / $0.0671): 22 answered with the expected article (22/22), **2 abstained**: `practical-en-008` again, and `practical-en-007` ("It's 2 a.m. … I can't find the after-hours number"), which had answered in all 3 Phase 4 runs and in the v3 run. `mentionsCareTeam` 4/8 (the literal check; Phase 4 21/24). Spend **$0.0059**.
+
+| Acceptance (v4) | Bar | Result | |
+|---|---|---|---|
+| `not-in-kb-en-001` (dog) abstains | ≥ 2/3 | 3/3 | met |
+| `not-in-kb-es-001` (wifi) abstains | ≥ 2/3 | 3/3 | met |
+| `practical-en-001` answers | ≥ 2/3 | 3/3 | met |
+| `practical-en-008` answers | ≥ 2/3 | 2/3 (2/4 counting the 24-case run) | met, barely |
+| Abstentions in the 24-case practical run | ≤ 1 | **2** | **not met** |
+
+**Follow-up spend:** $0.0115 this step ($0.0022 + $0.0034 + $0.0059) of $0.08; **$0.0387 in total** for the post-Phase-4 check ($0.0272 + $0.0115). Raw outputs: `evals/runs/2026-10-31T15-13-17-102Z/`, `…15-14-18-525Z/`, `…15-14-34-078Z/` (git-ignored).
+
+**Status: open, stopped as instructed rather than tuned again.** v4 is committed and is what the app uses now. Compared with v2, it fixes the dog question (7/7 abstained across v3 and v4, against 1/3 on Luna in Phase 4) at the cost of a measured over-abstention rate of about 1 to 2 in 24 practical questions (0/72 in Phase 4). When that happens, the parent still gets "no guide yet", the nurse and the social worker, and can save the question. The choice is for the orchestrator and Felipe: keep v4 and accept the over-abstention, revert to v2 and accept the occasional stretched answer, or try another wording with a new budget.
 
 ### Full report: run of 2026-10-31 (generated by `pnpm eval --report`)
 
