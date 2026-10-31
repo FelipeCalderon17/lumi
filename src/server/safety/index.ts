@@ -197,9 +197,9 @@ const RULES: readonly Rule[] = [
     language: "es",
     pattern: rx(
       String.raw`\b(?:inconsciente|no reacciona|perdio el conocimiento|desmayad[oa]` +
-        String.raw`|no ${ES_OBJ}${ES_ADV}${ES_AUX}(?:despertar(?:l[oa]s?|les?|se)?|despertando(?:l[oa]s?|les?|se)?|despiert(?:a|an)|desperto|despertaba)` +
-        String.raw`|no ${ES_OBJ}(?:ha|han|hemos|he) despertado` +
-        String.raw`|no ${ES_MODAL} (?:hacer )?que (?:se )?despiert(?:e|en)` +
+        `|no ${ES_OBJ}${ES_ADV}${ES_AUX}(?:despertar(?:l[oa]s?|les?|se)?|despertando(?:l[oa]s?|les?|se)?|despiert(?:a|an)|desperto|despertaba)` +
+        `|no ${ES_OBJ}(?:ha|han|hemos|he) despertado` +
+        `|no ${ES_MODAL} (?:hacer )?que (?:se )?despiert(?:e|en)` +
         `|no hay (?:manera|forma) de despertar(?:l[oa]s?|les?)` +
         String.raw`|se (?:${ES_ESTAR} )?desmay(?:o|a|an|ando|ado)|${ES_ESTAR} desmayandose)\b`,
     ),
@@ -212,9 +212,9 @@ const RULES: readonly Rule[] = [
     language: "es",
     pattern: rx(
       String.raw`\b(?:${ES_REFL} (?:${ES_ESTAR} )?(?:ahog|atragant)(?:a|as|an|o|ue|e|aba|ando)` +
-        String.raw`|(?:${ES_ESTAR} )?(?:ahog|atragant)and(?:ome|ose|ote)` +
-        String.raw`|${ES_REFL} (?:${ES_MODAL}|voy a|va a|vas a) (?:ahogar|atragantar)` +
-        String.raw`|(?:${ES_MODAL}|voy a|va a|vas a) (?:ahogar|atragantar)(?:me|se|te)` +
+        `|(?:${ES_ESTAR} )?(?:ahog|atragant)and(?:ome|ose|ote)` +
+        `|${ES_REFL} (?:${ES_MODAL}|voy a|va a|vas a) (?:ahogar|atragantar)` +
+        `|(?:${ES_MODAL}|voy a|va a|vas a) (?:ahogar|atragantar)(?:me|se|te)` +
         String.raw`|atragantad[oa])\b`,
     ),
   },
@@ -294,8 +294,8 @@ const RULES: readonly Rule[] = [
     pattern: rx(
       String.raw`\b(?:${ES_INTENT} (?:\w+ )?${ES_HARM_ENCLITIC}${ES_NOT_OBJECT}` +
         String.raw`|(?:me|se|te) ${ES_INTENT} (?:\w+ )?${ES_HARM_INF}${ES_NOT_OBJECT}` +
-        String.raw`|(?:me|se|te) ${ES_ESTAR} (?:cortando|lastimando|hiriendo|haciendo (?:(?:mucho|tanto) )?dano)${ES_NOT_OBJECT}` +
-        String.raw`|${ES_ESTAR} (?:cortand|lastimand|hiriend)(?:ome|ose|ote)${ES_NOT_OBJECT}` +
+        `|(?:me|se|te) ${ES_ESTAR} (?:cortando|lastimando|hiriendo|haciendo (?:(?:mucho|tanto) )?dano)${ES_NOT_OBJECT}` +
+        `|${ES_ESTAR} (?:cortand|lastimand|hiriend)(?:ome|ose|ote)${ES_NOT_OBJECT}` +
         String.raw`|autolesion(?:es|arme|arse)?)\b`,
     ),
   },
