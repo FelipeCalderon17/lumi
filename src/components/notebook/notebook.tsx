@@ -1,9 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { Dictionary, Locale } from "@/i18n";
 import { fill } from "@/i18n/format";
 import { formatNoteDate } from "@/lib/dates";
+import { localSafetyNotices, noticeCopy, noticeKinds } from "@/lib/notebook-safety";
+import type { SheetData } from "@/lib/notebook-sheet";
 import {
   addNote,
   browserStorage,
@@ -17,8 +19,9 @@ import {
 } from "@/lib/notebook-store";
 import { config } from "@/server/config";
 import type { NotebookResponse, NotebookSafetyNotice } from "@/server/notebook";
+import type { EmergencyKind } from "@/server/safety";
 import { VoiceInput } from "../voice-input";
-import { NotebookSheet, type SheetData } from "./notebook-sheet";
+import { NotebookSheet } from "./notebook-sheet";
 
 const MAX_NOTES = config.limits.notebook.maxNotes;
 
@@ -28,7 +31,8 @@ type Prepare =
   | {
       kind: "error";
       message: "prepareFailed" | "prepareInvalid";
-      safetyNotices: NotebookSafetyNotice[];
+      /** Notices the server returned with the error (a 400 still checks every note first). */
+      serverNotices: NotebookSafetyNotice[];
     };
 
 /**
@@ -121,17 +125,21 @@ export function Notebook({ locale, t }: { locale: Locale; t: Dictionary }) {
         setPrepare({ kind: "idle" });
         return;
       }
-      const safetyNotices = body && Array.isArray(body.safetyNotices) ? body.safetyNotices : [];
+      const serverNotices = body && Array.isArray(body.safetyNotices) ? body.safetyNotices : [];
       setPrepare({
         kind: "error",
         message: body?.error === "invalid_notes" ? "prepareInvalid" : "prepareFailed",
-        safetyNotices,
+        serverNotices,
       });
     } catch {
       if (!controller.signal.aborted)
-        setPrepare({ kind: "error", message: "prepareFailed", safetyNotices: [] });
+        setPrepare({ kind: "error", message: "prepareFailed", serverNotices: [] });
     }
   }
+
+  // The same deterministic check, on the device: offline or after an error, flagged notes still
+  // get the fixed steps (B1, Phase 3 review).
+  const localNotices = useMemo(() => localSafetyNotices(notes), [notes]);
 
   if (sheet) {
     return <NotebookSheet data={sheet} locale={locale} t={t} onBack={() => setSheet(null)} />;
@@ -324,12 +332,19 @@ export function Notebook({ locale, t }: { locale: Locale; t: Dictionary }) {
         <div role="status" aria-live="polite">
           {prepare.kind === "error" && (
             <div className="mt-4 space-y-3">
-              <SafetyNotices notices={prepare.safetyNotices} t={t} />
+              <SafetyNotices kinds={noticeKinds(prepare.serverNotices, localNotices)} t={t} />
               <p>{n[prepare.message]}</p>
               <button
                 type="button"
                 className="btn-quiet w-full"
-                onClick={() => setSheet({ kind: "byDate", notes, preparedAt: new Date() })}
+                onClick={() =>
+                  setSheet({
+                    kind: "byDate",
+                    notes,
+                    preparedAt: new Date(),
+                    serverNotices: prepare.serverNotices,
+                  })
+                }
               >
                 {n.printByDate}
               </button>
@@ -342,21 +357,13 @@ export function Notebook({ locale, t }: { locale: Locale; t: Dictionary }) {
   );
 }
 
-/** Fixed emergency steps for flagged notes, ALWAYS shown first (ADR 0003). One per kind. */
-export function SafetyNotices({
-  notices,
-  t,
-}: {
-  notices: readonly NotebookSafetyNotice[];
-  t: Dictionary;
-}) {
-  const kinds = [...new Set(notices.map((notice) => notice.kind))];
+/** Fixed emergency steps for flagged notes, ALWAYS shown before the notes (ADR 0003). */
+export function SafetyNotices({ kinds, t }: { kinds: readonly EmergencyKind[]; t: Dictionary }) {
   if (kinds.length === 0) return null;
   return (
     <div className="space-y-3">
       {kinds.map((kind) => {
-        const selfHarm = kind === "self_harm";
-        const steps = selfHarm ? t.safety.selfHarm.steps : t.safety.emergency.steps;
+        const copy = noticeCopy(kind, t);
         return (
           <div
             key={kind}
@@ -368,11 +375,11 @@ export function SafetyNotices({
                 aria-hidden="true"
                 className="mt-[0.5em] size-2.5 shrink-0 rounded-pill bg-ember"
               />
-              {selfHarm ? t.notebook.selfHarmTitle : t.notebook.safetyTitle}
+              {copy.title}
             </p>
-            <p className="mt-2">{t.notebook.safetyBody}</p>
+            <p className="mt-2">{copy.body}</p>
             <ul className="mt-2 list-disc space-y-1 pl-5">
-              {steps.map((step) => (
+              {copy.steps.map((step) => (
                 <li key={step}>{step}</li>
               ))}
             </ul>
@@ -383,7 +390,7 @@ export function SafetyNotices({
               >
                 {t.safety.actions.call911}
               </a>
-              {selfHarm && (
+              {kind === "self_harm" && (
                 <a href="tel:988" className="btn-quiet">
                   {t.safety.actions.call988}
                 </a>

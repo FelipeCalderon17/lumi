@@ -4,26 +4,17 @@ import { useEffect, useRef, useState } from "react";
 import type { Dictionary, Locale } from "@/i18n";
 import { fill } from "@/i18n/format";
 import { formatDay, formatNoteDate } from "@/lib/dates";
-import type { StoredNote } from "@/lib/notebook-store";
+import { noticeLines } from "@/lib/notebook-safety";
+import { type SheetData, sheetModel } from "@/lib/notebook-sheet";
 import { notebookPlainText } from "@/lib/notebook-text";
-import type { NotebookResponse, NotebookTopic } from "@/server/notebook";
 import { LumiMark } from "../lumi-mark";
 import { SafetyNotices } from "./notebook";
-
-export type SheetData =
-  | { kind: "prepared"; response: NotebookResponse; preparedAt: Date }
-  /** No AI: the notes by date, when preparing failed. */
-  | { kind: "byDate"; notes: StoredNote[]; preparedAt: Date };
-
-type Group = {
-  topic: NotebookTopic | null;
-  notes: { key: string; text: string; createdAt: string; flagged: boolean }[];
-};
 
 /**
  * The doctor-ready page: safety notices first, then each note VERBATIM (whitespace and line
  * breaks kept) with its local date, under headings from the dictionaries. Print, Share (Web
- * Share API, else copy) and Copy.
+ * Share API, else copy) and Copy. Every variant runs the deterministic safety check on the
+ * device as well and merges it with the server's notices, so no sheet can lose them.
  */
 export function NotebookSheet({
   data,
@@ -46,30 +37,7 @@ export function NotebookSheet({
     headingRef.current?.focus();
   }, []);
 
-  const notices = data.kind === "prepared" ? data.response.safetyNotices : [];
-  const flagged = new Set(notices.map((notice) => notice.noteIndex));
-  const groups: Group[] =
-    data.kind === "prepared"
-      ? data.response.result.groups.map((group) => ({
-          topic: group.topic,
-          notes: group.notes.map((note) => ({
-            key: String(note.index),
-            text: note.text,
-            createdAt: note.createdAt,
-            flagged: flagged.has(note.index),
-          })),
-        }))
-      : [
-          {
-            topic: null,
-            notes: data.notes.map((note) => ({
-              key: note.id,
-              text: note.text,
-              createdAt: note.createdAt,
-              flagged: false,
-            })),
-          },
-        ];
+  const { kinds, groups } = sheetModel(data);
   const title = data.kind === "prepared" ? n.resultTitle : n.byDateTitle;
   const subtitle = fill(n.preparedOn, { date: formatDay(data.preparedAt, locale) });
   const intro =
@@ -83,7 +51,7 @@ export function NotebookSheet({
     notebookPlainText({
       title,
       subtitle,
-      safety: notices.length > 0 ? [n.safetyTitle, n.safetyBody] : [],
+      safety: noticeLines(kinds, t),
       groups: groups.map((group) => ({
         heading: group.topic ? n.topics[group.topic] : n.byDateTitle,
         notes: group.notes.map((note) => ({
@@ -157,9 +125,9 @@ export function NotebookSheet({
           </div>
         </header>
 
-        {notices.length > 0 && (
+        {kinds.length > 0 && (
           <div className="mt-6">
-            <SafetyNotices notices={notices} t={t} />
+            <SafetyNotices kinds={kinds} t={t} />
           </div>
         )}
         {intro && <p className="mt-6 text-muted">{intro}</p>}
