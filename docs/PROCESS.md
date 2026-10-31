@@ -376,3 +376,57 @@ A small fixes-only round: two demo-breakage items and one wording fix. The prove
 | 3 Doc wording | Applied | README and ADR 0015: "An unsourced number is withheld regardless of formatting." replaces "a dose number can never be sourced". |
 
 **Checks.** Node 24.19.0. `pnpm test` 3 runs in a row: ✓ ✓ ✓ (28 files, 589 tests each). `pnpm lint` ✓, `pnpm typecheck` ✓, `pnpm test:kb` ✓ (5 files, 156 tests), `pnpm build` ✓. All exit codes 0.
+
+## Phase 3: the UI
+
+The builder agent (Claude) built every page and flow on top of the approved server, then checked them in a real browser. Felipe's framing: the visual deliverable matters most, there's no "AI template" look, the reader is a stressed parent at 2 a.m. on a phone, and the app must not break. Server guardrails stayed untouched. Decisions are in [ADR 0016](decisions/0016-phase-3-ui.md) (Proposed).
+
+**What was built**
+
+- **Design system:** night/dawn tokens with a remembered manual toggle, Fraunces + Atkinson Hyperlegible Next, one amber accent, a line-art hero (a window at night, a lantern, a paper boat, fireflies), a still paper grain, and utilities instead of a component library. Reduced motion turns animation off.
+- **Shell:** the 911/988 strip on every page (static, reviewed copy, "More" for the full lines), a header with all seven sections, a current-page marker, a no-JS mobile menu, a skip link, the EN/ES switch, and the footer disclaimer with the one allowed demo number.
+- **Ask Lumi:**
+  - The NDJSON reader (`src/lib/chat-client.ts`) returns exactly one terminal event, and aborts on a new question, "Start over" or unmount.
+  - Every event is rendered from fixed copy. Answers get citation pills and a Sources list.
+  - Medical → "+ Add to my notebook". Crisis puts 988 first, then Parent Circles.
+  - Abstained → the full gap flow (redacted editable preview, disclosure, consent, every status, tab-memory delete).
+  - Voice input with a 2-minute countdown and auto-stop.
+- **My notebook:** `localStorage` with corrupt-data recovery and Undo. The processing notice comes first. Prepare renders safety notices first and verbatim notes with local dates. There's a no-AI by-date page when preparing fails, a print stylesheet, Share (Web Share or copy) and Copy.
+- **Other pages:**
+  - Guides: the library and article pages.
+  - Community: mock Parent Circles grouped by situation, plus comfort reading.
+  - Volunteer: mock roles with filters and a validated demo sign-up.
+  - Donate: a demo flow with a fixed, illustrative impact table.
+  - Staff: sign-in → saved questions with delete → usage with derived cost and the `complete` flag → sign-out, with a fail-closed message.
+- **Tests:** client-side unit tests for the NDJSON reader (one terminal event, premature EOF, HTTP and network errors, abort), notebook storage (add/delete/undo/clear, corrupt data, storage failures), the voice countdown and cap, donate tiers, volunteer filters and sign-up validation, the Markdown reader (every KB article parses without losing words), note dates and the plain-text export. The dictionary tests now allow `notebook.processingNotice` to name OpenAI and exactly one fictional `555-01xx` number in `footer.contactPhone`.
+
+**Notable prompts and decisions**
+
+- Felipe's brief named the deep slice (Ask Lumi + the notebook) and asked for honest mocks elsewhere. Mocks carry a "Demo" badge and a "nothing is sent" line.
+- The content rules run on all UI copy, and they flagged mock schedules ("Mondays, 7–8 p.m.") and "ages 6–12" as dose shapes. The builder reworded the copy ("Mondays, early evening", "ages 6 to 12") rather than weaken the gate. This is documented as a tradeoff.
+- `redactContactDetails` moved to the Node-free `src/server/gaps/redact.ts`, so the preview shows exactly what the server stores. There's no behaviour change, and the server tests are unchanged.
+
+**The browser check** (Chromium via a scratch `playwright-core` outside the repo; the preview tool's screenshot channel failed in this environment, though its evaluate worked)
+
+- The dev server ran against a local Docker Postgres 17 on 5433. `DATABASE_URL` and throwaway staff credentials were passed inline, and nothing was written to env files.
+- Every page × EN/ES × 390 px/1280 px (36 combinations) was checked: strip visible, `lang` right, no horizontal overflow, console clean.
+- Then every flow, live or with mocked responses:
+  - **Chat:** answer, medical + add to notebook, emergency, crisis, abstained + save + delete, offline / EOF / 500 fallbacks, `too_long`, mocked `uncertain` (retry with the same id/token), `unavailable` and `rate_limited`, "Start over".
+  - **Voice:** unsupported, denied, a real fake-mic upload, and the countdown with auto-stop.
+  - **Notebook:** recovery, add, undo, delete, prepare with a safety notice first, verbatim whitespace, print, copy, share fallback, clear, a live ES prepare, a 503 → by-date page, and a 400 with safety notices.
+  - **Staff:** wrong passcode, sign-in, list, delete, usage, sign-out, the 429 message, and the fail-closed message on a production build without staff variables.
+  - **Other pages:** donate, volunteer, community and guides.
+- Postgres showed the parent delete as a blank tombstone. The ledger confirmed the live usage below.
+
+**What didn't work, and the fixes**
+
+- `next dev` (Next 16) appended its own block to AGENTS.md. Reverted, and `agentRules: false` in `next.config.ts`.
+- `navItems` was first defined in a client module and called from a server component, which failed the build. Moved to `nav-items.ts`.
+- The language switch re-rendered `<html>` on the client. React warned about the theme script, and the saved theme was dropped. Now it's a plain link (a full load), with a safety net in the toggle.
+- A missing favicon was a 404 on every page. Fixed with `app/icon.svg`.
+- The Spanish emergency strip wrapped to three rows on phones; it's now two compact rows. Safety cards on mobile were squeezed by the mark column; they're now full width. The fixed grain caused a seam in full-page screenshots; it now scrolls with the page.
+- The test helper first matched the answer's Sources `<ol>` (a test bug, not an app bug). Repeated staff logins hit the real 5-per-15-minutes limit, which confirmed the "Too many attempts" copy.
+
+**Live usage for the check** (from the ledger): 19 `gpt-6-luna` calls (router 10, answer 6, notebook 3) and 1 `gpt-transcribe` call (4 s), about $0.003 derived. Fixed-copy outcomes were checked live first. For the README stills they replay the same event shape.
+
+**Checks.** Node 24.19.0. `pnpm lint` ✓, `pnpm typecheck` ✓, `pnpm test` ✓ (37 files, 646 tests, up from 589), `pnpm test:kb` ✓ (5 files, 156 tests), `pnpm build` ✓. All exit codes 0.

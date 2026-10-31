@@ -45,7 +45,7 @@ Do **not** write about diagnosis, prognosis, treatments, side effects, medicines
 
 - Lumi is fictional. **Don't invent real-world facts presented as true** (specific laws, benefit amounts, programme names, eligibility rules). For leave, school rights or insurance, say who to ask (employer HR, the school, the insurance plan, the hospital social worker), not what the law says.
 - **No real organisations, hospitals or phone numbers.** Use generic institutions and descriptions: "your hospital's emergency line", "the social worker at your hospital", "your employer's HR team", "your insurance plan".
-- **One narrow exception ([ADR 0005](decisions/0005-no-conversation-storage.md)):** Real organizations are not used or imitated, except naming the AI data processor (OpenAI) in privacy disclosures, and the public 911/988 services in fixed safety copy. "OpenAI" may appear only in `help.processingNotice` and in the `how-lumi-can-help` article. Tests enforce this.
+- **One narrow exception ([ADR 0005](decisions/0005-no-conversation-storage.md)):** Real organizations are not used or imitated, except naming the AI data processor (OpenAI) in privacy disclosures, and the public 911/988 services in fixed safety copy. "OpenAI" may appear only in `help.processingNotice`, `notebook.processingNotice` and the `how-lumi-can-help` article. Tests enforce this.
 - **Allowed numbers:** **911** anywhere it helps. **988** (988 Suicide & Crisis Lifeline, a public US service) **only** in the fixed safety copy (`safety.*` and the crisis banner in the dictionaries) and, in the KB, only as the exact crisis line copied from `safety.crisisLine`. Outside the US: "contact your local emergency services". Tests enforce this.
 - **No names, no testimonials, no quotes from "families".** No invented stories.
 
@@ -76,7 +76,9 @@ Every article has `risk: standard | high` in its frontmatter. Mark **`high`** an
 - Body is 250–450 words.
 - No dosage patterns ("5 ml", "200mg", "a tablet", "give it every 4 hours", "take … twice daily": the structural gate in [ADR 0015](decisions/0015-structural-output-checks.md); KB text has to pass it too), no "cure"/"guarantee" (EN/ES), no "journey"/"warrior".
 - No phone numbers except 911, and 988 only inside the approved crisis line.
-- "OpenAI" only in the privacy disclosures (`help.processingNotice`, `how-lumi-can-help`).
+- "OpenAI" only in the privacy disclosures (`help.processingNotice`, `notebook.processingNotice`, `how-lumi-can-help`).
+- The only other phone number in the UI is the footer's fictional demo contact (`footer.contactPhone`, `555-01xx`), never in safety or fallback copy (ADR 0012).
+- UI copy passes the same dosage gate as the KB, so mock schedules use time-of-day words ("Mondays, early evening"), not clock times, and age ranges are written "ages 6 to 12".
 
 ## Review checklist (per article)
 

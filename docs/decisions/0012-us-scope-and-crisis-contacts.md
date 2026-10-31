@@ -13,6 +13,8 @@ Emergency and crisis copy depends on the country. The earlier content rules allo
   - Outside the US: **"contact your local emergency services"**.
 - 988 is a public US service. It may appear **only** in the fixed safety copy (`safety.*` and the static crisis banner in the dictionaries) and in the identical crisis line in the self-care KB article. Tests enforce this, and no other phone numbers may appear anywhere.
 - Lumi never invents other organisations or numbers (hospital lines are described, not numbered: "your hospital's emergency line").
+- **One demo exception (Phase 3, [ADR 0016](0016-phase-3-ui.md)):** the footer's demo contact line may show a fictional number from the reserved `555-01xx` range (`footer.contactPhone`, currently `555-0142`). It's never in safety, fallback or KB copy. The dictionary tests allow exactly that key and require the `555-01xx` shape.
+- **Safety layer 3 (Phase 3):** every page shows a static strip with "Emergency? Call 911" and "In crisis? Call or text 988" (`safety.strip`), plus the full banner lines under "More".
 
 ## Consequences
 - The crisis path gives a parent something they can do tonight, in their language.

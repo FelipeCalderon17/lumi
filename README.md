@@ -4,9 +4,9 @@
 
 A prototype website for **Lumi**, a fictional foundation supporting families of children with cancer, built for the FutureProofing take-home ([brief](docs/BRIEF.md)).
 
-> **Status:** Phase 2, server side. The assistant pipeline, voice-to-text, the notebook, gaps and staff endpoints work behind tests and a first live smoke test. The UI is next (Phase 3).
+> **Status:** Phase 3, UI built. Every page works in English and Spanish, on phones and desktops, on top of the tested server side (assistant pipeline, voice-to-text, notebook, gaps, staff). It was checked flow by flow in a real browser ([PROCESS.md](docs/PROCESS.md)).
 >
-> **Live demo:** _TODO: Railway URL after Phase 3._
+> **Live demo:** _TODO: Railway URL._
 
 ## What it is
 
@@ -14,7 +14,11 @@ A bilingual (English/Spanish) site for families in the US, where the one deep pa
 
 Behind it, a small **staff view** lists questions Lumi couldn't answer, saved only when a parent chooses to share them after seeing and editing exactly what will be stored. Questions older than 30 days are deleted when someone saves a question or staff opens the list. The team uses shared questions to decide which guides to write next.
 
-Landing, donate and volunteer are placeholders.
+Around it:
+- **My notebook:** private notes kept on the device, typed or spoken. "Prepare for my appointment" sorts them by topic in the parent's own words, ready to print or share.
+- **Guides:** the library the assistant answers from.
+- **Community** (Parent Circles), **Volunteer** and **Donate:** clearly labelled demo pages. No backend, no payments, no testimonials.
+- **Every page:** a calm strip with "Emergency? Call 911" and "In crisis? Call or text 988".
 
 ## Why this slice
 
@@ -44,7 +48,7 @@ Every tradeoff is a conscious, time-boxed choice for a prototype. Each is record
 | **Number provenance withholds benign numbers** (ADR 0015) | Every number, frequency and schedule in a chat answer must also appear in a guide it cites, after normalization (Unicode digits, written numbers EN/ES, Roman II–XII, half/media → 1/2, twice/doble → 2x). Otherwise the answer is withheld. False positives: a benign number the cited guide lacks gets the fallback ("Pack 2 changes of clothes" citing a guide with no "2"), and so does EN "once you arrive" (read as 11). It checks set membership, not context: a number or schedule anywhere in the cited guide passes. "1" is in almost every guide (one/un/una), and some guides contain "2", "10", "daily", "at night" or "antes de dormir". Ordinals and fractions outside the list ("fifth", "quinto") aren't read as numbers, and neither is a bare "I". | An unsourced number is withheld regardless of formatting (lists, quotes, line breaks). One simple rule covers what the phrasing rules keep missing. | Measure the false-positive rate on real answers (Phase 4); context-aware provenance (the number together with the word it counts). |
 | **List-scope bounds and quotation handling** (ADR 0015) | The dosage rules read a list as one scope only within 4 lines under a heading of up to 4 words, or under a heading ending in a colon. A value further down, or under a longer heading, isn't caught by those rules. Label parsing is skipped after an opening quote, but only when the quoted text has no number, frequency or schedule ('decir: "Uno de mis hijos…"' is a KB line). | Bounds keep ordinary lists and quotations passing. Number provenance doesn't depend on layout, so it still catches an unsourced number beyond the bounds. | Parse the Markdown structure instead of counting lines. | A model-based dose classifier as an extra layer (never a replacement); fuzzy matching; clinician review of what counts as a dose. |
 | **Notebook without AI rewriting** (ADR 0015) | The model only sorts notes into fixed topics. There are no AI summaries and no AI-polished questions: the page is the parent's own notes, verbatim, with dates, under fixed headings. | AI rewriting with validation was tried first, and the reviewer showed it could silently drop "6 seizures". Without rewriting, no note can be invented, altered or dropped, by construction. | AI-suggested questions shown **separately**, clearly labelled as suggestions, with clinician-reviewed guardrails. Never edits a note. |
-| **Notebook notes are processed by OpenAI; a note can be misfiled** ([ADR 0005](docs/decisions/0005-no-conversation-storage.md), ADR 0015) | Notes stay on the device and Lumi stores none of them, but "prepare" sends them to OpenAI for one classification call (`store: false`). A note may land under the wrong heading. | Grouping by topic helps at an appointment. A misfiled note is still shown verbatim, and classification accuracy is measured in evals. | On-device classification; a processing notice on the notebook page (Phase 3); a "move to…" control for the parent. |
+| **Notebook notes are processed by OpenAI; a note can be misfiled** ([ADR 0005](docs/decisions/0005-no-conversation-storage.md), ADR 0015) | Notes stay on the device and Lumi stores none of them, but "prepare" sends them to OpenAI for one classification call (`store: false`). A note may land under the wrong heading. | Grouping by topic helps at an appointment. A misfiled note is still shown verbatim, and classification accuracy is measured in evals. | On-device classification; a "move to…" control for the parent. (The processing notice on the notebook page shipped in Phase 3.) |
 | **Whole KB in context, no vector DB** ([ADR 0002](docs/decisions/0002-whole-kb-in-context.md)) | Every answer pays for the full KB as input tokens. Prompt caching is best-effort, not guaranteed, and an article edit invalidates it until it warms. | 12 short articles per language fit easily. No retrieval step that can miss, and no embeddings pipeline. | Hybrid retrieval (BM25 + embeddings) with the same citation contract, at ~200 articles. |
 | **Buffer → validate → reveal** ([ADR 0010](docs/decisions/0010-buffer-validate-reveal.md)) | The parent waits for the full answer (a calm progress state) instead of watching it stream. `answerTotalMs` (25 s) is the ceiling. | No model text reaches the parent before it passes the completion, citation and output checks, so nothing is ever withdrawn. | Stream sentence by sentence, each validated before it's shown, if the checks can run per sentence. |
 | **Valid citation ≠ grounded claim** ([ADR 0010](docs/decisions/0010-buffer-validate-reveal.md), [ARCHITECTURE](docs/ARCHITECTURE.md#what-citation-integrity-does-and-doesnt-guarantee)) | Code checks that cited guides exist, not that each sentence is supported. An unsupported claim next to a real citation can reach the parent. | Grounding can't be checked deterministically. It's reduced by the prompt and the fixed medical path, and measured by the judge. | Sentence-level support checking before reveal, if latency allows. |
@@ -62,7 +66,38 @@ Every tradeoff is a conscious, time-boxed choice for a prototype. Each is record
 | **Live transcription checks pending** ([ADR 0014](docs/decisions/0014-voice-transcription.md)) | `gpt-transcribe` was chosen from the provider docs and checked on two synthetic recordings only. Real voices, noisy rooms and Spanish quality aren't verified. The 2-minute cap cuts long memos, and if the provider stops reporting duration, transcription fails closed. | A live EN/ES check is paid and needs real recordings. Felipe confirms the model with it. | The live check with real EN/ES recordings; `gpt-4o-transcribe` as the fallback choice. |
 | **No live-Postgres concurrency test** (ADR 0005, 0006) | The delete-vs-save race (tombstone upsert on the primary key; save `ON CONFLICT DO NOTHING`) is tested by SQL shape and an in-memory store, not by concurrent transactions on a running Postgres. | Tests must not need a database or network. The guarantee rests on documented Postgres primary-key semantics. | An integration test with concurrent transactions against a disposable Postgres (CI service container). |
 | **Spanish name for 988** ([ARCHITECTURE § Open questions](docs/ARCHITECTURE.md#open-questions)) | The Spanish copy uses the English service name "988 Suicide & Crisis Lifeline". | Not yet checked against the official source; a wrong name in crisis copy is worse than the English one. | Verify the official Spanish name before launch. |
+| **Session-only conversation** ([ADR 0005](docs/decisions/0005-no-conversation-storage.md), [ADR 0016](docs/decisions/0016-phase-3-ui.md)) | Ask Lumi's Q&A list lives in the tab's memory. It's gone on "Start over", reload or close, so a parent can't come back to an answer later. | No conversation storage, on our side or the device's. A shared family phone keeps nothing. The notebook is the explicit place to keep things ("+ Add to my notebook"). | An opt-in "save this answer to my notebook". |
+| **Device-bound notebook** (ADR 0005, 0016) | Notes live in this browser's `localStorage` only: no sync or backup. Clearing browser data deletes them, and some private modes block storage (the page then says it couldn't save). Corrupt data is recovered by keeping the valid notes. | Private by default, with no accounts. The page says where notes live. | An optional encrypted export/import file, or accounts with end-to-end encryption. |
+| **Voice depends on the browser** ([ADR 0014](docs/decisions/0014-voice-transcription.md), ADR 0016) | The mic shows only where `MediaRecorder` and `getUserMedia` exist. Elsewhere it's hidden and typing works. The browser check covered the unsupported, denied, countdown and 2-minute auto-stop states headless. The one real upload was a synthetic tone (correctly `empty`); real speech is still pending. | Progressive enhancement: voice is a convenience, never the only way in. | The live EN/ES check with real voices; test on iOS Safari and Android Chrome devices. |
+| **Print and share support** (ADR 0016) | The doctor-ready layout was checked in Chromium's print emulation only. "Share" uses the Web Share API where the browser has it, otherwise it copies. Clipboard access can be refused, and then the page says so. | Built on platform features, with no PDF library and no server rendering of private notes. | Check printing in Safari and Firefox; an optional PDF built on the device. |
+| **Mock Community, Volunteer and Donate** (ADR 0016) | Parent Circles, volunteer roles and the donate flow are demos, each with a "Demo" badge. "Join" only flips a label, the sign-up sends nothing, and no payment is processed or card collected. The donate impact table is fixed, reviewed copy labelled illustrative (no AI). | The brief asks for one deep slice. Real sign-ups and payments would need real organisations and a processor. | A real events backend, a CRM for volunteers and a payment processor, each with its own privacy review. |
+| **Mock schedules without clock times** (ADR 0016, [CONTENT-GUIDELINES](docs/CONTENT-GUIDELINES.md)) | Circles say "Mondays, early evening", not "7–8 p.m.", and "ages 6 to 12", not "6–12". | UI copy passes the same dosage gate as the KB, which reads clock-time ranges as dose schedules. Rewording the copy beat weakening the gate. | A content-rule exemption scoped to non-generated UI copy, with an ADR. |
+| **Fictional phone number in the footer** ([ADR 0012](docs/decisions/0012-us-scope-and-crisis-contacts.md), ADR 0016) | The footer's demo contact line shows `555-0142`, from the reserved fictional range. It's the only number besides 911/988, and never in safety or fallback copy. | A real-looking footer without a real number. Tests allow exactly that one key, in the `555-01xx` shape. | A real foundation's contact details. |
+| **First gap save that loses its response** (ADR 0005, 0016) | If the network drops the very first save's response, the page says "couldn't save". It has no id or token yet (the server creates them), so it can't offer a retry or delete. | Rare, and the question still expires with the 30-day purge, and staff can delete it. Retries after an `uncertain` keep their credentials. | Client-generated ids, so every save can be retried or deleted idempotently. |
+| **Language switch reloads the page** (ADR 0016) | Switching EN↔ES is a full page load, which ends the current tab's conversation. | It swaps `<html lang>` cleanly and keeps the saved theme. A client re-render of the root layout dropped both. | Keep the conversation in `sessionStorage` across a language switch. |
 | **Clinician review pending** (ADR 0003, 0015) | Safety patterns, the fixed emergency and medical copy, what counts as a dose, and the notebook topics haven't been reviewed by a clinician. | Prototype for a take-home, with no clinical partner. | Clinician review before any real family uses Lumi. |
+
+## Screens
+
+Real screenshots from the browser check (dark "night" theme unless noted). Answers and the notebook page come from live model calls. The fixed-copy outcomes were checked live too, and their stills replay the same event.
+
+| | |
+|---|---|
+| ![Landing, desktop](docs/screenshots/landing-desktop.jpg) Landing | ![Landing, dawn theme](docs/screenshots/landing-dawn-desktop.jpg) Landing, dawn theme |
+| ![Answer with citations](docs/screenshots/ask-answer-desktop.jpg) Ask Lumi: an answer with citation links and sources | ![Medical template](docs/screenshots/ask-medical-desktop.jpg) Medical question: fixed template + "Add to my notebook" |
+| ![Abstained and gap preview](docs/screenshots/ask-abstained-gap-desktop.jpg) No guide yet: editable preview, disclosure, consent | ![Staff area](docs/screenshots/staff-desktop.jpg) Staff: saved questions and usage with derived cost |
+| ![Notebook](docs/screenshots/notebook-desktop.jpg) My notebook | ![Prepared page](docs/screenshots/notebook-prepared.jpg) Prepared for the appointment, notes verbatim |
+| ![Print view](docs/screenshots/notebook-print.jpg) Print layout | ![Guides](docs/screenshots/guides-desktop.jpg) Guide library |
+| ![Community](docs/screenshots/community-desktop.jpg) Parent Circles (demo) | ![Donate](docs/screenshots/donate-es-desktop.jpg) Donar (demo, Spanish) |
+
+Mobile (390 px):
+
+| | | | |
+|---|---|---|---|
+| ![Landing ES mobile](docs/screenshots/landing-mobile-es.jpg) | ![Progress](docs/screenshots/ask-progress-mobile-es.jpg) | ![Emergency](docs/screenshots/ask-emergency-mobile.jpg) | ![Crisis ES](docs/screenshots/ask-crisis-mobile-es.jpg) |
+| Inicio | Waiting: one calm line | Emergency: fixed copy, Call 911 | Crisis: 988 first |
+
+More: [guide article (ES)](docs/screenshots/guide-article-es-desktop.jpg), [volunteer (mobile)](docs/screenshots/volunteer-mobile.jpg), [Ask Lumi before the first question](docs/screenshots/ask-empty-desktop.jpg).
 
 ## Architecture
 
@@ -72,13 +107,32 @@ In one line: **deterministic safety check (before any limit) → cheap router wi
 
 ## Running locally
 
-Requirements: Node 24, pnpm 10.
+Requirements: Node 24, pnpm 10, and Docker (only for the staff and gap flows).
 
 ```bash
 pnpm install
 cp .env.example .env.local   # fill in values locally; never commit them
 pnpm dev                     # http://localhost:3000 → redirects to /en or /es
 ```
+
+Environment variables (names only; see `.env.example`):
+
+| Variable | Needed for | Without it |
+|---|---|---|
+| `OPENAI_API_KEY` | Ask Lumi, voice, notebook "Prepare" | Those calls fail and show the calm fallback copy |
+| `DATABASE_URL` | Saving gap questions, the usage ledger, the staff list | Gap save says "not available in this demo"; the ledger is a no-op |
+| `STAFF_PASSCODE`, `STAFF_SESSION_SECRET` (≥ 32 chars) | The staff area | The staff area stays closed (fail-closed message) |
+
+**Local Postgres for the staff and gap flows.** Pass the URL inline so it never ends up in an env file:
+
+```bash
+docker run -d --name lumi-db -e POSTGRES_PASSWORD=lumi -e POSTGRES_DB=lumi -p 5433:5432 postgres:17
+# (or: docker start lumi-db)
+DATABASE_URL=postgres://postgres:lumi@localhost:5433/lumi pnpm db:migrate
+DATABASE_URL=postgres://postgres:lumi@localhost:5433/lumi pnpm dev
+```
+
+To try the staff area without touching `.env.local`, add throwaway values inline for that one process: `STAFF_PASSCODE=… STAFF_SESSION_SECRET=… pnpm dev`. Open `/en/staff`.
 
 | Script | What it does |
 |---|---|
@@ -90,8 +144,6 @@ pnpm dev                     # http://localhost:3000 → redirects to /en or /es
 | `pnpm smoke` | Small live run through the real pipeline (~14 cheap calls + 2 short transcriptions). **Costs money.** Needs `.env.local`. |
 | `pnpm eval` | Golden-set evals against the real model. **Costs money.** Not in CI. |
 | `pnpm db:generate` / `db:migrate` | Drizzle migrations (`drizzle/`). Migrate by hand against `DATABASE_URL`. |
-
-Without `DATABASE_URL` the app still runs: the usage ledger is a no-op and saving a question says it isn't available in this demo. Without `STAFF_PASSCODE` and `STAFF_SESSION_SECRET` the staff area stays closed.
 
 CI (`.github/workflows/ci.yml`) runs Biome, typecheck, tests (including the KB content gate) and a production build. No secrets.
 

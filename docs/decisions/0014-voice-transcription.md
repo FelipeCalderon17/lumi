@@ -30,6 +30,8 @@ Parents often have their hands full, or find it easier to say a worry out loud t
 *Added 2026-10-30 (Phase 2 final fixes), so the README tradeoffs table has a source.*
 - **The live check is pending.** The model was chosen from the provider's docs and types. The only live run so far is two short synthetic recordings (macOS `say`, one EN and one ES) in `pnpm smoke`. Both came back word for word with the language detected. Real voices, accents, noisy hospital rooms and Spanish quality aren't verified. Felipe confirms the model (or switches to `gpt-4o-transcribe`) with a live EN/ES check on real recordings.
 
+- **Browser support (Phase 3, [ADR 0016](0016-phase-3-ui.md)).** The mic is offered only where `MediaRecorder` and `getUserMedia` exist and the browser records webm/opus, webm or mp4. Elsewhere it's hidden and typing works as usual. Recording is at 32 kbps, with a visible countdown from 2:00 and an auto-stop at the cap. The declared duration is capped at 120 s. Permission denied, empty, too long, busy and failed each have a calm message. The audio lives in memory until the single upload, then it's dropped. Checked headless: unsupported, denied, countdown and auto-stop (with a fast-forwarded clock and a mocked upload). One real upload was Chrome's synthetic tone, which correctly came back `empty`.
+
 ## Alternatives
 - **Browser speech recognition (Web Speech API).** Free and on-device in some browsers, but quality varies, Spanish support is uneven, and in Chrome the audio goes to Google, which is worse to explain.
 - **Streaming transcription (`gpt-live-transcribe`).** Nicer UX, but needs a WebSocket path and more moving parts than a 2-minute note needs.

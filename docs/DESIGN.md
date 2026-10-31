@@ -15,7 +15,7 @@ Lumi is the small light you leave on in a hospital room. The interface should fe
 
 ## Colour
 
-Two themes, chosen by `prefers-color-scheme`:
+Two themes, chosen by `prefers-color-scheme`, with a manual toggle in the header that's remembered on the device (applied before paint):
 
 - **Night** (dark): the home palette, what most late-night visits will see.
 - **Dawn** (light): warm paper, never pure white backgrounds.
@@ -102,9 +102,9 @@ Full rules: [CONTENT-GUIDELINES.md](CONTENT-GUIDELINES.md). In short:
 
 ## Accessibility checklist
 
-- [ ] AA contrast on every text pair (table above)
-- [ ] Visible focus ring (3px `glow`) on every interactive element
-- [ ] `lang` on `<html>` matches the page; the language switch link has `hreflang`/`lang`
-- [ ] Answer region is `aria-live="polite"` and announces the progress line once, then the complete answer; emergency is not hidden behind animation
-- [ ] All motion off under `prefers-reduced-motion`
-- [ ] Works at 200% zoom and 320px width
+- [x] AA contrast on every text pair (table above)
+- [x] Visible focus ring (3px `glow`) on every interactive element
+- [x] `lang` on `<html>` matches the page; the language switch link has `hreflang`/`lang`
+- [x] Answer region is `aria-live="polite"` and announces the progress line once, then the complete answer; emergency is not hidden behind animation
+- [x] All motion off under `prefers-reduced-motion`
+- [ ] Works at 200% zoom and 320px width (checked at 390px with no horizontal overflow on any page; 320px and 200% zoom not yet checked)
