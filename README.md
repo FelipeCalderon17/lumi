@@ -9,6 +9,8 @@ A parent can ask Lumi a practical question at any hour, in English or Spanish, a
 > **Status:** Phases 0–4 are done (foundations, knowledge base, server, UI, evals). Every page works in English and Spanish, on phones and desktops. Deployed on Railway.
 >
 > **Live demo:** https://lumi-production-fa66.up.railway.app
+>
+> **Walkthrough video:** _link coming soon (3–5 min)._
 
 ## Review in 10 minutes
 
