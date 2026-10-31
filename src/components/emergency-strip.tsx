@@ -23,7 +23,7 @@ export function EmergencyStrip({ t }: { t: Dictionary }) {
           <a
             href="tel:911"
             aria-label={`${strip.emergency}. ${actions.call911}`}
-            className="flex min-h-10 items-center gap-2 font-semibold text-text hover:underline max-sm:mr-20 sm:min-h-11"
+            className="flex min-h-11 items-center gap-2 font-semibold text-text hover:underline max-sm:mr-20"
           >
             <span aria-hidden="true" className="size-2 rounded-pill bg-ember" />
             {strip.emergency}
@@ -31,14 +31,14 @@ export function EmergencyStrip({ t }: { t: Dictionary }) {
           <a
             href="tel:988"
             aria-label={`${strip.crisis}. ${actions.call988}`}
-            className="flex min-h-10 items-center gap-2 text-text hover:underline sm:min-h-11"
+            className="flex min-h-11 items-center gap-2 text-text hover:underline"
           >
             <span aria-hidden="true" className="size-2 rounded-pill bg-sage" />
             {strip.crisis}
           </a>
         </div>
         <details className="group">
-          <summary className="absolute -top-0.5 right-3 flex min-h-11 cursor-pointer list-none items-center gap-1.5 rounded-pill px-2 text-muted hover:text-text sm:top-0 [&::-webkit-details-marker]:hidden">
+          <summary className="absolute top-0 right-3 flex min-h-11 cursor-pointer list-none items-center gap-1.5 rounded-pill px-2 text-muted hover:text-text [&::-webkit-details-marker]:hidden">
             {strip.more}
             <svg
               aria-hidden="true"
