@@ -446,7 +446,19 @@ describe("content-rules.findContentViolations", () => {
 
   it("known limitations and accepted over-withholding (EVALS.md, Tracked limitations)", () => {
     // Still pass: vocabulary the finite detector doesn't cover.
-    for (const text of ["Paracetamol half", "Give II", "Give Ⅱ", "Take a break, then 5"]) {
+    for (const text of [
+      "Paracetamol half",
+      "Give II",
+      "Give Ⅱ",
+      "Take a break, then 5",
+      "Use what was prescribed daily",
+      "Take a fifth",
+      "Give quadruple",
+      "Toma un quinto",
+      "Take first thing",
+      "Take with supper",
+      "Toma al mediodía",
+    ]) {
       expect([text, withheld(text)]).toEqual([text, false]);
     }
     // Withheld although harmless: the price of failing closed.
