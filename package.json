@@ -17,10 +17,10 @@
     "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run",
     "test:kb": "vitest run src/server/knowledge evals",
-    "eval": "node evals/run.ts",
+    "eval": "node --env-file-if-exists=.env.local evals/run.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "smoke": "LUMI_LIVE=1 node --env-file=.env.local ./node_modules/vitest/vitest.mjs run --config vitest.live.config.ts --silent=false --reporter=verbose"
+    "smoke": "LUMI_LIVE=1 node --env-file=.env.local ./node_modules/vitest/vitest.mjs run --config vitest.live.config.ts evals/smoke.live.ts --silent=false --reporter=verbose"
   },
   "dependencies": {
     "@ai-sdk/openai": "^4.0.106",

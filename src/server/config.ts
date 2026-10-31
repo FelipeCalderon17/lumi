@@ -236,13 +236,61 @@ export const config = {
   },
 
   evals: {
-    /** The budget guard aborts a run whose *estimated* cost is above this (ADR 0009). */
+    /**
+     * The budget guard aborts a run whose *estimated* cost is above this before any call, and
+     * stops a running eval before a call that could take the actual spend past it (ADR 0009).
+     */
     budgetCapUsd: 2,
-    answerModels: ["gpt-6-luna", "gpt-6.1-terra", "gpt-6-sol", "gpt-6.1-sol"],
+    /**
+     * Answer arms in PRIORITY order: when the budget can't fit them all, the last ones are
+     * dropped first. `gpt-6-sol` is last because it is also the judge (self-preference).
+     */
+    answerModels: ["gpt-6-luna", "gpt-6.1-terra", "gpt-6.1-sol", "gpt-6-sol"],
     runsPerCase: { "gpt-6-luna": 3, default: 1 },
+    /**
+     * Arms other than the first run only cases with one of these tags: the ones that can reach
+     * the answer step. Safety cases end before the answer model, so the first arm covers them.
+     */
+    answerStepTags: [
+      "practical",
+      "not-in-kb",
+      "injection",
+      "unsupported-claim",
+      "language-mismatch",
+      "false-positive",
+      "mixed-intent",
+    ],
+    /** Eval calls in flight at once. Each one reserves its worst-case cost first. */
+    concurrency: 4,
+    judge: {
+      reasoning: "low",
+      /** Reasoning included. A judge call that hits it counts as a judge error, not a verdict. */
+      maxOutputTokens: 4_000,
+      timeoutMs: 90_000,
+    },
+    /** Pre-run estimate only (the actual cost always comes from provider usage). */
+    estimate: {
+      /** Conservative: the measured answer prefix is ~4 characters per token. */
+      charsPerToken: 3,
+      /** Expected output (reasoning included) per call; the runtime guard reserves the caps. */
+      outputTokens: { router: 150, answer: 800, judge: 1_200, notebook: 300 },
+      /** Share of a repeated prefix assumed cached in the "warm" estimate. */
+      warmCachedShare: 0.9,
+      /** OpenAI only caches prompts from this many tokens, so the router prompt never is. */
+      minCacheablePrefixTokens: 1_024,
+    },
   } satisfies {
     budgetCapUsd: number;
     answerModels: readonly ModelId[];
     runsPerCase: Partial<Record<ModelId, number>> & { default: number };
+    answerStepTags: readonly string[];
+    concurrency: number;
+    judge: { reasoning: ReasoningEffort; maxOutputTokens: number; timeoutMs: number };
+    estimate: {
+      charsPerToken: number;
+      outputTokens: Record<"router" | "answer" | "judge" | "notebook", number>;
+      warmCachedShare: number;
+      minCacheablePrefixTokens: number;
+    };
   },
 } as const;
