@@ -21,12 +21,17 @@ import { createBudgetGuard } from "./lib/budget";
 import { JUDGE_PROMPT_VERSION } from "./lib/judge";
 import { parseEvalArgs } from "./lib/options";
 import { buildPlan, estimatePlan, fitPlanToBudget, promptSizes } from "./lib/plan";
+import { redactSecrets } from "./lib/redact";
 import { renderResults, renderSafetyReview, usd } from "./lib/render";
 import { judgeOutputs, summarizeArm, summarizeNotebook } from "./lib/report";
 import { type ChatRecord, executePlan, type NotebookRecord, type RunRecord } from "./lib/runner";
 import { NotebookCaseSchema } from "./notebook";
 
 const enabled = process.env.LUMI_EVAL === "1";
+
+/** Everything printed or written goes through redactSecrets (defense in depth). */
+const say = (line: string) => console.log(redactSecrets(line));
+const write = (file: URL, text: string) => writeFileSync(file, redactSecrets(text));
 
 function readJsonl<T>(file: string, parse: (v: unknown) => T): T[] {
   return readFileSync(new URL(file, import.meta.url), "utf8")
@@ -59,7 +64,7 @@ function writeReport(
   const armSummaries = arms.map((arm) => summarizeArm(arm, chat, cases, modelCatalog));
   const notebookSummary = nb.length ? summarizeNotebook(nb, modelCatalog) : null;
   const judgeCaps = judgeOutputs(records);
-  writeFileSync(
+  write(
     new URL("summary.json", dir),
     JSON.stringify(
       { metas, arms: armSummaries, notebook: notebookSummary, judgeCaps, ...extra },
@@ -67,21 +72,15 @@ function writeReport(
       2,
     ),
   );
-  writeFileSync(
-    new URL("results.md", dir),
-    renderResults(metas, armSummaries, notebookSummary, judgeCaps),
-  );
-  writeFileSync(
-    new URL("safety-review.md", dir),
-    renderSafetyReview(metas[0] as Meta, chat, cases),
-  );
+  write(new URL("results.md", dir), renderResults(metas, armSummaries, notebookSummary, judgeCaps));
+  write(new URL("safety-review.md", dir), renderSafetyReview(metas[0] as Meta, chat, cases));
   for (const a of armSummaries) {
-    console.log(
+    say(
       `${a.arm.padEnd(14)} runs ${a.runs} · checks ${a.passAll.pass}/${a.passAll.total} · safety gate ${a.safetyGateAll.pass}/${a.safetyGateAll.total} · grounded ${a.groundedAccuracy.pass}/${a.groundedAccuracy.total} · judge ${a.judge.groundedness.pass}/${a.judge.groundedness.total}`,
     );
   }
   if (notebookSummary) {
-    console.log(
+    say(
       `notebook       verbatim ${notebookSummary.verbatim.pass}/${notebookSummary.verbatim.total} · classification ${notebookSummary.classification.pass}/${notebookSummary.classification.total}`,
     );
   }
@@ -122,7 +121,7 @@ it.skipIf(!enabled)(
       const dir = new URL(`./runs/${stamp}/`, import.meta.url);
       mkdirSync(dir, { recursive: true });
       writeReport(dir, metas, records, cases);
-      console.log(`\nReport (no model call): evals/runs/${stamp}/results.md, safety-review.md`);
+      say(`\nReport (no model call): evals/runs/${stamp}/results.md, safety-review.md`);
       return;
     }
 
@@ -132,10 +131,10 @@ it.skipIf(!enabled)(
     const { plan, estimate } = fitted;
 
     const printEstimate = (title: string, e: typeof estimate, units: number) => {
-      console.log(`\n${title}: ${units} units, budget cap $${opts.budgetUsd.toFixed(2)}`);
-      console.log("section                          units  calls   warm      cold      worst");
+      say(`\n${title}: ${units} units, budget cap $${opts.budgetUsd.toFixed(2)}`);
+      say("section                          units  calls   warm      cold      worst");
       for (const s of [...e.sections, { label: "TOTAL", units, estimate: e.total }]) {
-        console.log(
+        say(
           `${s.label.padEnd(32)} ${String(s.units).padStart(5)}  ${String(s.estimate.calls).padStart(5)}  ${usd(s.estimate.warm).padEnd(9)} ${usd(s.estimate.cold).padEnd(9)} ${usd(s.estimate.worst)}`,
         );
       }
@@ -149,21 +148,21 @@ it.skipIf(!enabled)(
     }
     printEstimate(fitted.droppedArms.length ? "Fitted plan" : "Plan", estimate, plan.units.length);
     const t = estimate.total;
-    console.log(
+    say(
       `(warm: the KB prefix cached at ${config.evals.estimate.warmCachedShare * 100}% after its first call; cold: nothing cached; worst: cold + every output cap. Output estimate per call: ${JSON.stringify(config.evals.estimate.outputTokens)}; ${config.evals.estimate.charsPerToken} chars/token.)`,
     );
-    for (const s of plan.skippedArms) console.log(`skipped arm ${s.arm}: ${s.reason}`);
+    for (const s of plan.skippedArms) say(`skipped arm ${s.arm}: ${s.reason}`);
     for (const arm of fitted.droppedArms) {
       plan.skippedArms.push({
         arm,
         reason: "dropped before the run (priority order): the warm estimate didn't fit the cap",
       });
-      console.log(`dropped arm ${arm} (priority order): the warm estimate didn't fit the cap`);
+      say(`dropped arm ${arm} (priority order): the warm estimate didn't fit the cap`);
     }
-    if (t.unknownPrice.length) console.log(`unknown prices: ${t.unknownPrice.join(", ")}`);
+    if (t.unknownPrice.length) say(`unknown prices: ${t.unknownPrice.join(", ")}`);
 
     if (!live) {
-      console.log(
+      say(
         opts.dryRun
           ? "\nDry run: no model was called."
           : "\nNo LUMI_LIVE=1: estimate only, no model was called.",
@@ -172,7 +171,7 @@ it.skipIf(!enabled)(
     }
     if (!process.env.OPENAI_API_KEY) throw new Error("OPENAI_API_KEY is not set (.env.local)");
     if (!fitted.fits) {
-      console.log(
+      say(
         `\nABORTED before any call: the warm estimate ${usd(t.warm)} is above the cap $${opts.budgetUsd}. Narrow the run (--arms, --judge=first, --runs) or raise --budget.`,
       );
       return;
@@ -184,7 +183,7 @@ it.skipIf(!enabled)(
     mkdirSync(dir, { recursive: true });
     const resultsFile = new URL("results.jsonl", dir);
     const guard = createBudgetGuard(opts.budgetUsd);
-    console.log(`\nLive run → evals/runs/${stamp}/\n`);
+    say(`\nLive run → evals/runs/${stamp}/\n`);
 
     const outcome = await executePlan(plan, {
       provider: createOpenAIProvider(),
@@ -192,8 +191,8 @@ it.skipIf(!enabled)(
       catalog: modelCatalog,
       guard,
       concurrency: opts.concurrency,
-      onRecord: (r) => appendFileSync(resultsFile, `${JSON.stringify(r)}\n`),
-      log: (line) => console.log(line),
+      onRecord: (r) => appendFileSync(resultsFile, redactSecrets(`${JSON.stringify(r)}\n`)),
+      log: (line) => say(line),
     });
 
     const meta: Meta = {
@@ -228,14 +227,12 @@ it.skipIf(!enabled)(
       },
       fatal: outcome.fatal,
     });
-    console.log(
+    say(
       `\nActual spend: ${usd(guard.spentUsd)} of $${opts.budgetUsd.toFixed(2)} (overruns ${guard.overruns}, unknown-cost calls ${guard.unknownCostCalls})`,
     );
-    if (guard.stoppedAt) console.log(`Budget guard stopped before: ${guard.stoppedAt}`);
-    if (outcome.fatal) console.log(`Stopped: ${outcome.fatal}`);
-    console.log(
-      `\nReport: evals/runs/${stamp}/results.md, safety-review.md, summary.json, results.jsonl`,
-    );
+    if (guard.stoppedAt) say(`Budget guard stopped before: ${guard.stoppedAt}`);
+    if (outcome.fatal) say(`Stopped: ${outcome.fatal}`);
+    say(`\nReport: evals/runs/${stamp}/results.md, safety-review.md, summary.json, results.jsonl`);
   },
   7_200_000,
 );

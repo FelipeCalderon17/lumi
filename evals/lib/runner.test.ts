@@ -1,6 +1,6 @@
 import { APICallError, simulateReadableStream } from "ai";
 import { MockLanguageModelV4 } from "ai/test";
-import { beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import { config, type ModelId, modelCatalog } from "../../src/server/config";
 import { type KnowledgeBase, loadKnowledgeBase } from "../../src/server/knowledge";
 import type { ModelProvider } from "../../src/server/models";
@@ -405,6 +405,108 @@ describe("executePlan (mocked models, real pipeline)", () => {
     ]);
     const sol = outcome.records.filter((r) => r.kind === "chat" && r.arm === "gpt-6.1-sol");
     expect(sol.every((r) => r.status === "done")).toBe(true);
+  });
+});
+
+describe("provider errors never persist credential material", () => {
+  const KEY = "sk-proj-SYNTHETICKEY0123456789abcdefABCDEF";
+  function leakingModel() {
+    const error = () =>
+      new APICallError({
+        message: `Incorrect API key provided: ${KEY}. Authorization: Bearer ${KEY}`,
+        url: `https://example.invalid/v1/responses?api_key=${KEY}`,
+        requestBodyValues: { api_key: KEY },
+        statusCode: 401,
+        responseHeaders: { authorization: `Bearer ${KEY}`, "x-api-key": KEY },
+        responseBody: JSON.stringify({ error: { message: `bad key ${KEY}` } }),
+      });
+    return new MockLanguageModelV4({
+      doGenerate: async () => {
+        throw error();
+      },
+      doStream: async () => {
+        throw error();
+      },
+    });
+  }
+
+  it("a 401 carrying a key in message, body and headers: not in records, summary, report or stdout", async () => {
+    const printed: string[] = [];
+    const spies = [
+      vi.spyOn(console, "log").mockImplementation((...a) => void printed.push(a.join(" "))),
+      vi.spyOn(console, "warn").mockImplementation((...a) => void printed.push(a.join(" "))),
+      vi.spyOn(console, "error").mockImplementation((...a) => void printed.push(a.join(" "))),
+      vi.spyOn(process.stdout, "write").mockImplementation((chunk) => {
+        printed.push(String(chunk));
+        return true;
+      }),
+    ];
+    const written: string[] = [];
+    try {
+      const plan = buildPlan(options({ notebook: false }), golden, [], modelCatalog);
+      const guard = createBudgetGuard(5);
+      const outcome = await executePlan(plan, {
+        provider: {
+          language: () => leakingModel(),
+          transcription: () => {
+            throw new Error("no");
+          },
+        },
+        kbs,
+        catalog: modelCatalog,
+        guard,
+        concurrency: 1,
+        onRecord: (r) => written.push(JSON.stringify(r)),
+        log: (line) => printed.push(line),
+      });
+      expect(outcome.fatal).toMatch(/auth/);
+      const failed = outcome.records.find(
+        (r): r is ChatRecord => r.kind === "chat" && r.providerError !== null,
+      );
+      expect(failed?.providerError).toEqual({
+        name: "AI_APICallError",
+        statusCode: 401,
+        kind: "auth",
+      });
+      const chat = outcome.records.filter((r): r is ChatRecord => r.kind === "chat");
+      const arm = summarizeArm("gpt-6-luna", chat, casesById, modelCatalog);
+      written.push(JSON.stringify(arm), JSON.stringify(outcome));
+      const meta = {
+        date: "2026-10-31",
+        gitSha: "abc",
+        dirty: false,
+        fingerprint: {
+          kb: { en: "a", es: "b" },
+          prompts: "c",
+          versions: { router: 1, answer: 2, notebook: 4 },
+        },
+        judgeModel: config.models.judge,
+        routerModel: config.models.router,
+        notebookModel: config.models.notebook,
+        judgePromptVersion: 1,
+        args: [],
+        estimate: {
+          sections: [],
+          total: { cold: 0, warm: 0, worst: 0, calls: 0, unknownPrice: [] },
+        },
+        capUsd: 5,
+        spentUsd: guard.spentUsd,
+        stoppedAt: null,
+        skippedArms: [],
+        unavailableArms: [],
+        skippedUnits: 0,
+        durationMin: 0,
+        runDir: "x",
+      };
+      written.push(renderResults([meta], [arm], null, judgeOutputs(outcome.records)));
+      written.push(renderSafetyReview(meta, chat, casesById));
+    } finally {
+      for (const spy of spies) spy.mockRestore();
+    }
+    for (const text of [...written, ...printed]) {
+      expect(text).not.toContain("SYNTHETICKEY");
+    }
+    expect(written.length).toBeGreaterThan(3);
   });
 });
 

@@ -7,7 +7,7 @@ import { testKb } from "../../src/server/test-helpers";
 import type { GoldenCase } from "../golden";
 import type { NotebookCase } from "../notebook";
 import { type CallEstimate, createBudgetGuard, estimateCalls, worstCaseUsd } from "./budget";
-import { isModelUnavailable } from "./capture";
+import { classifyProviderError, isModelUnavailable } from "./capture";
 import {
   allPass,
   detectLanguage,
@@ -18,6 +18,7 @@ import {
 } from "./checks";
 import { checkNotebookCase } from "./notebook-checks";
 import { DEFAULT_OPTIONS, parseEvalArgs } from "./options";
+import { countSecretLike, redactSecrets } from "./redact";
 import { dist, percentile } from "./report";
 import { attributeWithholding } from "./withholding";
 
@@ -471,21 +472,54 @@ describe("notebook checks", () => {
   });
 });
 
-describe("isModelUnavailable", () => {
-  const err = (statusCode: number | null, message: string) => ({
-    name: "AI_APICallError",
-    statusCode,
-    message,
+describe("provider error classification", () => {
+  const err = (statusCode: number | null, message: string, name = "AI_APICallError") =>
+    Object.assign(new Error(message), { name, statusCode });
+  const kind = (statusCode: number | null, message: string, name?: string) =>
+    classifyProviderError(err(statusCode, message, name)).kind;
+
+  it("a rejected model id: 404, or 400/403 that names the model", () => {
+    expect(kind(404, "Not found")).toBe("model_unavailable");
+    expect(kind(400, "The model `x` does not exist")).toBe("model_unavailable");
+    expect(kind(403, "You do not have access to model x")).toBe("model_unavailable");
+    expect(isModelUnavailable(classifyProviderError(err(404, "")))).toBe(true);
   });
-  it("is a rejected model id: 404, or 400/403 that names the model", () => {
-    expect(isModelUnavailable(err(404, "Not found"))).toBe(true);
-    expect(isModelUnavailable(err(400, "The model `x` does not exist"))).toBe(true);
-    expect(isModelUnavailable(err(403, "You do not have access to model x"))).toBe(true);
-  });
-  it("isn't a transient or unrelated error", () => {
+
+  it("auth, rate limits, timeouts and everything else", () => {
+    expect(kind(401, "Incorrect API key")).toBe("auth");
+    expect(kind(403, "Forbidden")).toBe("auth");
+    expect(kind(429, "rate limit")).toBe("rate_limited");
+    expect(kind(null, "aborted", "TimeoutError")).toBe("timeout");
+    expect(kind(500, "model overloaded")).toBe("provider_error");
+    expect(kind(400, "Invalid schema for response_format")).toBe("provider_error");
     expect(isModelUnavailable(null)).toBe(false);
-    expect(isModelUnavailable(err(500, "model overloaded"))).toBe(false);
-    expect(isModelUnavailable(err(429, "rate limit"))).toBe(false);
-    expect(isModelUnavailable(err(400, "Invalid schema for response_format"))).toBe(false);
+  });
+
+  it("keeps only name, status and kind: never the message", () => {
+    const summary = classifyProviderError(
+      err(401, "Incorrect API key provided: sk-SYNTHETIC0123456789"),
+    );
+    expect(summary).toEqual({ name: "AI_APICallError", statusCode: 401, kind: "auth" });
+    expect(classifyProviderError(err(500, "x", "sk-SYNTHETIC0123456789 Bearer abc")).name).toBe(
+      "Error",
+    );
+  });
+});
+
+describe("redactSecrets", () => {
+  it("masks sk- keys, bearer tokens and api_key values, and counts them without echoing", () => {
+    const text =
+      'key sk-proj-SYNTHETIC_0123456789abcdef, Authorization: Bearer eyJSYNTHETIC.abc.def, url ?api_key=SYNTHETICVALUE&x=1, {"api-key": "SYNTHETIC2"}';
+    const out = redactSecrets(text);
+    expect(out).not.toMatch(/SYNTHETIC/);
+    expect(out).toContain("sk-[redacted]");
+    expect(out).toContain("Bearer [redacted]");
+    expect(countSecretLike(text)).toBe(4);
+    expect(countSecretLike(out)).toBe(0);
+  });
+
+  it("leaves ordinary eval text alone", () => {
+    const text = "Ask your care team [6]. task-123 skipped; bearer of good news.";
+    expect(redactSecrets(text)).toBe(text);
   });
 });

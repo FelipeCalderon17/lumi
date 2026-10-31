@@ -10,31 +10,60 @@ export type Capture = {
   text: string;
   /** Provider calls made through this wrapper (a retry counts twice). */
   calls: number;
-  error: { name: string; statusCode: number | null; message: string } | null;
+  /**
+   * A provider error, reduced to what's safe to keep: never the message, body or headers,
+   * which can echo credentials or the request (Codex review, Phase 4 fixes round 1).
+   */
+  error: ProviderErrorSummary | null;
+};
+
+export const PROVIDER_ERROR_KINDS = [
+  "model_unavailable",
+  "auth",
+  "rate_limited",
+  "timeout",
+  "provider_error",
+] as const;
+export type ProviderErrorKind = (typeof PROVIDER_ERROR_KINDS)[number];
+export type ProviderErrorSummary = {
+  /** The error class name, only if it looks like an identifier (e.g. "AI_APICallError"). */
+  name: string;
+  statusCode: number | null;
+  kind: ProviderErrorKind;
 };
 
 type WrappableModel = Exclude<LanguageModel, string>;
 
-function describeError(error: unknown): Capture["error"] {
+const MODEL_REJECTED =
+  /(does not exist|not found|not supported|do not have access|unknown|invalid)/i;
+
+/**
+ * Classifies a provider error. The message is read here, in memory, only to tell a rejected
+ * model id apart; it's never returned, stored or printed.
+ */
+export function classifyProviderError(error: unknown): ProviderErrorSummary {
   const e = error as { name?: unknown; statusCode?: unknown; message?: unknown };
-  return {
-    name: typeof e?.name === "string" ? e.name : "Error",
-    statusCode: typeof e?.statusCode === "number" ? e.statusCode : null,
-    message: typeof e?.message === "string" ? e.message.slice(0, 300) : "",
-  };
+  const rawName = typeof e?.name === "string" ? e.name : "";
+  const name = /^[A-Za-z_][\w.]{0,59}$/.test(rawName) ? rawName : "Error";
+  const statusCode = typeof e?.statusCode === "number" ? e.statusCode : null;
+  const message = typeof e?.message === "string" ? e.message : "";
+  const namesModel = /model/i.test(message) && MODEL_REJECTED.test(message);
+  const kind: ProviderErrorKind =
+    statusCode === 404 || ((statusCode === 400 || statusCode === 403) && namesModel)
+      ? "model_unavailable"
+      : statusCode === 401 || statusCode === 403
+        ? "auth"
+        : statusCode === 429
+          ? "rate_limited"
+          : name === "AbortError" || name === "TimeoutError"
+            ? "timeout"
+            : "provider_error";
+  return { name, statusCode, kind };
 }
 
 /** True when a provider error says the model id itself was rejected (skip that arm). */
 export function isModelUnavailable(error: Capture["error"]): boolean {
-  if (!error) return false;
-  if (error.statusCode === 404) return true;
-  return (
-    (error.statusCode === 400 || error.statusCode === 403) &&
-    /model/i.test(error.message) &&
-    /(does not exist|not found|not supported|do not have access|unknown|invalid)/i.test(
-      error.message,
-    )
-  );
+  return error?.kind === "model_unavailable";
 }
 
 export function captureModel(model: LanguageModel): { model: LanguageModel; capture: Capture } {
@@ -52,7 +81,7 @@ export function captureModel(model: LanguageModel): { model: LanguageModel; capt
             .join("");
           return result;
         } catch (error) {
-          capture.error = describeError(error);
+          capture.error = classifyProviderError(error);
           throw error;
         }
       },
@@ -63,7 +92,7 @@ export function captureModel(model: LanguageModel): { model: LanguageModel; capt
         try {
           result = await doStream();
         } catch (error) {
-          capture.error = describeError(error);
+          capture.error = classifyProviderError(error);
           throw error;
         }
         const tee = new TransformStream<
@@ -72,7 +101,7 @@ export function captureModel(model: LanguageModel): { model: LanguageModel; capt
         >({
           transform(part, controller) {
             if (part.type === "text-delta") capture.text += part.delta;
-            else if (part.type === "error") capture.error = describeError(part.error);
+            else if (part.type === "error") capture.error = classifyProviderError(part.error);
             controller.enqueue(part);
           },
         });

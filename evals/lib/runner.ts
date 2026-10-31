@@ -218,7 +218,8 @@ export async function executePlan(plan: Plan, deps: RunnerDeps): Promise<RunOutc
     if (reservation) deps.guard.settle(reservation, costUsd);
 
     const providerError = answer.capture.error ?? router.capture.error;
-    if (providerError?.statusCode === 401) fatal = "the provider rejected the API key (401)";
+    if (providerError?.kind === "auth")
+      fatal = "the provider rejected the credentials (auth error)";
     if (isModelUnavailable(answer.capture.error) && !unavailable.has(unit.arm)) {
       unavailable.set(unit.arm, answer.capture.error);
       log(`! ${unit.arm} rejected by the API: skipping the rest of this arm`);
