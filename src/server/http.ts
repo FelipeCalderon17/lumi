@@ -168,13 +168,17 @@ const BODY_ERRORS: Record<BodyReadError, { status: number; error: string }> = {
   stream_error: { status: 400, error: "invalid_body" },
 };
 
-/** The controlled response for a body that couldn't be read. Never cached. */
+/**
+ * The controlled response for a body that couldn't be read. Never cached. `extra` adds fields
+ * a route always returns on errors (the notebook's `safetyNotices`).
+ */
 export function bodyErrorResponse(
   reason: BodyReadError,
   headers: Record<string, string> = { "Cache-Control": "no-store" },
+  extra: Record<string, unknown> = {},
 ): Response {
   const { status, error } = BODY_ERRORS[reason];
-  return Response.json({ error }, { status, headers });
+  return Response.json({ error, ...extra }, { status, headers });
 }
 
 /**

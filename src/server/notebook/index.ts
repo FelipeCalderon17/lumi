@@ -40,7 +40,7 @@ import { quantitiesIn } from "./quantities";
 
 const { maxNotes, maxNoteChars } = config.limits.notebook;
 
-/** Shape only, so the safety check can run on every note before any limit. */
+/** Shape only: notes with text and createdAt strings, and a known locale. */
 export const NotebookRequestShapeSchema = z
   .object({
     notes: z.array(z.object({ text: z.string(), createdAt: z.string() }).strict()).min(1),
@@ -286,8 +286,15 @@ export type NotebookServiceDeps = NotebookDeps & {
 };
 
 export type NotebookStart =
-  /** Invalid notes (HTTP 400). Safety notices found before validation are still returned. */
-  | { kind: "rejected"; error: "invalid_notes"; safetyNotices: NotebookSafetyNotice[] }
+  /**
+   * HTTP 400: a bad shape or locale ("invalid_request"), or notes over a limit or with a bad
+   * createdAt ("invalid_notes"). Safety notices found before validation are still returned.
+   */
+  | {
+      kind: "rejected";
+      error: "invalid_request" | "invalid_notes";
+      safetyNotices: NotebookSafetyNotice[];
+    }
   | { kind: "done"; response: NotebookResponse; recorded: Promise<unknown> };
 
 /**
@@ -295,16 +302,32 @@ export type NotebookStart =
  * and the checks. A safety match never blocks the page: its notice comes back with the result.
  * Every failure after validation returns the notes grouped by date.
  */
+/**
+ * Every note text we can recover from an unvalidated body: `notes[i].text` when it's a string,
+ * whatever else is wrong with the request (bad createdAt, unknown locale, extra fields).
+ */
+function recoverableNoteTexts(body: unknown): { noteIndex: number; text: string }[] {
+  if (typeof body !== "object" || body === null || !("notes" in body)) return [];
+  const notes = (body as { notes: unknown }).notes;
+  if (!Array.isArray(notes)) return [];
+  return notes.flatMap((note: unknown, noteIndex) => {
+    if (typeof note !== "object" || note === null || !("text" in note)) return [];
+    const text = (note as { text: unknown }).text;
+    return typeof text === "string" ? [{ noteIndex, text }] : [];
+  });
+}
+
 export async function prepareNotebook(
-  shape: NotebookRequestShape,
+  body: unknown,
   ctx: RequestContext,
   deps: NotebookServiceDeps,
 ): Promise<NotebookStart> {
   const log = deps.log ?? silentLogger;
-  // Safety on EVERY note, any length, before validation, any limit or model call.
+  // Safety on EVERY recoverable note, any length, before ANY validation (shape, locale,
+  // createdAt), any limit or model call (Codex re-review 3).
   const safetyNotices: NotebookSafetyNotice[] = [];
-  for (const [noteIndex, note] of shape.notes.entries()) {
-    const safety = checkEmergency(note.text);
+  for (const { noteIndex, text } of recoverableNoteTexts(body)) {
+    const safety = checkEmergency(text);
     if (!safety.triggered) continue;
     log({ requestId: ctx.requestId, event: "safety", outcome: safety.kind, ruleId: safety.ruleId });
     safetyNotices.push({
@@ -315,7 +338,9 @@ export async function prepareNotebook(
     });
   }
 
-  const parsed = NotebookRequestSchema.safeParse(shape);
+  const shape = NotebookRequestShapeSchema.safeParse(body);
+  if (!shape.success) return { kind: "rejected", error: "invalid_request", safetyNotices };
+  const parsed = NotebookRequestSchema.safeParse(shape.data);
   if (!parsed.success) return { kind: "rejected", error: "invalid_notes", safetyNotices };
   const request = parsed.data;
   const fallback = (reason: FailureReason): NotebookResult => ({

@@ -351,6 +351,65 @@ describe("notebook.prepareNotebook", () => {
     expect(out.response.result.type).toBe("notebook");
   });
 
+  it("regression (Codex re-review 3): notes are scanned for safety before ANY validation", async () => {
+    const emergency = "No está respirando";
+    const notice = (noteIndex: number) => ({
+      kind: "medical_emergency",
+      detectedBy: "safety",
+      language: "es",
+      noteIndex,
+    });
+    for (const [label, body, error, notices] of [
+      [
+        "createdAt null",
+        { notes: [{ text: emergency, createdAt: null }], locale: "es" },
+        "invalid_request",
+        [notice(0)],
+      ],
+      [
+        "second note's createdAt null",
+        {
+          notes: [
+            { text: emergency, createdAt: "2026-10-27T23:10:00-05:00" },
+            { text: "Tired", createdAt: null },
+          ],
+          locale: "es",
+        },
+        "invalid_request",
+        [notice(0)],
+      ],
+      [
+        "createdAt not a date",
+        { notes: [{ text: emergency, createdAt: "not-a-date" }], locale: "es" },
+        "invalid_notes",
+        [notice(0)],
+      ],
+      [
+        "unknown locale",
+        { notes: [{ text: emergency, createdAt: "2026-10-27T23:10:00-05:00" }], locale: "fr" },
+        "invalid_request",
+        [notice(0)],
+      ],
+      [
+        "extra field",
+        { notes: [{ text: emergency, createdAt: "x", mood: 3 }], locale: "es" },
+        "invalid_request",
+        [notice(0)],
+      ],
+      [
+        "no locale, text in a non-string neighbour",
+        { notes: [{ text: 5 }, { text: emergency }] },
+        "invalid_request",
+        [notice(1)],
+      ],
+      ["not an object", "No está respirando", "invalid_request", []],
+      ["notes not an array", { notes: emergency, locale: "es" }, "invalid_request", []],
+    ] as const) {
+      const out = await prepareNotebook(body, testCtx(), deps());
+      expect([label, out]).toEqual([label, { kind: "rejected", error, safetyNotices: notices }]);
+    }
+  });
+
   it("invalid notes are rejected, but notices found first are still returned", async () => {
     const longScary = { text: `${"a".repeat(900)} he is not breathing`, createdAt: "x" };
     expect(await prepareNotebook({ notes: [longScary], locale: "en" }, testCtx(), deps())).toEqual({
