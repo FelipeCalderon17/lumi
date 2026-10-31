@@ -245,6 +245,171 @@ describe("safety.checkEmergency", () => {
   });
 });
 
+describe("safety grammar families (Codex re-review 3)", () => {
+  it("catches every miss reproduced in re-review 3", () => {
+    for (const [text, kind] of [
+      ["No lo puedo despertar", "medical_emergency"],
+      ["No la puedo despertar", "medical_emergency"],
+      ["No está despertando", "medical_emergency"],
+      ["No está pudiendo respirar", "medical_emergency"],
+      ["Me estoy ahogando", "medical_emergency"],
+      ["Estoy ahogándome", "medical_emergency"],
+      ["me ahogo", "medical_emergency"],
+      ["I cannot get my child to wake up", "medical_emergency"],
+      ["He took too much acetaminophen", "medical_emergency"],
+      ["Me voy a hacer mucho daño", "self_harm"],
+      ["Estoy pensando en hacerme daño", "self_harm"],
+      ["I am thinking about cutting myself", "self_harm"],
+    ] as const) {
+      expect([text, kindOf(text)]).toEqual([text, kind]);
+    }
+  });
+
+  it("ES 'despertar': clitic before or after × modal / estar / none × verb forms", () => {
+    const sentences: string[] = [];
+    for (const modal of ["puedo", "puede", "podemos", "pude", "logro", "logramos", "consigo"]) {
+      for (const clitic of ["lo", "la", "los", "le"]) {
+        sentences.push(`no ${clitic} ${modal} despertar`, `no ${modal} despertar${clitic}`);
+      }
+    }
+    sentences.push(
+      "no está despertando",
+      "no están despertando",
+      "no se despierta",
+      "no despierta",
+      "no despertó",
+      "no se ha despertado",
+      "no logro que despierte",
+      "no hay manera de despertarlo",
+      "no puedo bien despertarlo",
+    );
+    for (const text of sentences) {
+      expect([text, kindOf(text)]).toEqual([text, "medical_emergency"]);
+    }
+  });
+
+  it("ES 'respirar': modal / estar (+ pudiendo) / adverbs × verb forms", () => {
+    for (const text of [
+      "no respira",
+      "no respiro",
+      "no respiraba",
+      "no está respirando",
+      "no estoy respirando",
+      "no está pudiendo respirar",
+      "no puede respirar",
+      "no logra respirar",
+      "no puede bien respirar",
+      "casi no respira",
+      "ya no está respirando",
+      "dejó de respirar",
+      "está dejando de respirar",
+      "se está quedando sin aire",
+    ]) {
+      expect([text, kindOf(text)]).toEqual([text, "medical_emergency"]);
+    }
+  });
+
+  it("ES choking: reflexive clitic before or after, present / past / continuous / modal", () => {
+    const sentences: string[] = [];
+    for (const stem of ["ahog", "atragant"]) {
+      sentences.push(
+        `me ${stem}o`,
+        `se ${stem}a`,
+        `se ${stem}ó`,
+        `me ${stem}ué`,
+        `me estoy ${stem}ando`,
+        `se está ${stem}ando`,
+        `te estás ${stem}ando`,
+        `estoy ${stem}ándome`,
+        `está ${stem}ándose`,
+        `${stem}ándose`,
+        `se puede ${stem}ar`,
+        `se va a ${stem}ar`,
+        `puede ${stem}arse`,
+      );
+    }
+    for (const text of sentences) {
+      expect([text, kindOf(text)]).toEqual([text, "medical_emergency"]);
+    }
+  });
+
+  it("ES self-harm: clitic before or after × intent × intensifier × verb", () => {
+    const sentences: string[] = [];
+    for (const intent of ["voy a", "quiero", "va a"]) {
+      for (const verb of ["hacer daño", "hacer mucho daño", "lastimar", "cortar"]) {
+        sentences.push(`me ${intent} ${verb}`);
+      }
+    }
+    for (const intent of ["quiero", "voy a", "estoy pensando en", "pienso en", "tengo ganas de"]) {
+      for (const verb of ["hacerme daño", "hacerme mucho daño", "lastimarme", "cortarme"]) {
+        sentences.push(`${intent} ${verb}`);
+      }
+    }
+    sentences.push("me estoy cortando", "estoy cortándome", "se está lastimando");
+    for (const text of sentences) {
+      expect([text, kindOf(text)]).toEqual([text, "self_harm"]);
+    }
+  });
+
+  it("EN self-harm: intent / ongoing × filler × base and -ing forms (cut → cutting)", () => {
+    const sentences: string[] = [];
+    for (const intent of [
+      "I want to",
+      "I wanna",
+      "I'm gonna",
+      "I am going to",
+      "I might",
+      "I'm about to",
+    ]) {
+      for (const verb of ["hurt", "harm", "cut", "burn"])
+        sentences.push(`${intent} ${verb} myself`);
+    }
+    for (const intent of ["I am thinking about", "I'm thinking of", "I feel like"]) {
+      for (const verb of ["hurting", "harming", "cutting", "burning"]) {
+        sentences.push(`${intent} ${verb} myself`);
+      }
+    }
+    sentences.push(
+      "I've been cutting myself",
+      "he keeps hurting himself",
+      "she is cutting herself",
+      "I'm going to really hurt myself",
+    );
+    for (const text of sentences) {
+      expect([text, kindOf(text)]).toEqual([text, "self_harm"]);
+    }
+  });
+
+  it("mixed intent: a logistics question with any of the new families still triggers", () => {
+    expect(kindOf("¿Dónde estaciono? Me estoy ahogando")).toBe("medical_emergency");
+    expect(kindOf("¿Qué llevo al hospital? No lo puedo despertar")).toBe("medical_emergency");
+    expect(kindOf("Where do I park? I am thinking about cutting myself")).toBe("self_harm");
+    expect(kindOf("¿Cuánto cuesta el parqueo? Me voy a hacer mucho daño")).toBe("self_harm");
+  });
+
+  it("objects, accidents and everyday mornings still don't trigger", () => {
+    for (const text of [
+      "me estoy cortando las uñas",
+      "quiero cortarme el pelo",
+      "Me despierto a las 6",
+      "no me puedo despertar temprano",
+      "Ya está respirando mejor",
+      "I cut myself shaving",
+      "I hurt myself lifting him",
+      "He took his pills as prescribed",
+      "Le di su medicamento según las instrucciones",
+    ]) {
+      expect([text, kindOf(text)]).toEqual([text, null]);
+    }
+  });
+
+  it("documented recall-leaning false positives (ADR 0003, Known limitations)", () => {
+    // Kept on purpose: an extra 911 screen is cheaper than a miss. Listed so a change is visible.
+    expect(kindOf("No, está respirando")).toBe("medical_emergency");
+    expect(kindOf("I can't wake up early")).toBe("medical_emergency");
+  });
+});
+
 describe("safety against the golden set", () => {
   const cases: GoldenCase[] = readFileSync(
     new URL("../../../evals/golden.jsonl", import.meta.url),

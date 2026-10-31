@@ -162,6 +162,34 @@ describe("pipeline.startChat (safety and limits)", () => {
     expect(calls(router)).toBe(0);
   });
 
+  it("regression (Codex re-review 3): new grammar families are caught before the limiter and the length check", async () => {
+    const cases = [
+      ["No lo puedo despertar", "medical_emergency", "es"],
+      ["No está despertando", "medical_emergency", "es"],
+      ["Me estoy ahogando", "medical_emergency", "es"],
+      ["Estoy ahogándome", "medical_emergency", "es"],
+      ["me ahogo", "medical_emergency", "es"],
+      ["Me voy a hacer mucho daño", "self_harm", "es"],
+      ["I am thinking about cutting myself", "self_harm", "en"],
+    ] as const;
+    for (const [message, kind, language] of cases) {
+      const expected = [{ type: "emergency", kind, detectedBy: "safety", language }];
+      // Rate limiter exhausted.
+      const limited = setup({ chatMax: 0, modelCallsMax: 0 });
+      expect([message, await collect(startChat(ask(message), testCtx(), limited.deps))]).toEqual([
+        message,
+        expected,
+      ]);
+      expect(calls(limited.router)).toBe(0);
+      // Over the length limit (and limiter exhausted too).
+      const long = `${"a".repeat(config.limits.maxInputChars + 100)} ${message}`;
+      const start = startChat(ask(long), testCtx(), limited.deps);
+      expect([message, start.kind]).toEqual([message, "stream"]);
+      expect(await collect(start)).toEqual(expected);
+      expect(calls(limited.router)).toBe(0);
+    }
+  });
+
   it("an over-length or empty message is rejected (HTTP 400) without a model call", () => {
     const { deps, router } = setup();
     const long = "a".repeat(config.limits.maxInputChars + 1);

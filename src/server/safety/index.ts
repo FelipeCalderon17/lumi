@@ -40,9 +40,15 @@ type Rule = { id: string; kind: EmergencyKind; language: Language; pattern: RegE
  * "no esta respirando". Apostrophes are kept for contractions, and every `'` is optional
  * ("isnt", "cant").
  *
- * They cover ordinary grammar, not just one phrasing: third and first person, present
- * continuous ("está/estoy …-ando/-iendo"), clitics ("despertarlo/despertarla"), and EN
- * contractions and slang ("wanna", "gonna", "can't wake him up").
+ * Rules are written by grammar family, not by phrasing (Codex re-review 3): each one is
+ * {subject / clitic placement} × {modal or aspect} × {an explicit list of the verb's forms},
+ * with a few known adverbs or intensifiers allowed in between. In Spanish that means the
+ * clitic before or after the verb ("no lo puedo despertar" / "no puedo despertarlo"), present
+ * continuous ("está despertando", "me estoy ahogando" / "estoy ahogándome") and modals
+ * ("puedo", "logro", "está pudiendo"). In English, contractions, slang ("wanna", "gonna") and
+ * the -ing forms, spelled out rather than generated ("cut" → "cutting").
+ *
+ * It is still a finite regex backstop, not understanding: see ADR 0003, "Known limitations".
  *
  * Order matters only for which rule id is reported: medical emergencies are listed first, so
  * a message with both ("he's not breathing, I want to die") gets the emergency steps. Both
@@ -50,8 +56,8 @@ type Rule = { id: string; kind: EmergencyKind; language: Language; pattern: RegE
  */
 
 /** Medicines, for the poisoning rules: on their own they're routine ("took his pills"). */
-const EN_MEDS = `(?:pills?|tablets?|capsules?|medicines?|medications?|meds|syrup|doses?)`;
-const ES_MEDS = `(?:pastillas?|tabletas?|capsulas?|medicinas?|medicamentos?|jarabe|dosis)`;
+const EN_MEDS = `(?:pills?|tablets?|capsules?|medicines?|medications?|meds|syrup|doses?|acetaminophen|paracetamol|ibuprofen|aspirin|morphine|oxycodone|opioids?|insulin|sleeping pills?)`;
+const ES_MEDS = `(?:pastillas?|tabletas?|capsulas?|medicinas?|medicamentos?|jarabe|dosis|paracetamol|acetaminofen|ibuprofeno|aspirinas?|morfina|insulina)`;
 /** Substances that are an emergency to swallow whatever the amount. */
 const EN_HAZARDS = `(?:bleach|detergent|laundry (?:pods?|soap)|cleaning (?:products?|liquid|fluid|spray)|cleaner|drain cleaner|batter(?:y|ies)|antifreeze|rat poison|poison|pesticide|lye)`;
 const ES_HAZARDS = `(?:cloro|lejia|detergente|jabon de (?:ropa|lavadora|platos)|productos? de limpieza|limpiador|pilas?|baterias?|anticongelante|veneno|raticida|insecticida|pesticida)`;
@@ -59,6 +65,35 @@ const EN_SWALLOW = `(?:swallowed|drank|ate|ingested|took|chewed|got into|has eat
 const ES_SWALLOW = `(?:se )?(?:tomo|trago|comio|bebio|ingirio)`;
 /** A following article/possessive means a body part or object: "cortarme el pelo". */
 const ES_NOT_OBJECT = String.raw`(?! (?:el|la|los|las|un|una|mi|mis|su|sus)\b)`;
+
+// ── Spanish grammar pieces ──────────────────────────────────────────────────────────────
+/** Object clitic before the verb, third person: "no LO puedo despertar". */
+const ES_OBJ = `(?:(?:lo|la|los|las|le|les|se) )?`;
+/** Modals: "no PUEDO despertarlo", "no LOGRA respirar", "no CONSIGUE…". */
+const ES_MODAL = `(?:puedo|puede|pueden|podemos|pude|pudo|pudimos|podia|logro|logra|logran|logramos|logre|consigo|consigue|conseguimos|consegui|quiere|quiso)`;
+/** "estar" for the present continuous: "ESTÁ respirando", "ESTOY ahogándome". */
+const ES_ESTAR = `(?:esta|estas|estoy|estan|estamos|estaba|estuvo)`;
+/** Adverbs that can sit between the key words: "no puede BIEN respirar", "no respira CASI". */
+const ES_ADV = `(?:(?:bien|casi|nada|ya|todavia|aun|mucho|para nada) )?`;
+/** {modal | estar (+ "pudiendo") | nothing}, each optionally followed by an adverb. */
+const ES_AUX = `(?:(?:${ES_MODAL}|${ES_ESTAR}(?: pudiendo)?) ${ES_ADV})?`;
+/** Reflexive clitic: "ME ahogo", "SE ahoga", "TE estás ahogando". */
+const ES_REFL = `(?:me|se|te)`;
+/** Self-harm intent: "quiero", "voy a", "estoy pensando en", "tengo ganas de"… */
+const ES_INTENT = `(?:quiero|quiere|quieres|voy a|va a|vas a|pienso en|piensa en|${ES_ESTAR} pensando en|ganas de|podria|necesito|necesita)`;
+/** Self-harm verbs with the clitic attached: "hacerme (mucho) daño", "lastimarme". */
+const ES_HARM_ENCLITIC = `(?:hacer(?:me|se|te) (?:(?:mucho|tanto|algo|un) )?dano|lastimar(?:me|se|te)|cortar(?:me|se|te)|herir(?:me|se|te))`;
+/** The same verbs with the clitic in front: "me voy a hacer (mucho) daño". */
+const ES_HARM_INF = `(?:hacer (?:(?:mucho|tanto|algo|un) )?dano|lastimar|cortar|herir)`;
+
+// ── English grammar pieces ──────────────────────────────────────────────────────────────
+/** Self-harm intent: "want to", "gonna", "thinking about", "feel like"… */
+const EN_INTENT = `(?:wants? to|wanted to|wanna|going to|gonna|about to|thinking (?:about|of)|think(?:s)? about|might|feel(?:ing)? like|plan(?:ning)? to|trying to|tempted to|urge to|need to)`;
+/** Self-harm verbs in every form an intent can take, spelled out ("cut" → "cutting"). */
+const EN_HARM = `(?:hurt|hurting|harm|harming|cut|cutting|burn|burning|injure|injuring)`;
+/** Ongoing self-harm: "I am / I've been / he keeps cutting himself". */
+const EN_ONGOING = `(?:am|i'?m|is|he'?s|she'?s|are|been|keeps?|started|start)`;
+const EN_SELF = `(?:myself|himself|herself|themselves|themself)`;
 
 const rx = (source: string) => new RegExp(source);
 
@@ -88,7 +123,7 @@ const RULES: readonly Rule[] = [
     kind: "medical_emergency",
     language: "en",
     pattern:
-      /\b(?:unconscious|unresponsive|passed out|fainted|collapsed|(?:won'?t|will not|can'?t|cannot|couldn'?t|could not|isn'?t|is not|doesn'?t|does not|didn'?t|did not|not|unable to) (?:wake|waking)(?: (?:him|her|them))?(?: up)?|can'?t get (?:him|her|them) to wake)\b/,
+      /\b(?:unconscious|unresponsive|passed out|fainted|collapsed|(?:won'?t|will not|can'?t|cannot|couldn'?t|could not|isn'?t|is not|doesn'?t|does not|didn'?t|did not|not|unable to) (?:wake|waking)(?: (?:him|her|them))?(?: up)?|(?:can'?t|cannot|can not|couldn'?t|could not|unable to) (?:get|make) (?:\w+ ){1,3}?(?:to )?wake)\b/,
   },
   {
     id: "en.choking",
@@ -112,7 +147,7 @@ const RULES: readonly Rule[] = [
     pattern: rx(
       String.raw`\b(?:overdos(?:e|ed|es|ing)` +
         String.raw`|${EN_SWALLOW} (?:\w+ ){0,3}?${EN_HAZARDS}` +
-        String.raw`|(?:swallowed|took|ate|drank|had|gave (?:him|her|them)|given|got) (?:\w+ ){0,2}?too (?:many|much) (?:of )?(?:\w+ ){0,2}?${EN_MEDS}` +
+        String.raw`|(?:swallowed|took|taken|ate|drank|had|gave (?:him|her|them)|given|got) (?:\w+ ){0,2}?too (?:many|much) (?:of )?(?:\w+ ){0,2}?${EN_MEDS}` +
         `|accidentally (?:swallowed|took|ate|drank|chewed|got into|gave (?:him|her|them))` +
         String.raw`|${EN_SWALLOW} (?:\w+ ){0,4}?${EN_MEDS}(?: \w+){0,3}? (?:by accident|by mistake)` +
         String.raw`|got into (?:\w+ ){0,2}?(?:${EN_MEDS}|medicine cabinet)` +
@@ -130,11 +165,16 @@ const RULES: readonly Rule[] = [
 
   // ── ES, emergencia médica ─────────────────────────────────────────────────────────────
   {
+    // "no respira", "no está (pudiendo) respirar", "no puede bien respirar", "dejó de respirar".
     id: "es.breathing",
     kind: "medical_emergency",
     language: "es",
-    pattern:
-      /\b(?:no (?:(?:esta|estoy|puede|puedo|logra|consigue) )?respir(?:a|o|ar|ando)|(?:dejo|ha dejado|dejaron) de respirar|(?:le|me) cuesta (?:mucho )?respirar|dificultad para respirar|se (?:esta )?ahoga(?:ndo)?|ahogandose)\b/,
+    pattern: rx(
+      String.raw`\b(?:no ${ES_ADV}${ES_AUX}respir(?:a|o|an|amos|aba|aban|ar|ando)` +
+        `|(?:deja|dejo|ha dejado|dejaron|esta dejando) de respirar` +
+        `|(?:le|me) cuesta (?:mucho )?respirar|dificultad para respirar` +
+        String.raw`|${ES_REFL} (?:${ES_ESTAR} )?qued(?:a|o|ando) sin aire)\b`,
+    ),
   },
   {
     id: "es.blue",
@@ -150,17 +190,33 @@ const RULES: readonly Rule[] = [
       /\b(?:convulsi(?:on|ones|ona|onando|ono|onar)|ataque epileptico|esta convulsionando)\b/,
   },
   {
+    // Clitic either side: "no (lo) puedo despertar(lo)"; continuous: "no está despertando";
+    // finite: "no (se) despierta / despertó / ha despertado"; "no logro que despierte".
     id: "es.unresponsive",
     kind: "medical_emergency",
     language: "es",
-    pattern:
-      /\b(?:inconsciente|no (?:se )?despierta|no (?:puedo|puede|podemos|pude|logro|logramos|consigo) despertar(?:l[oa]s?|le)?|no reacciona|perdio el conocimiento|se (?:desmayo|esta desmayando)|desmayad[oa])\b/,
+    pattern: rx(
+      String.raw`\b(?:inconsciente|no reacciona|perdio el conocimiento|desmayad[oa]` +
+        String.raw`|no ${ES_OBJ}${ES_ADV}${ES_AUX}(?:despertar(?:l[oa]s?|les?|se)?|despertando(?:l[oa]s?|les?|se)?|despiert(?:a|an)|desperto|despertaba)` +
+        String.raw`|no ${ES_OBJ}(?:ha|han|hemos|he) despertado` +
+        String.raw`|no ${ES_MODAL} (?:hacer )?que (?:se )?despiert(?:e|en)` +
+        `|no hay (?:manera|forma) de despertar(?:l[oa]s?|les?)` +
+        String.raw`|se (?:${ES_ESTAR} )?desmay(?:o|a|an|ando|ado)|${ES_ESTAR} desmayandose)\b`,
+    ),
   },
   {
+    // Choking needs the reflexive clitic, before or after: "me ahogo", "se está ahogando",
+    // "estoy ahogándome", "se atragantó", "se puede ahogar".
     id: "es.choking",
     kind: "medical_emergency",
     language: "es",
-    pattern: /\b(?:se (?:esta )?atragant(?:o|a|ando)|atragantad[oa])\b/,
+    pattern: rx(
+      String.raw`\b(?:${ES_REFL} (?:${ES_ESTAR} )?(?:ahog|atragant)(?:a|as|an|o|ue|e|aba|ando)` +
+        String.raw`|(?:${ES_ESTAR} )?(?:ahog|atragant)and(?:ome|ose|ote)` +
+        String.raw`|${ES_REFL} (?:${ES_MODAL}|voy a|va a|vas a) (?:ahogar|atragantar)` +
+        String.raw`|(?:${ES_MODAL}|voy a|va a|vas a) (?:ahogar|atragantar)(?:me|se|te)` +
+        String.raw`|atragantad[oa])\b`,
+    ),
   },
   {
     id: "es.bleeding",
@@ -206,9 +262,11 @@ const RULES: readonly Rule[] = [
     id: "en.self_harm.hurt",
     kind: "self_harm",
     language: "en",
-    // Intent, not accidents: "I want to hurt myself", not "I hurt myself lifting him".
-    pattern:
-      /\b(?:want(?:s)? to|wanna|going to|gonna|thinking (?:about|of)|might|feel like) (?:hurt|harm|cut)(?:ing)? (?:myself|himself|herself|themselves)\b|\bself[- ]harm(?:ing)?\b/,
+    // Intent or ongoing, not accidents: "I want to hurt myself", "I've been cutting myself",
+    // not "I hurt myself lifting him".
+    pattern: rx(
+      String.raw`\b(?:${EN_INTENT}|${EN_ONGOING}) (?:\w+ )?${EN_HARM} ${EN_SELF}\b|\bself[- ]harm(?:ing)?\b`,
+    ),
   },
   {
     id: "en.self_harm.die",
@@ -227,12 +285,17 @@ const RULES: readonly Rule[] = [
       /\b(?:(?:matarme|matarse|(?:me|se) (?:voy|va|quiero|quiere) (?:a )?matar)(?! (?:trabajando|estudiando|de)\b)|suicidarme|suicidarse|(?:me|se) (?:voy|va) a suicidar|quitarme la vida|quitarse la vida|(?:me|se) (?:voy|va|quiero|quiere) (?:a )?quitar la vida|acabar con (?:mi|su) vida)\b/,
   },
   {
+    // Clitic either side, intensifier allowed: "me voy a hacer (mucho) daño", "estoy pensando
+    // en hacerme daño", "quiero lastimarme"; ongoing: "me estoy cortando". An article or
+    // possessive after the verb means an object ("cortarme el pelo") and doesn't count.
     id: "es.self_harm.hurt",
     kind: "self_harm",
     language: "es",
     pattern: rx(
-      String.raw`\b(?:(?:quiero|quiere|voy a|va a|pienso en|ganas de) (?:hacerme dano|lastimarme|cortarme|hacerse dano|lastimarse|cortarse)${ES_NOT_OBJECT}` +
-        `|(?:me|se) (?:voy a|va a|quiero|quiere) (?:hacer dano|lastimar|cortar)${ES_NOT_OBJECT}` +
+      String.raw`\b(?:${ES_INTENT} (?:\w+ )?${ES_HARM_ENCLITIC}${ES_NOT_OBJECT}` +
+        String.raw`|(?:me|se|te) ${ES_INTENT} (?:\w+ )?${ES_HARM_INF}${ES_NOT_OBJECT}` +
+        String.raw`|(?:me|se|te) ${ES_ESTAR} (?:cortando|lastimando|hiriendo|haciendo (?:(?:mucho|tanto) )?dano)${ES_NOT_OBJECT}` +
+        String.raw`|${ES_ESTAR} (?:cortand|lastimand|hiriend)(?:ome|ose|ote)${ES_NOT_OBJECT}` +
         String.raw`|autolesion(?:es|arme|arse)?)\b`,
     ),
   },
