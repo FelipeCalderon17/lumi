@@ -24,7 +24,7 @@ export function LanguageSwitch({
       hrefLang={other}
       lang={other}
       aria-label={ariaLabel}
-      className="rounded-pill border border-line px-3 py-1 text-sm text-muted transition-colors hover:border-glow hover:text-text"
+      className="flex min-h-11 items-center rounded-pill border border-line px-4 text-[0.95rem] text-muted transition-colors duration-200 hover:border-glow hover:text-text"
     >
       {label}
     </Link>

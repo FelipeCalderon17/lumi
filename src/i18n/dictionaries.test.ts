@@ -5,6 +5,9 @@ import { NOTEBOOK_TOPICS } from "@/server/notebook";
 import { en } from "./dictionaries/en";
 import { es } from "./dictionaries/es";
 
+/** Fictional demo contact number (555-01xx), allowed in the footer only (README tradeoffs). */
+const DEMO_PHONE_KEY = "footer.contactPhone";
+
 /** Every string in a dictionary, with its dotted path. */
 function strings(value: unknown, path = ""): [string, string][] {
   if (typeof value === "string") return [[path, value]];
@@ -43,9 +46,20 @@ describe.each([
 
   it("passes the content rules (no other phone numbers, dosages or banned words)", () => {
     const violations = strings(dict).flatMap(([path, s]) =>
-      findContentViolations(s).map((v) => `${path}: ${v.rule} "${v.match}"`),
+      findContentViolations(s)
+        // The one exception: the footer's demo contact line (fictional 555-01xx, checked below).
+        .filter((v) => !(path === DEMO_PHONE_KEY && v.rule === "phone_number"))
+        .map((v) => `${path}: ${v.rule} "${v.match}"`),
     );
     expect(violations).toEqual([]);
+  });
+
+  it("the only other phone number is the footer's fictional 555-01xx demo contact", () => {
+    expect(dict.footer.contactPhone).toMatch(/^555-01\d{2}$/);
+    const with555 = strings(dict)
+      .filter(([, s]) => /555/.test(s))
+      .map(([path]) => path);
+    expect(with555).toEqual([DEMO_PHONE_KEY]);
   });
 
   it("fallback and abstained copy point only to real roles, not the placeholder family team", () => {
@@ -54,11 +68,11 @@ describe.each([
     }
   });
 
-  it("names the AI data processor only in the privacy disclosure (ADR 0005)", () => {
+  it("names the AI data processor only in the privacy disclosures (ADR 0005)", () => {
     const naming = strings(dict)
       .filter(([, s]) => AI_PROCESSOR_NAME.test(s))
       .map(([path]) => path);
-    expect(naming).toEqual(["help.processingNotice"]);
+    expect(naming).toEqual(["help.processingNotice", "notebook.processingNotice"]);
   });
 
   it("has a label for every notebook topic and nothing else (labels never come from the model)", () => {

@@ -10,12 +10,15 @@ export const VOICE_CAP_SECONDS = config.limits.audio.maxSeconds;
 export const VOICE_BITS_PER_SECOND = 32_000;
 
 /** Whole seconds left, counting down from the cap. Never negative. */
-export function remainingSeconds(elapsedMs: number, capSeconds = VOICE_CAP_SECONDS): number {
+export function remainingSeconds(
+  elapsedMs: number,
+  capSeconds: number = VOICE_CAP_SECONDS,
+): number {
   return Math.max(0, Math.ceil(capSeconds - Math.max(0, elapsedMs) / 1000));
 }
 
 /** True once the recording has reached the cap and must stop. */
-export function reachedCap(elapsedMs: number, capSeconds = VOICE_CAP_SECONDS): boolean {
+export function reachedCap(elapsedMs: number, capSeconds: number = VOICE_CAP_SECONDS): boolean {
   return elapsedMs >= capSeconds * 1000;
 }
 
@@ -26,7 +29,10 @@ export function formatClock(totalSeconds: number): string {
 }
 
 /** The duration we declare to the server: measured, at least 1 ms, never above the cap. */
-export function declaredDurationMs(elapsedMs: number, capSeconds = VOICE_CAP_SECONDS): number {
+export function declaredDurationMs(
+  elapsedMs: number,
+  capSeconds: number = VOICE_CAP_SECONDS,
+): number {
   return Math.min(Math.max(1, Math.round(elapsedMs)), capSeconds * 1000);
 }
 

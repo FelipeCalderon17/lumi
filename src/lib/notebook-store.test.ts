@@ -8,6 +8,7 @@ import {
   MAX_NOTE_CHARS,
   NOTEBOOK_STORAGE_KEY,
   type NoteStorage,
+  restoreNote,
 } from "./notebook-store";
 
 function memoryStorage(initial?: string): NoteStorage & { data: Map<string, string> } {
@@ -54,6 +55,18 @@ describe("notebook store", () => {
     expect(after.ok && after.notes.map((n) => n.text)).toEqual(["two"]);
     expect(clearNotes(storage)).toEqual({ ok: true, notes: [] });
     expect(storage.data.has(NOTEBOOK_STORAGE_KEY)).toBe(false);
+  });
+
+  it("undo puts a deleted note back in place, once", () => {
+    const storage = memoryStorage();
+    addNote(storage, "first", new Date(2026, 9, 1));
+    addNote(storage, "second", new Date(2026, 9, 2));
+    const [first] = loadNotes(storage).notes;
+    if (!first) throw new Error("missing note");
+    deleteNote(storage, first.id);
+    restoreNote(storage, first);
+    restoreNote(storage, first);
+    expect(loadNotes(storage).notes.map((n) => n.text)).toEqual(["first", "second"]);
   });
 
   it("recovers from corrupt data: invalid JSON, a non-array, or bad entries", () => {

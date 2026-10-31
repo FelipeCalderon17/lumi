@@ -87,6 +87,13 @@ export function deleteNote(storage: NoteStorage | null, id: string): WriteResult
   );
 }
 
+/** Puts back a note that was just deleted ("Undo"), with its original id and date. */
+export function restoreNote(storage: NoteStorage | null, note: StoredNote): WriteResult {
+  const { notes } = loadNotes(storage);
+  if (notes.some((n) => n.id === note.id)) return { ok: true, notes };
+  return save(storage, sortByDate([...notes, note]));
+}
+
 export function clearNotes(storage: NoteStorage | null): WriteResult {
   try {
     storage?.removeItem(NOTEBOOK_STORAGE_KEY);

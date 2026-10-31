@@ -3,6 +3,8 @@
 /*
  * Lumi design tokens — see docs/DESIGN.md for rationale and contrast table.
  * Two themes: "night" (default when the OS is dark — most 2 a.m. visits) and "dawn".
+ * The OS preference decides, unless the parent picked one with the toggle
+ * (<html data-theme="dark|light">, set before paint by the inline script in the layout).
  * Components only use semantic tokens (bg, surface, text, glow…), never raw hex.
  */
 
@@ -18,12 +20,13 @@
   --lumi-ember: #b3321f;
   --lumi-sage: #2e6b55;
   --lumi-halo: rgb(246 190 79 / 0.28);
+  --lumi-grain-opacity: 0.05;
   color-scheme: light;
 }
 
+/* night: the OS asks for dark and the parent hasn't picked dawn, or the parent picked night. */
 @media (prefers-color-scheme: dark) {
-  :root {
-    /* night */
+  :root:not([data-theme="light"]) {
     --lumi-bg: #12112a;
     --lumi-surface: #1c1a3d;
     --lumi-raised: #272452;
@@ -34,8 +37,24 @@
     --lumi-ember: #ff9a85;
     --lumi-sage: #8ed7b8;
     --lumi-halo: rgb(246 190 79 / 0.16);
+    --lumi-grain-opacity: 0.07;
     color-scheme: dark;
   }
+}
+
+:root[data-theme="dark"] {
+  --lumi-bg: #12112a;
+  --lumi-surface: #1c1a3d;
+  --lumi-raised: #272452;
+  --lumi-line: #3a3670;
+  --lumi-text: #f4eedf;
+  --lumi-muted: #b4aed6;
+  --lumi-glow: #f6be4f;
+  --lumi-ember: #ff9a85;
+  --lumi-sage: #8ed7b8;
+  --lumi-halo: rgb(246 190 79 / 0.16);
+  --lumi-grain-opacity: 0.07;
+  color-scheme: dark;
 }
 
 @theme inline {
@@ -50,10 +69,12 @@
   --color-glow: var(--lumi-glow);
   --color-ember: var(--lumi-ember);
   --color-sage: var(--lumi-sage);
+  --color-halo: var(--lumi-halo);
   /* Fixed in both themes: the lantern fill and the ink that sits on it (9.7:1). */
   --color-lantern: #f6be4f;
   --color-on-lantern: #1e1b3a;
   --color-transparent: transparent;
+  --color-current: currentColor;
 
   --font-display: var(--font-fraunces), "Iowan Old Style", Georgia, serif;
   --font-body: var(--font-atkinson), system-ui, sans-serif;
@@ -72,6 +93,8 @@
     background: var(--lumi-bg);
     color: var(--lumi-text);
     -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    scroll-padding-top: 1.5rem;
   }
 
   body {
@@ -79,9 +102,40 @@
     font-size: var(--text-base);
     line-height: 1.65;
     min-height: 100dvh;
+    position: relative;
     /* A soft lantern halo at the top of every page: the "small light in the dark". */
     background-image: radial-gradient(60rem 32rem at 18% -10%, var(--lumi-halo), transparent 70%);
     background-repeat: no-repeat;
+  }
+
+  /* Paper grain: a still, barely-there texture so the night isn't flat. Decorative only. */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    opacity: var(--lumi-grain-opacity);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .5 0 0 0 0 .45 0 0 0 0 .4 0 0 0 1 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  body > * {
+    position: relative;
+    z-index: 1;
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    font-variation-settings: "SOFT" 100;
+    text-wrap: balance;
+    letter-spacing: -0.015em;
+  }
+
+  p,
+  li {
+    text-wrap: pretty;
   }
 
   :focus-visible {
@@ -93,6 +147,122 @@
   ::selection {
     background: #f6be4f;
     color: #1e1b3a;
+  }
+
+  ::placeholder {
+    color: var(--lumi-muted);
+    opacity: 0.85;
+  }
+}
+
+/* The one primary action per view: the lantern. */
+@utility btn-lantern {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  min-height: 3rem;
+  padding: 0.7rem 1.5rem;
+  border-radius: var(--radius-pill);
+  background: #f6be4f;
+  color: #1e1b3a;
+  font-weight: 700;
+  box-shadow: 0 0 44px -10px rgb(246 190 79 / 0.85);
+  transition:
+    transform 260ms var(--ease-lumi),
+    box-shadow 260ms var(--ease-lumi);
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 0 56px -8px rgb(246 190 79 / 0.95);
+  }
+  &:disabled {
+    opacity: 0.55;
+    transform: none;
+    cursor: not-allowed;
+  }
+}
+
+/* Secondary actions: an outline that warms on hover. */
+@utility btn-quiet {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 2.75rem;
+  padding: 0.55rem 1.15rem;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--lumi-line);
+  color: var(--lumi-text);
+  font-weight: 600;
+  transition:
+    border-color 220ms var(--ease-lumi),
+    background-color 220ms var(--ease-lumi);
+  &:hover {
+    border-color: var(--lumi-glow);
+    background: var(--lumi-raised);
+  }
+  &:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+}
+
+/* Destructive, but calm: ember outline, never a red block. */
+@utility btn-ember {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 2.75rem;
+  padding: 0.55rem 1.15rem;
+  border-radius: var(--radius-pill);
+  border: 1px solid color-mix(in srgb, var(--lumi-ember) 55%, transparent);
+  color: var(--lumi-ember);
+  font-weight: 600;
+  transition: background-color 220ms var(--ease-lumi);
+  &:hover {
+    background: color-mix(in srgb, var(--lumi-ember) 10%, transparent);
+  }
+}
+
+/* Text fields: large, calm, with a warm focus. */
+@utility field {
+  width: 100%;
+  min-height: 3rem;
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-soft);
+  border: 1px solid var(--lumi-line);
+  background: var(--lumi-surface);
+  color: var(--lumi-text);
+  transition: border-color 200ms var(--ease-lumi);
+  &:hover {
+    border-color: color-mix(in srgb, var(--lumi-glow) 45%, var(--lumi-line));
+  }
+  &:focus-visible {
+    border-color: var(--lumi-glow);
+    outline-offset: 1px;
+  }
+}
+
+/* Small uppercase label above a heading. */
+@utility eyebrow {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--lumi-glow);
+}
+
+/* Links inside running text: underlined, warm on hover. */
+@utility link {
+  color: var(--lumi-text);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--lumi-glow) 70%, transparent);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 0.2em;
+  transition: text-decoration-color 200ms var(--ease-lumi);
+  &:hover {
+    text-decoration-color: var(--lumi-glow);
   }
 }
 
@@ -112,6 +282,56 @@
   animation: lumi-flicker 4.5s var(--ease-lumi) infinite;
 }
 
+/* The waiting state: a slow breath of light, nothing that bounces or types. */
+@keyframes lumi-breathe {
+  0%,
+  100% {
+    opacity: 0.45;
+    transform: scale(0.92);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@utility animate-breathe {
+  animation: lumi-breathe 2.8s ease-in-out infinite;
+}
+
+/* Fireflies drifting in the hero: tiny, slow, decorative. */
+@keyframes lumi-drift {
+  0%,
+  100% {
+    transform: translate(0, 0);
+    opacity: 0.35;
+  }
+  50% {
+    transform: translate(6px, -10px);
+    opacity: 1;
+  }
+}
+
+@utility animate-drift {
+  animation: lumi-drift 7s ease-in-out infinite;
+}
+
+/* A gentle fade-up when an answer is revealed (once, after validation). */
+@keyframes lumi-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@utility animate-reveal {
+  animation: lumi-reveal 420ms var(--ease-lumi) both;
+}
+
 /* biome-ignore-start lint/complexity/noImportantStyles: the reduced-motion override must beat every component style. */
 @media (prefers-reduced-motion: reduce) {
   *,
@@ -121,6 +341,41 @@
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+}
+
+/*
+ * Print: a clean, doctor-ready page. Ink on white, no backgrounds, no navigation, no buttons.
+ * Elements opt out with `print:hidden`; the notebook adds a print-only header.
+ */
+@media print {
+  :root,
+  :root[data-theme="dark"],
+  :root:not([data-theme="light"]) {
+    --lumi-bg: #ffffff;
+    --lumi-surface: #ffffff;
+    --lumi-raised: #ffffff;
+    --lumi-line: #bbbbbb;
+    --lumi-text: #111111;
+    --lumi-muted: #444444;
+    --lumi-glow: #111111;
+    --lumi-ember: #111111;
+    --lumi-sage: #111111;
+    color-scheme: light;
+  }
+  html,
+  body {
+    background: #ffffff !important;
+    font-size: 12pt;
+  }
+  body::before {
+    display: none;
+  }
+  a {
+    text-decoration: none !important;
+  }
+  @page {
+    margin: 18mm 16mm;
   }
 }
 /* biome-ignore-end lint/complexity/noImportantStyles: see above. */
