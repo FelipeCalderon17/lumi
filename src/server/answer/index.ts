@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { type LanguageModel, streamText } from "ai";
 import { config, type ModelId, type ReasoningEffort } from "../config";
+import { findUnsourcedNumbers } from "../content-rules";
 import { type RequestContext, stageSignal } from "../context";
 import type { Citation } from "../events";
 import type { KnowledgeBase } from "../knowledge";
@@ -207,7 +208,9 @@ export async function generateAnswer(
 
 /**
  * The last gate before reveal: citation integrity, then the runtime content check (no phone
- * numbers or dosages, whatever the citations say). Maps handles to citations for the UI.
+ * numbers or dosages, whatever the citations say), then number provenance (every number,
+ * frequency and schedule also appears in a cited article; ADR 0015). Maps handles to citations
+ * for the UI.
  */
 export function finalizeAnswer(
   text: string,
@@ -216,9 +219,13 @@ export function finalizeAnswer(
   const integrity = checkCitationIntegrity(text, new Set(kb.byHandle.keys()));
   if (integrity.status === "invalid") return { ok: false, reason: "invalid_output" };
   if (findUnsafeOutput(text).length > 0) return { ok: false, reason: "invalid_output" };
-  const citations = integrity.handles.flatMap((handle) => {
+  const cited = integrity.handles.flatMap((handle) => {
     const article = kb.byHandle.get(handle);
-    return article ? [{ handle, articleId: article.id, title: article.title }] : [];
+    return article ? [article] : [];
   });
+  const sources = cited.map((article) => `${article.title}\n${article.body}`);
+  if (findUnsourcedNumbers(text, sources).length > 0)
+    return { ok: false, reason: "invalid_output" };
+  const citations = cited.map(({ handle, id, title }) => ({ handle, articleId: id, title }));
   return { ok: true, value: { text, citations } };
 }

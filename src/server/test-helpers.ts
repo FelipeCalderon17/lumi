@@ -123,10 +123,15 @@ export function testArticles(language: Language, count = 12): Article[] {
   }));
 }
 
-/** A KB that also contains the medical-template article, like the real one. */
-export function testKb(language: Language = "en"): KnowledgeBase {
+/**
+ * A KB that also contains the medical-template article, like the real one. `firstBody` replaces
+ * article 1's body, for answers whose numbers must appear in what they cite (number provenance).
+ */
+export function testKb(language: Language = "en", firstBody?: string): KnowledgeBase {
+  const articles = testArticles(language, 11);
+  if (firstBody !== undefined && articles[0]) articles[0] = { ...articles[0], body: firstBody };
   return buildKnowledgeBase(language, [
-    ...testArticles(language, 11),
+    ...articles,
     {
       id: "questions-for-your-care-team",
       lang: language,

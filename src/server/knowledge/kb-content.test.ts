@@ -2,11 +2,17 @@ import { readdirSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { en } from "@/i18n/dictionaries/en";
 import { es } from "@/i18n/dictionaries/es";
-import { ABSTAIN_MARKER } from "../answer";
+import { ABSTAIN_MARKER, finalizeAnswer } from "../answer";
 import { config } from "../config";
 import { AI_PROCESSOR_NAME, findContentViolations } from "../content-rules";
 import { LANGUAGES } from "../types";
-import { type Article, countWords, MEDICAL_REDIRECT_ARTICLE_ID, parseArticleFile } from "./index";
+import {
+  type Article,
+  buildKnowledgeBase,
+  countWords,
+  MEDICAL_REDIRECT_ARTICLE_ID,
+  parseArticleFile,
+} from "./index";
 
 /**
  * KB content gate (runs in `pnpm test`, so it gates CI). Rules: docs/CONTENT-GUIDELINES.md
@@ -81,6 +87,32 @@ describe("KB content", () => {
       expect(findContentViolations(text)).toEqual([]);
       const withoutCrisisLine = text.split(CRISIS_LINE[lang]).join("");
       expect(withoutCrisisLine).not.toMatch(/\b988\b/);
+    },
+  );
+
+  // Number provenance (ADR 0015): a synthetic answer made of an article's own sentences, citing
+  // that article, must reach the parent. Line by line, and the whole body at once.
+  it.each(
+    LANGUAGES.flatMap((lang) =>
+      [
+        ...buildKnowledgeBase(
+          lang,
+          kb[lang].map((e) => e.article),
+        ).byHandle.values(),
+      ].map((article) => [`${lang}/${article.id}`, lang, article] as const),
+    ),
+  )(
+    "%s: every line, citing its own article, passes the final answer gate",
+    (_name, lang, article) => {
+      const handled = buildKnowledgeBase(
+        lang,
+        kb[lang].map((e) => e.article),
+      );
+      const lines = article.body.split("\n").filter((line) => line.trim() !== "");
+      const withheld = [...lines, article.body].filter(
+        (line) => !finalizeAnswer(`${line} [${article.handle}]`, handled).ok,
+      );
+      expect(withheld).toEqual([]);
     },
   );
 

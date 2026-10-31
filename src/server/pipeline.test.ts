@@ -351,13 +351,17 @@ describe("pipeline: dosage gate on the final answer (Codex re-review 3)", () => 
     }
   });
 
-  it("still answers the harmless counterexamples", async () => {
+  it("still answers the harmless counterexamples (their numbers are in the cited article)", async () => {
+    const body = "Take 2 snacks. Go to room 211. Take a break every 2 hours.";
     for (const text of [
       "Take 2 snacks [1].",
       "Go to room 211 [1].",
       "Take a break every 2 hours [1].",
     ]) {
-      const { deps } = setup({ answer: streamingModel([text]) });
+      const { deps } = setup({
+        answer: streamingModel([text]),
+        getKnowledgeBase: async (language) => testKb(language, body),
+      });
       const events = await collect(startChat(ask("What should I pack?"), testCtx(), deps));
       expect([text, last(events)]).toMatchObject([text, { type: "answer", text }]);
     }

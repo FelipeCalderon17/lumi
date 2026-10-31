@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { findUnsourcedNumbers } from "../content-rules";
 import { buildKnowledgeBase } from "../knowledge";
 import {
   failingModel,
@@ -257,13 +258,84 @@ describe("answer.finalizeAnswer (last gate before reveal)", () => {
     }
   });
 
-  it("does not withhold harmless numbers", () => {
+  it("does not withhold harmless numbers that the cited article contains", () => {
+    const sourced = testKb("en", "Take 2 snacks for the wait. Take a break every two hours.");
     for (const text of [
       "Take 2 snacks for the wait [1]",
       "Room 911 is on the left [1]",
       "Take a break every 2 hours [1]",
     ]) {
-      expect([text, finalizeAnswer(text, kb).ok]).toEqual([text, true]);
+      expect([text, finalizeAnswer(text, sourced).ok]).toEqual([text, true]);
     }
+  });
+});
+
+describe("answer.finalizeAnswer: number provenance (ADR 0015, Codex verification)", () => {
+  const kb = testKb();
+  const withheld = { ok: false, reason: "invalid_output" };
+  const BLOCKERS = [
+    "- Paracetamol\n  - half as needed [1]",
+    "Paracetamol:\n\n- half as needed [1]",
+    'Paracetamol: "half the usual amount" [1]',
+    'Paracetamol: "500 to control pain" [1]',
+    "Paracetamol: «media de lo habitual» [1]",
+    "Use what was prescribed daily [1]",
+    "Usa lo que te recetaron diariamente [1]",
+    "Use whatever was prescribed every morning [1]",
+    "Use what was prescribed at\nbedtime [1]",
+    "Usa lo que te recetaron por la\nnoche [1]",
+  ];
+
+  it("withholds every latest Codex blocker, whatever the formatting", () => {
+    for (const text of BLOCKERS) {
+      expect([text, finalizeAnswer(text, kb)]).toEqual([text, withheld]);
+    }
+  });
+
+  it("the provenance layer alone catches each of them", () => {
+    for (const text of BLOCKERS) {
+      expect([text, findUnsourcedNumbers(text, ["Body of article 1."]).length > 0]).toEqual([
+        text,
+        true,
+      ]);
+    }
+  });
+
+  it("withholds a number in any script or written form that the cited article lacks", () => {
+    for (const text of [
+      "Bring ٢ bags [1]",
+      "Bring ２ bags [1]",
+      "Chapter IV explains it [1]",
+      "Bring two bags [1]",
+      "Bring a dozen snacks [1]",
+      "Usa doble capa [1]",
+      "Ask twice [1]",
+    ]) {
+      expect([text, finalizeAnswer(text, kb)]).toEqual([text, withheld]);
+    }
+  });
+
+  it("passes a number or schedule the cited article contains, in another written form", () => {
+    const sourced = testKb("en", "Bring two bags. Visit in the morning. Kept for 30 days.");
+    for (const text of [
+      "Bring 2 bags [1]",
+      "Bring ２ bags [1]",
+      "Visit in the\nmorning [1]",
+      "Questions are kept for 30 days [1]",
+      "In an emergency, call 911 [1]",
+    ]) {
+      expect([text, finalizeAnswer(text, sourced).ok]).toEqual([text, true]);
+    }
+  });
+
+  it("checks against the cited articles only, not the whole KB", () => {
+    const sourced = testKb("en", "Kept for 30 days.");
+    expect(finalizeAnswer("Kept for 30 days [1]", sourced).ok).toBe(true);
+    expect(finalizeAnswer("Kept for 30 days [2]", sourced)).toEqual(withheld);
+    expect(finalizeAnswer("Kept for 30 days [1, 2]", sourced).ok).toBe(true);
+  });
+
+  it("documented tradeoff: a benign number missing from the cited article is withheld", () => {
+    expect(finalizeAnswer("Pack 2 changes of clothes [1]", kb)).toEqual(withheld);
   });
 });
