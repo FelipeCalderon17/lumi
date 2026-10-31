@@ -72,3 +72,19 @@ export function interpretTranscription(status: number, body: unknown): Transcrib
   if (b.status === "rate_limited" || b.status === "capacity") return { kind: "busy" };
   return { kind: "failed" };
 }
+
+/**
+ * Asks for the microphone, but only hands the stream back if the request is still wanted.
+ * `isCurrent` is checked AFTER the permission prompt resolves: if the parent left the page (or
+ * the start was cancelled) meanwhile, every track is stopped at once and the caller gets null,
+ * so no recorder is ever created for it. Errors from `request` propagate.
+ */
+export async function openMicrophone(
+  request: () => Promise<MediaStream>,
+  isCurrent: () => boolean,
+): Promise<MediaStream | null> {
+  const stream = await request();
+  if (isCurrent()) return stream;
+  for (const track of stream.getTracks()) track.stop();
+  return null;
+}

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useId, useState } from "react";
 import type { Dictionary, Locale } from "@/i18n";
 import { fill } from "@/i18n/format";
+import { signOutStaff } from "@/lib/staff-session";
 import type { CostEstimate } from "@/server/ledger";
 import type { StaffOverview } from "@/server/staff";
 
@@ -51,9 +52,11 @@ export function StaffArea({ locale, t }: { locale: Locale; t: Dictionary }) {
     void load();
   }, [load]);
 
-  const logout = async () => {
-    await fetch("/api/staff/logout", { method: "POST" }).catch(() => {});
+  // The cookie is httpOnly: only show sign-in once the server confirms it cleared the session.
+  const logout = async (): Promise<boolean> => {
+    if ((await signOutStaff()) !== "signed_out") return false;
     setView({ kind: "login", note: null });
+    return true;
   };
 
   if (view.kind === "loading") return <p className="mt-10 text-muted">…</p>;
@@ -197,9 +200,11 @@ function Dashboard({
   t: Dictionary;
   overview: Overview;
   onExpired: () => void;
-  onLogout: () => void;
+  onLogout: () => Promise<boolean>;
 }) {
   const s = t.staff;
+  const [signingOut, setSigningOut] = useState(false);
+  const [signOutFailed, setSignOutFailed] = useState(false);
   const [items, setItems] = useState(overview.gaps.status === "ok" ? overview.gaps.items : []);
   const [confirming, setConfirming] = useState<string | null>(null);
   const [rowNote, setRowNote] = useState<{ id: string; text: string } | null>(null);
@@ -234,6 +239,16 @@ function Dashboard({
     }
   };
 
+  const signOut = async () => {
+    setSigningOut(true);
+    setSignOutFailed(false);
+    const ok = await onLogout();
+    if (!ok) {
+      setSignOutFailed(true);
+      setSigningOut(false);
+    }
+  };
+
   const usage = overview.usage;
 
   return (
@@ -243,10 +258,31 @@ function Dashboard({
           <h2 id="gaps-title" className="text-4xl">
             {s.gapsTitle}
           </h2>
-          <button type="button" className="btn-quiet" onClick={onLogout}>
+          <button
+            type="button"
+            className="btn-quiet"
+            disabled={signingOut}
+            onClick={() => void signOut()}
+          >
             {s.signOut}
           </button>
         </div>
+        {signOutFailed && (
+          <div
+            role="alert"
+            className="mt-3 flex flex-wrap items-center gap-3 rounded-soft border border-ember/60 bg-ember/8 px-4 py-2"
+          >
+            <span>{s.signOutFailed}</span>
+            <button
+              type="button"
+              className="link min-h-11 font-semibold"
+              disabled={signingOut}
+              onClick={() => void signOut()}
+            >
+              {t.gaps.retry}
+            </button>
+          </div>
+        )}
         <p className="mt-3 max-w-3xl text-muted">{s.gapsLede}</p>
         <p role="status" aria-live="polite" className="mt-3 min-h-6 text-sage">
           {status}

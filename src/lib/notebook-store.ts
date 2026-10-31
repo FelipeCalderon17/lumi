@@ -65,17 +65,19 @@ function save(storage: NoteStorage | null, notes: StoredNote[]): WriteResult {
   }
 }
 
-/** Adds a note (text kept as typed, only trimmed at the ends) with the device's local time. */
+/**
+ * Adds a note with the device's local time. The text is stored EXACTLY as typed, leading and
+ * trailing whitespace included; trim is only used to refuse a blank note.
+ */
 export function addNote(
   storage: NoteStorage | null,
   text: string,
   now: Date = new Date(),
 ): WriteResult {
-  const clean = text.trim();
-  if (clean === "") return { ok: false, reason: "empty" };
-  if (clean.length > MAX_NOTE_CHARS) return { ok: false, reason: "too_long" };
+  if (text.trim() === "") return { ok: false, reason: "empty" };
+  if (text.length > MAX_NOTE_CHARS) return { ok: false, reason: "too_long" };
   const { notes } = loadNotes(storage);
-  const note: StoredNote = { id: newId(), text: clean, createdAt: localIsoString(now) };
+  const note: StoredNote = { id: newId(), text, createdAt: localIsoString(now) };
   return save(storage, sortByDate([...notes, note]));
 }
 

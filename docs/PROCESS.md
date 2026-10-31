@@ -431,6 +431,39 @@ The builder agent (Claude) built every page and flow on top of the approved serv
 
 **Checks.** Node 24.19.0. `pnpm lint` ✓, `pnpm typecheck` ✓, `pnpm test` ✓ (37 files, 646 tests, up from 589), `pnpm test:kb` ✓ (5 files, 156 tests), `pnpm build` ✓. All exit codes 0.
 
+## Phase 3 fixes round 1 (Codex review)
+
+Codex reviewed Phase 3 and found five blocking issues and four cheap polish items. The builder agent (Claude) fixed only those, as fixes round 1 of at most 2. Decisions and tradeoffs are in [ADR 0016 § Revision 1](decisions/0016-phase-3-ui.md#revision-1-phase-3-fixes-round-1-codex-review) and the README table. Server guardrails were untouched.
+
+| Finding | Status | What changed |
+|---|---|---|
+| B1 Local notebook fallback dropped safety notices | Fixed | The page imports the server's own `checkEmergency` (pure, no Node APIs). `src/lib/notebook-sheet.ts` merges server and local notices for every sheet. The 400 panel, "Print my notes by date" and offline preparation all show the fixed notices before the notes, with flagged notes marked. |
+| B2 Recording could start after leaving the page | Fixed | A start token, bumped on unmount, plus `openMicrophone()`. A stream that arrives late has every track stopped, and no `MediaRecorder` is created. |
+| B3 Failed staff logout left a hidden session | Fixed | `signOutStaff()` succeeds only on `200 {status:"ok"}`. On failure the dashboard stays, with "Couldn't sign you out. Try again." / "No pudimos cerrar tu sesión. Inténtalo de nuevo." and a retry button. |
+| B4 Copy/Share omitted the safety instructions | Fixed | One kind → copy mapping (`src/lib/notebook-safety.ts`) feeds both the screen and the export. The text includes the title, body and every step, in the sheet's language, before the notes (911; plus 988 for self-harm). |
+| B5 "Verbatim" trimmed whitespace | Fixed | `addNote` stores the exact string; trim only refuses blank notes. The request and the server already kept it, and the list and sheet use `pre-wrap`. |
+| P1 Phone landing | Applied | The headline, lede and "Ask Lumi a question" come before the illustration below `lg`. The button ends at 571–620 px of an 844 px viewport. |
+| P2 Repeated citation pills | Applied | `collapseRepeatedCitations()`, for answers only: one pill per run of the same single guide. Sources are unchanged. |
+| P3 Ask textarea focus | Applied | An amber border and a 3 px ring on the box while the textarea has focus. |
+| P4 Volunteer smooth scroll | Applied | `behavior: "auto"` under `prefers-reduced-motion`. |
+| Notebook rate-limit wording, 320 px / 200% zoom | Documented | Left as is, per the review. Added to the ADR 0016 known limitations and the README table. |
+
+**Tests** (+26): local notices EN/ES; kind ordering; the export for each kind in EN and ES (title, body, every step, 911/988, before the notes); sheet models (by date and offline flagged, 400 notices kept, prepared merge, verbatim text); exact-whitespace storage; a delayed `getUserMedia` mock (unmounted → tracks stopped, null, no recorder; still mounted → stream untouched; denied → rejects); `signOutStaff` (ok, 500, unexpected body, non-JSON, offline); citation collapsing (single guide → one pill, runs across guides, grouped citations and headings end a run, no-op returns the same blocks).
+
+**Browser re-check:** a production build (`next start`) with Chromium via the scratch `playwright-core` in /tmp. EN and ES at 390 px and 1280 px, 80 checks, 80/80 passed, twice. API responses were mocked with `page.route`, and offline used `context.setOffline`.
+- **B1:** a mocked 400 with a notice → notice in the panel → by-date sheet with the notice before the notes and the note flagged.
+- **B1 offline:** both notices in the panel and on the sheet, the 988 button, 2 flagged notes.
+- **B4:** clipboard text has the titles and steps before the notes, with 988 for self-harm.
+- **B5:** localStorage, the request body and the rendered text are byte-identical, with `pre-wrap`.
+- **B2:** a `getUserMedia` stub resolved after client-side navigation → 1 track stopped (`ended`), 0 recorders.
+- **B3:** a mocked 500 on logout → dashboard and message stay → retry → sign-in, and `/api/staff/gaps` then returns 401.
+- **Polish:** P1 CTA above the fold, no overflow. P2 a mocked answer shows pills [1], [2] with an intact Sources list. P3 a ring appears on focus. P4 reduced motion → `auto`.
+- Screenshots updated: `landing-mobile-es.jpg`, and `ask-answer-desktop.jpg` from **one live call** (the "What to bring" chip). The real answer cited one guide throughout and now shows a single pill at the end.
+
+**What didn't work at first:** the first browser run had a script bug. `section li` matched a step inside the first notice, because the page wraps the sheet in a `<section>`, so it looked like "notices after notes". Scoping the selector to the article fixed it; the app was correct. The mobile nav link in the B2 check is hidden behind the menu, so the check navigates via the logo instead.
+
+**Checks.** Node 24.19.0. `pnpm lint` ✓, `pnpm typecheck` ✓, `pnpm test` ✓ ✓ (2 runs, 40 files, 672 tests each, up from 646), `pnpm test:kb` ✓ (5 files, 156 tests), `pnpm build` ✓. All exit codes 0. Live usage: 1 `gpt-6-luna` answer flow (router + answer).
+
 ## Phase 3 UI feedback round 1 (Felipe)
 
 Felipe reviewed the UI in the browser and asked for four changes. The builder agent (Claude) made them in a separate worktree (`ui-feedback-1`), fixes only, no server changes.

@@ -27,12 +27,15 @@ describe("notebook store", () => {
     expect(loadNotes(memoryStorage())).toEqual({ notes: [], recovered: false });
   });
 
-  it("adds notes in date order, keeping the text as typed (trimmed at the ends)", () => {
+  it("adds notes in date order, keeping the text exactly as typed (ends included)", () => {
     const storage = memoryStorage();
-    addNote(storage, "  Slept badly.\n  Woke at 3.  ", new Date(2026, 9, 29, 23, 0));
+    addNote(storage, "  Slept badly.\n  Woke at 3.  \n", new Date(2026, 9, 29, 23, 0));
     addNote(storage, "Ask about school", new Date(2026, 9, 28, 8, 0));
     const { notes } = loadNotes(storage);
-    expect(notes.map((n) => n.text)).toEqual(["Ask about school", "Slept badly.\n  Woke at 3."]);
+    expect(notes.map((n) => n.text)).toEqual([
+      "Ask about school",
+      "  Slept badly.\n  Woke at 3.  \n",
+    ]);
     expect(new Set(notes.map((n) => n.id)).size).toBe(2);
   });
 

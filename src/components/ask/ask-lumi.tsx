@@ -121,10 +121,12 @@ export function AskLumi({ locale, t }: { locale: Locale; t: Dictionary }) {
 
   return (
     <div className="mt-6 space-y-8 lg:mt-10">
-      {/* One full-width chat card: the conversation (its own scroll area), then the composer. */}
+      {/* One full-width chat card: the conversation (its own scroll area), then the composer.
+          The card glows while the composer has focus (the textarea draws no outline itself);
+          the gap flow's textarea, deeper inside, doesn't trigger it. */}
       <div
         ref={cardRef}
-        className="flex flex-col rounded-soft border border-line bg-surface shadow-[0_30px_60px_-40px_rgb(0_0_0/0.55)]"
+        className="flex flex-col rounded-soft border border-line bg-surface shadow-[0_30px_60px_-40px_rgb(0_0_0/0.55)] transition-[border-color,box-shadow] duration-200 has-[>form_textarea:focus]:border-glow has-[>form_textarea:focus]:ring-3 has-[>form_textarea:focus]:ring-glow/45"
       >
         {started && (
           <>

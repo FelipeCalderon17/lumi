@@ -16,15 +16,18 @@ export default async function HomePage({ params }: PageProps<"/[locale]">) {
 
   return (
     <>
-      {/* Hero: the lantern on the night table. */}
-      <section className="mx-auto grid max-w-6xl items-center gap-6 px-5 pt-6 pb-16 sm:pt-10 lg:grid-cols-[1.15fr_0.85fr] lg:gap-10 lg:pb-24">
-        <div className="order-2 lg:order-1">
+      {/* Hero: the lantern on the night table. On phones the words and "Ask Lumi" come first,
+          so the purpose and the action are visible without scrolling; the picture follows. */}
+      <section className="mx-auto grid max-w-6xl items-center gap-10 px-5 pt-6 pb-16 sm:pt-10 lg:grid-cols-[1.15fr_0.85fr] lg:pb-24">
+        <div>
           <p className="eyebrow">{h.eyebrow}</p>
-          <h1 className="mt-5 text-[2.9rem] leading-[1.02] sm:text-7xl lg:text-[5.2rem]">
+          <h1 className="mt-4 text-[2.6rem] leading-[1.02] sm:mt-5 sm:text-7xl lg:text-[5.2rem]">
             {h.titleStart} <em className="text-glow italic">{h.titleEmphasis}</em>
           </h1>
-          <p className="mt-7 max-w-xl text-[1.2rem] text-muted">{h.lede}</p>
-          <div className="mt-10 flex flex-col gap-4 sm:flex-row sm:items-center">
+          <p className="mt-5 max-w-xl text-[1.12rem] text-muted sm:mt-7 sm:text-[1.2rem]">
+            {h.lede}
+          </p>
+          <div className="mt-7 flex flex-col gap-4 sm:mt-10 sm:flex-row sm:items-center">
             <Link href={`/${locale}/help`} className="btn-lantern text-[1.08rem]">
               {h.cta}
               <span aria-hidden="true">→</span>
@@ -42,7 +45,7 @@ export default async function HomePage({ params }: PageProps<"/[locale]">) {
             </div>
           </div>
         </div>
-        <div className="order-1 mx-auto w-56 sm:w-72 lg:order-2 lg:w-full lg:max-w-md">
+        <div className="mx-auto w-56 sm:w-72 lg:w-full lg:max-w-md">
           <NightWindow className="h-auto w-full" />
         </div>
       </section>

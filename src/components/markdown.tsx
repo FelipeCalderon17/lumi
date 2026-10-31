@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Fragment, type ReactNode } from "react";
-import { type Block, type Inline, parseMarkdown } from "@/lib/markdown";
+import { type Block, collapseRepeatedCitations, type Inline, parseMarkdown } from "@/lib/markdown";
 import type { Citation } from "@/server/events";
 
 type CitationProps = {
@@ -96,17 +96,26 @@ function renderBlock(block: Block, i: number, props: CitationProps, headingOffse
 
 /**
  * Renders KB articles and answers from our Markdown subset. Never uses innerHTML: text from an
- * article or a model answer is always rendered as text.
+ * article or a model answer is always rendered as text. `collapseCitations` (answers) shows a
+ * repeated single-source pill once per run; the Sources list is unaffected.
  */
 export function Markdown({
   source,
   headingOffset = 0,
   className,
+  collapseCitations = false,
   ...props
-}: { source: string; headingOffset?: number; className?: string } & CitationProps) {
+}: {
+  source: string;
+  headingOffset?: number;
+  className?: string;
+  collapseCitations?: boolean;
+} & CitationProps) {
+  const parsed = parseMarkdown(source);
+  const blocks = collapseCitations ? collapseRepeatedCitations(parsed) : parsed;
   return (
     <div className={className}>
-      {parseMarkdown(source).map((block, i) => renderBlock(block, i, props, headingOffset))}
+      {blocks.map((block, i) => renderBlock(block, i, props, headingOffset))}
     </div>
   );
 }

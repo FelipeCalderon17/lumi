@@ -1,6 +1,6 @@
 # 0016 — Phase 3 UI: one deep slice, honest mocks, on-device state
 
-**Status:** Proposed · 2026-10-31 · *Phase 3 (UI). Pending review and Felipe's sign-off.*
+**Status:** Proposed · 2026-10-31 · *Phase 3 (UI). Revised after Codex's Phase 3 review (fixes round 1). Pending re-review and Felipe's sign-off.*
 
 ## Context
 The brief asks for one slice done deeply and reasonable placeholders for the rest. The server side (Phases 0–2) is done: the chat pipeline, notebook classification, voice, gaps, staff and the ledger. Phase 3 is the site a stressed parent actually sees, often on a phone at 2 a.m. It must also look like something FutureProofing would proudly show a client, without any "AI template" look. Nothing in this phase may weaken a server guardrail.
@@ -47,12 +47,12 @@ The brief asks for one slice done deeply and reasonable placeholders for the res
 - The processing notice (`notebook.processingNotice`, naming OpenAI; ADR 0005) sits next to the button, so it's seen before anything is sent.
 - Prepare sends at most `maxNotes` (the most recent 40).
 - The page renders the current contract:
-  - Safety notices come first, on organized pages, fallback pages and 400 responses.
+  - Safety notices come first, before any note, on every sheet: organized, fallback, 400 responses and the by-date page (see "Revision 1").
   - Topic headings come from the dictionaries.
   - Note text is rendered verbatim (`white-space: pre-wrap`), with the wall-clock date the device wrote.
-- If preparing fails, "Print my notes by date" builds the same page on the device without AI.
+- If preparing fails (or the device is offline), "Print my notes by date" builds the same page on the device without AI, with the safety notices.
 - Print uses a print stylesheet: ink on white, a header with the date, and no navigation or buttons.
-- Share uses the Web Share API where available, and otherwise copies to the clipboard. There's also a plain "Copy". Shared and copied text is the notes verbatim.
+- Share uses the Web Share API where available, and otherwise copies to the clipboard. There's also a plain "Copy". Shared and copied text starts with the full fixed safety notice (title, body and every step, in the page's language) when one applies, then the notes verbatim.
 
 **Guides:** the KB articles themselves, as a library and article pages. Citations link there.
 
@@ -70,6 +70,33 @@ The brief asks for one slice done deeply and reasonable placeholders for the res
 
 **Footer:** "Lumi is a fictional foundation. Demo content. Not medical advice." It also holds the **only** non-safety phone number on the site, a fictional `555-0142` in `footer.contactPhone`, enforced by the dictionary tests (ADR 0012).
 
+## Revision 1: Phase 3 fixes round 1 (Codex review)
+
+**Safety notices can't be lost on the device (B1, B4)**
+- The notebook page runs the **same** deterministic check as the server (`checkEmergency` from `src/server/safety`). That module is pure TypeScript with no Node APIs, so it's imported directly. Nothing was copied, and the server rules are unchanged.
+- `src/lib/notebook-sheet.ts` builds every sheet. It merges the server's notices with the local check: a note is flagged if either flags it, and one notice is shown per kind, medical emergency first.
+- The error panel shows the notices from a 400 together with the local check. "Print my notes by date" keeps both. Offline, the local check alone flags the page.
+- A server notice on the by-date page contributes only its **kind**. Its `noteIndex` refers to the request, which may differ from the notes now on the page (notes added since, or the 40-note cap), so the flag dots come from the local check.
+- `src/lib/notebook-safety.ts` holds the kind → copy mapping, used by both the screen and Copy/Share. The export can't drift from the screen: it includes the title, the body and every step, so the self-harm notice carries 911 and 988.
+
+**Verbatim means verbatim (B5):** `addNote` stores the string exactly as typed, including leading and trailing whitespace and newlines. `trim` is only used to refuse a blank note. The request sends the same string, and the server already showed notes untrimmed. The list and the sheet render with `white-space: pre-wrap`.
+
+**No microphone after leaving (B2):** each start takes a token, and unmounting bumps it. `openMicrophone` (src/lib/voice.ts) checks the token after the permission prompt resolves. A stale stream has every track stopped at once, and no recorder is created.
+
+**Staff sign-out is confirmed (B3):** the session cookie is httpOnly, so only the server can clear it. The page shows sign-in only after `/api/staff/logout` answers `200 {status:"ok"}`. Otherwise the dashboard stays, with "Couldn't sign you out. Try again." and a retry button (EN/ES).
+
+**Polish**
+- **Phone landing:** the headline, lede and "Ask Lumi a question" come before the illustration below `lg`. At 390 × 844 the button ends at about 570–620 px, above the fold.
+- **Citation pills:** `collapseRepeatedCitations` is presentation only, and only for answers. A run of consecutive citations to the same single guide (across sentences, bullets and paragraphs) shows one pill at its end. A grouped citation ("[1, 3]"), a change of guide or a heading ends the run. An answer that cites one guide throughout shows a single pill. The Sources list and the citation checks are untouched.
+- **Ask box focus:** when the textarea has focus, the box gets an amber border and a 3 px ring.
+- **Volunteer:** scrolling to the sign-up form uses `behavior: "auto"` under `prefers-reduced-motion`.
+
+**Tradeoffs accepted in this revision**
+- The safety regexes now also ship in the browser bundle. They're public in the repo anyway, and they're small. A client that skips them only hurts itself, because the server still checks every note before preparing.
+- A collapsed run leaves earlier sentences without their own pill. The claim's source is the next pill in the run, which is always the same single guide, so the association stays correct but less explicit.
+- Notes typed with stray trailing spaces or blank lines print that way. That's the cost of "the parent's own words, exactly".
+- The by-date page shows server notices by kind, without pointing at a note, when only the server matched. This can only happen if the server and client rules diverge, which they can't with a shared module.
+
 ## Consequences
 - The deep slice is complete end to end, and every failure ends in calm, fixed copy with 911.
 - The rest of the site feels real but never pretends: badges, dashed borders and "nothing is sent" lines.
@@ -85,6 +112,8 @@ The brief asks for one slice done deeply and reasonable placeholders for the res
 - **Mock schedules:** no clock times, because the dosage gate in the content rules flags them in UI copy.
 - **First-save network error:** if the very first gap save loses its response, the UI says "couldn't save". The id is created by the server, so the page has no credentials to retry or delete. The lazy retention and staff delete still apply.
 - **Staff 401 in the console:** opening the staff page before signing in logs one browser "401" line. It's the session check, by contract.
+- **Generic notebook rate-limit wording:** a rate-limited (or capacity-limited) prepare returns the by-date fallback page with the generic "We couldn't sort your notes by topic right now" line, not a specific "try again in a few minutes". Left as is after the Phase 3 review.
+- **Narrow screens and zoom:** checked at 390 px and 1280 px only. 320 px widths and 200% browser zoom weren't systematically checked. Left as is after the Phase 3 review.
 
 ## Alternatives
 - **A component library (shadcn/Radix).** Rejected: it brings the template look we're avoiding, and a few utilities were enough.
