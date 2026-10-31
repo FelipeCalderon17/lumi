@@ -185,6 +185,8 @@ export const config = {
   rateLimit: {
     chat: { windowMs: 60_000, max: 10 },
     gaps: { windowMs: 60 * 60_000, max: 5 },
+    /** Parent deletes write a tombstone, so they're bounded too; generous so privacy wins. */
+    gapDeletes: { windowMs: 60 * 60_000, max: 30 },
     staffLogin: { windowMs: 15 * 60_000, max: 5 },
     transcribe: { windowMs: 60 * 60_000, max: 30 },
     notebook: { windowMs: 60 * 60_000, max: 10 },

@@ -1,0 +1,1 @@
+ALTER TABLE "gap_question" ADD COLUMN "deleted" boolean DEFAULT false NOT NULL;

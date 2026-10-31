@@ -23,7 +23,7 @@ export type ServerDeps = {
   usageReader: UsageReader | null;
   staffAuth: StaffAuthConfig;
   limiters: Record<
-    "chat" | "gaps" | "staffLogin" | "transcribe" | "notebook" | "modelCalls",
+    "chat" | "gaps" | "gapDeletes" | "staffLogin" | "transcribe" | "notebook" | "modelCalls",
     RateLimiter
   >;
   /** Per-process salt for rate-limit keys; never persisted. */
@@ -47,6 +47,7 @@ export function createServerDeps(
   const limiters = {
     chat: limiter(config.rateLimit.chat),
     gaps: limiter(config.rateLimit.gaps),
+    gapDeletes: limiter(config.rateLimit.gapDeletes),
     staffLogin: limiter(config.rateLimit.staffLogin),
     transcribe: limiter(config.rateLimit.transcribe),
     notebook: limiter(config.rateLimit.notebook),

@@ -163,7 +163,7 @@ export function testCtx(overrides: Partial<RequestContext> = {}): RequestContext
   };
 }
 
-type StoredGap = GapRecord & { deleteTokenHash: string };
+type StoredGap = GapRecord & { deleteTokenHash: string; deleted: boolean };
 
 /** An in-memory GapStore with the same semantics as the Drizzle one. */
 export function memoryGapStore(now: () => Date = () => new Date()) {
@@ -171,15 +171,19 @@ export function memoryGapStore(now: () => Date = () => new Date()) {
   const store: GapStore = {
     async insert(row) {
       const existing = rows.find((r) => r.id === row.id);
-      if (existing) return existing.deleteTokenHash === row.deleteTokenHash ? "exists" : "conflict";
-      rows.push({ ...row, createdAt: now() });
+      if (existing) {
+        if (existing.deleteTokenHash !== row.deleteTokenHash) return "conflict";
+        return existing.deleted ? "deleted" : "exists";
+      }
+      rows.push({ ...row, deleted: false, createdAt: now() });
       return "inserted";
     },
     async listRecent(limit) {
-      return [...rows]
+      return rows
+        .filter((r) => !r.deleted)
         .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
         .slice(0, limit)
-        .map(({ deleteTokenHash: _hash, ...record }) => record);
+        .map(({ deleteTokenHash: _hash, deleted: _deleted, ...record }) => record);
     },
     async delete(id) {
       const index = rows.findIndex((r) => r.id === id);
@@ -188,9 +192,22 @@ export function memoryGapStore(now: () => Date = () => new Date()) {
       return true;
     },
     async deleteWithTokenHash(id, hash) {
-      const index = rows.findIndex((r) => r.id === id && r.deleteTokenHash === hash);
-      if (index === -1) return false;
-      rows.splice(index, 1);
+      // Same as the SQL upsert: tombstone the row, or claim the id with a blank tombstone.
+      const existing = rows.find((r) => r.id === id);
+      if (existing) {
+        if (existing.deleteTokenHash !== hash) return false;
+        Object.assign(existing, { question: "", topic: "other", deleted: true });
+        return true;
+      }
+      rows.push({
+        id,
+        question: "",
+        language: "en",
+        topic: "other",
+        deleteTokenHash: hash,
+        deleted: true,
+        createdAt: now(),
+      });
       return true;
     },
     async purgeOlderThan(cutoff) {

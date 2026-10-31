@@ -17,6 +17,12 @@ import { LANGUAGES, type Language } from "../types";
  * Delete path: staff can delete any row; the parent gets a one-time delete token on save
  * (only its hash is stored) to remove it from the same tab. The id and token exist before the
  * insert, so even an `uncertain` save hands them back.
+ *
+ * Parent delete vs. a save still in flight (Codex re-review 3): the delete is an upsert of a
+ * tombstone on the same primary key. If the row is there, its question is blanked and it's
+ * marked deleted; if it isn't there yet, a blank deleted row takes the id, and the late insert
+ * hits `ON CONFLICT (id) DO NOTHING`. Postgres serialises the two on the primary-key index, so
+ * whichever commits first, the question doesn't stay stored.
  */
 
 export const GAP_TOPICS = [...KB_TOPICS, "other"] as const;
@@ -58,6 +64,7 @@ export interface GapStore {
   /**
    * Idempotent insert with a caller-chosen id (`ON CONFLICT (id) DO NOTHING`). "inserted" or
    * "exists" (the same id AND token hash are already stored: a retry) mean the row is there;
+   * "deleted" means the parent already deleted this id (tombstone) and nothing was written;
    * "conflict" means the id belongs to another row and nothing was written.
    */
   insert(row: {
@@ -66,11 +73,16 @@ export interface GapStore {
     language: GapSubmission["language"];
     topic: GapSubmission["topic"];
     deleteTokenHash: string;
-  }): Promise<"inserted" | "exists" | "conflict">;
+  }): Promise<"inserted" | "exists" | "deleted" | "conflict">;
+  /** Stored questions, newest first. Never tombstones. */
   listRecent(limit: number): Promise<GapRecord[]>;
-  /** Staff delete. */
+  /** Staff delete (of a row staff can see, so it has already committed). */
   delete(id: string): Promise<boolean>;
-  /** Parent delete: removes the row only if the token hash matches. */
+  /**
+   * Parent delete, one atomic upsert: blanks and tombstones the row if the token hash matches,
+   * or writes a tombstone if the id isn't stored (yet). `false` only when the id belongs to
+   * another token.
+   */
   deleteWithTokenHash(id: string, deleteTokenHash: string): Promise<boolean>;
   /** Removes rows created before `cutoff`. Returns how many were removed. */
   purgeOlderThan(cutoff: Date): Promise<number>;
@@ -118,7 +130,10 @@ export type GapSaveResult =
   | { status: "uncertain"; id: string; deleteToken: string }
   /** No database in this deployment (demo mode). */
   | { status: "unavailable" }
-  /** Nothing was written (the purge before the insert failed, or the retry id is taken). */
+  /**
+   * Nothing was written: the purge before the insert failed, the retry id is taken, or the
+   * parent already deleted this id.
+   */
   | { status: "failed" };
 
 /**
@@ -152,14 +167,20 @@ export async function saveGap(
       }),
       timeoutMs,
     );
-    if (outcome === "conflict") return { status: "failed" };
+    if (outcome === "conflict" || outcome === "deleted") return { status: "failed" };
     return { status: "saved", id, deleteToken };
   } catch {
     return { status: "uncertain", id, deleteToken };
   }
 }
 
-export type GapDeleteResult = { status: "deleted" | "not_found" | "unavailable" | "failed" };
+/**
+ * "deleted": the question isn't stored and can't be stored later under this id, including when
+ * the save hadn't landed yet. "not_found": the id belongs to another token.
+ */
+export type GapDeleteResult = {
+  status: "deleted" | "not_found" | "unavailable" | "failed" | "rate_limited";
+};
 
 export async function deleteGapWithToken(
   id: string,

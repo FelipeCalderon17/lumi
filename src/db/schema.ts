@@ -41,6 +41,12 @@ export const gapQuestion = pgTable(
     consent: boolean("consent").notNull(),
     /** SHA-256 of the one-time delete token given to the parent. Never the token itself. */
     deleteTokenHash: text("delete_token_hash").notNull(),
+    /**
+     * Tombstone: the parent deleted this id. The question is blanked, and because the row keeps
+     * the primary key, a save that commits later can't recreate it (Codex re-review 3).
+     * Purged with the same retention as everything else.
+     */
+    deleted: boolean("deleted").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [

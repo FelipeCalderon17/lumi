@@ -153,7 +153,57 @@ describe("gaps.saveGap", () => {
     expect(await deleteGapWithToken(saved.id, saved.deleteToken, memory.store)).toEqual({
       status: "deleted",
     });
-    expect(memory.rows).toHaveLength(0);
+    expect(await memory.store.listRecent(10)).toEqual([]);
+    expect(memory.rows.filter((r) => r.question !== "")).toEqual([]);
+  });
+
+  it("regression (Codex re-review 3): a delete BEFORE the delayed commit wins; the question never stays", async () => {
+    const memory = memoryGapStore();
+    let committed: Promise<unknown> = Promise.resolve();
+    const slow: GapStore = {
+      ...memory.store,
+      insert: (row) => {
+        // The database commits 45 ms later; saveGap stops waiting after 10 ms.
+        committed = new Promise((resolve) => setTimeout(resolve, 45)).then(() =>
+          memory.store.insert(row),
+        );
+        return committed as Promise<"inserted">;
+      },
+    };
+    const saved = await saveGap(submission, slow, new Date(), 10);
+    if (saved.status !== "uncertain") throw new Error(saved.status);
+    // The parent deletes while the insert is still in flight.
+    expect(await deleteGapWithToken(saved.id, saved.deleteToken, memory.store, 10)).toEqual({
+      status: "deleted",
+    });
+    expect(await committed).toBe("deleted"); // the late insert hit the tombstone
+    expect(await memory.store.listRecent(10)).toEqual([]);
+    expect(memory.rows.filter((r) => r.question !== "")).toEqual([]);
+    // A retry with the same credentials can't bring it back either.
+    const retry = { id: saved.id, deleteToken: saved.deleteToken };
+    expect(await saveGap({ ...submission, retry }, memory.store)).toEqual({ status: "failed" });
+    expect(await memory.store.listRecent(10)).toEqual([]);
+  });
+
+  it("a delete AFTER the commit blanks the stored question", async () => {
+    const memory = memoryGapStore();
+    const saved = await saveGap(submission, memory.store);
+    if (saved.status !== "saved") throw new Error(saved.status);
+    expect(await deleteGapWithToken(saved.id, saved.deleteToken, memory.store)).toEqual({
+      status: "deleted",
+    });
+    expect(await memory.store.listRecent(10)).toEqual([]);
+    expect(memory.rows.map((r) => [r.question, r.deleted])).toEqual([["", true]]);
+  });
+
+  it("tombstones are purged with the same retention", async () => {
+    let now = new Date("2026-09-01T00:00:00Z");
+    const memory = memoryGapStore(() => now);
+    await deleteGapWithToken(crypto.randomUUID(), "x".repeat(32), memory.store);
+    expect(memory.rows).toHaveLength(1);
+    now = new Date("2026-10-30T00:00:00Z");
+    await saveGap(submission, memory.store, now);
+    expect(memory.rows.filter((r) => r.deleted)).toEqual([]);
   });
 
   it("retrying with the same id and token is idempotent: one row, same credentials", async () => {
@@ -187,18 +237,20 @@ describe("gaps.saveGap", () => {
 });
 
 describe("gaps.deleteGapWithToken", () => {
-  it("removes the row only with the matching token", async () => {
+  it("removes the question only with the matching token", async () => {
     const { store, rows } = memoryGapStore();
     const saved = await saveGap(submission, store);
     if (saved.status !== "saved") throw new Error(saved.status);
     expect(await deleteGapWithToken(saved.id, "wrong-token-wrong-token", store)).toEqual({
       status: "not_found",
     });
-    expect(rows).toHaveLength(1);
+    expect(rows.map((r) => r.deleted)).toEqual([false]);
+    expect(rows[0]?.question).not.toBe("");
     expect(await deleteGapWithToken(saved.id, saved.deleteToken, store)).toEqual({
       status: "deleted",
     });
-    expect(rows).toHaveLength(0);
+    expect(await store.listRecent(10)).toEqual([]);
+    expect(rows.map((r) => [r.question, r.deleted])).toEqual([["", true]]);
   });
 
   it("returns 'unavailable' without a database", async () => {

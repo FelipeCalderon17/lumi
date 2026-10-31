@@ -86,23 +86,58 @@ export function createDbUsageReader(db: Db): UsageReader {
   };
 }
 
+type GapInsertRow = Parameters<GapStore["insert"]>[0];
+
+/** Save: never overwrites. A tombstone with this id (parent already deleted) wins. */
+export function gapInsertQuery(db: Db, row: GapInsertRow) {
+  return db
+    .insert(gapQuestion)
+    .values({ ...row, consent: true })
+    .onConflictDoNothing({ target: gapQuestion.id })
+    .returning({ id: gapQuestion.id });
+}
+
+/**
+ * Parent delete as ONE upsert on the primary key (Codex re-review 3). Row there with this
+ * token → question blanked, marked deleted. Row not there yet → a blank tombstone takes the id,
+ * so a save still in flight hits ON CONFLICT DO NOTHING. A concurrent insert of the same id
+ * makes Postgres wait on the primary-key index, so the two can't interleave. Another token's
+ * row → no change, no row returned.
+ */
+export function gapTombstoneQuery(db: Db, id: string, deleteTokenHash: string) {
+  return db
+    .insert(gapQuestion)
+    .values({
+      id,
+      question: "",
+      language: "en",
+      topic: "other",
+      consent: true,
+      deleteTokenHash,
+      deleted: true,
+    })
+    .onConflictDoUpdate({
+      target: gapQuestion.id,
+      set: { question: "", topic: "other", deleted: true },
+      setWhere: eq(gapQuestion.deleteTokenHash, sql`excluded.delete_token_hash`),
+    })
+    .returning({ id: gapQuestion.id });
+}
+
 export function createDbGapStore(db: Db): GapStore {
   return {
     async insert(row) {
-      const inserted = await db
-        .insert(gapQuestion)
-        .values({ ...row, consent: true })
-        .onConflictDoNothing({ target: gapQuestion.id })
-        .returning({ id: gapQuestion.id });
+      const inserted = await gapInsertQuery(db, row);
       if (inserted.length > 0) return "inserted";
       const same = await db
-        .select({ id: gapQuestion.id })
+        .select({ deleted: gapQuestion.deleted })
         .from(gapQuestion)
         .where(
           and(eq(gapQuestion.id, row.id), eq(gapQuestion.deleteTokenHash, row.deleteTokenHash)),
         )
         .limit(1);
-      return same.length > 0 ? "exists" : "conflict";
+      if (same.length === 0) return "conflict";
+      return same[0]?.deleted ? "deleted" : "exists";
     },
     async listRecent(limit): Promise<GapRecord[]> {
       return db
@@ -114,6 +149,7 @@ export function createDbGapStore(db: Db): GapStore {
           createdAt: gapQuestion.createdAt,
         })
         .from(gapQuestion)
+        .where(eq(gapQuestion.deleted, false))
         .orderBy(desc(gapQuestion.createdAt))
         .limit(limit);
     },
@@ -125,11 +161,8 @@ export function createDbGapStore(db: Db): GapStore {
       return deleted.length > 0;
     },
     async deleteWithTokenHash(id, deleteTokenHash) {
-      const deleted = await db
-        .delete(gapQuestion)
-        .where(and(eq(gapQuestion.id, id), eq(gapQuestion.deleteTokenHash, deleteTokenHash)))
-        .returning({ id: gapQuestion.id });
-      return deleted.length > 0;
+      const tombstoned = await gapTombstoneQuery(db, id, deleteTokenHash);
+      return tombstoned.length > 0;
     },
     async purgeOlderThan(cutoff) {
       const deleted = await db
