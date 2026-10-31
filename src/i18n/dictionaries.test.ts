@@ -68,6 +68,15 @@ describe.each([
     }
   });
 
+  it("abstained copy sends the parent to the nurse first, then the social worker (no-guide rule)", () => {
+    const body = dict.safety.abstained.body;
+    expect(body).toMatch(/nurse|enfermera/i);
+    expect(body).toMatch(/social worker|trabajador social/i);
+    expect(body.search(/nurse|enfermera/i)).toBeLessThan(
+      body.search(/social worker|trabajador social/i),
+    );
+  });
+
   it("names the AI data processor only in the privacy disclosures (ADR 0005)", () => {
     const naming = strings(dict)
       .filter(([, s]) => AI_PROCESSOR_NAME.test(s))

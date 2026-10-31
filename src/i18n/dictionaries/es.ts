@@ -77,7 +77,7 @@ export const es: Dictionary = {
     },
     abstained: {
       title: "Todavía no tengo una guía sobre eso.",
-      body: "Para preguntas prácticas, el trabajador social de tu hospital puede ayudarte a encontrar con quién hablar.",
+      body: "Pregúntale a la enfermera o al equipo médico de tu hijo o hija. Para otras preguntas prácticas, el trabajador social de tu hospital puede ayudarte a encontrar con quién hablar.",
     },
     strip: {
       label: "Líneas de emergencia y de crisis",

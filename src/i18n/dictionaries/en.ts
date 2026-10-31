@@ -84,7 +84,7 @@ export const en = {
     },
     abstained: {
       title: "I don't have a guide on that yet.",
-      body: "For practical questions, your hospital's social worker may help you find the right person to ask.",
+      body: "Please check with your child's nurse or care team. For other practical questions, your hospital's social worker can help you find the right person.",
     },
     /** The calm strip at the top of every page (safety layer 3). Static, works without JS. */
     strip: {
