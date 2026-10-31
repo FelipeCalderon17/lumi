@@ -6,9 +6,9 @@ A prototype website for **Lumi**, a fictional foundation that supports families 
 
 A parent can ask Lumi a practical question at any hour, in English or Spanish, and get a short, warm answer written from a small library of guides, with those guides listed below the answer. When Lumi doesn't know, it says so. Medical questions get fixed, reviewed copy that points to the care team. Emergencies and explicit self-harm get 911 or 988 straight away, from rules that don't wait on AI. A private notebook helps parents bring their own notes to the next appointment, sorted by topic but kept word for word.
 
-> **Status:** Phases 0–4 are done (foundations, knowledge base, server, UI, evals). Every page works in English and Spanish, on phones and desktops. Deploy is next.
+> **Status:** Phases 0–4 are done (foundations, knowledge base, server, UI, evals). Every page works in English and Spanish, on phones and desktops. Deployed on Railway.
 >
-> **Live demo:** _TODO: Railway URL._
+> **Live demo:** https://lumi-production-fa66.up.railway.app
 
 ## Review in 10 minutes
 
@@ -230,9 +230,19 @@ To try the staff area without touching `.env.local`, add throwaway values inline
 | `pnpm test:kb` | The KB content gate plus the free eval tests (golden-set format, runner with mocks); its own CI job |
 | `pnpm smoke` | A small live run through the real pipeline (about 14 cheap calls + 2 short transcriptions). **Costs money.** Needs `.env.local`. |
 | `pnpm eval` | Golden-set and notebook evals against the real models. `pnpm eval --dry-run` only prints the plan and estimate (no key needed). A paid run needs `LUMI_LIVE=1 pnpm eval`. **Costs money**, budget-guarded ($2 by default, `--budget` to change), never in CI. |
-| `pnpm db:generate` / `db:migrate` | Drizzle migrations (`drizzle/`). Migrate by hand against `DATABASE_URL`. |
+| `pnpm db:generate` / `db:migrate` | Drizzle migrations (`drizzle/`). Locally, migrate by hand against `DATABASE_URL`; on Railway the pre-deploy step runs it (see Deploy). |
 
 CI (`.github/workflows/ci.yml`) runs Biome, typecheck, tests and a production build, plus the KB content gate as a separate job. No secrets.
+
+### Deploy
+
+[Railway](https://railway.com), project `lumi`, one region, one replica:
+
+- **Services:** `lumi` (this repo, built by Railpack: Node 24 from `.nvmrc`/`engines`, pnpm from `packageManager`) and `Postgres` (Railway template, private network only; no public TCP proxy).
+- **Service settings** (set on the service, not in a file: Railway didn't apply a `railway.json` to this service): build `pnpm build`, start `pnpm start` (Next reads `PORT`), health check `/en`, restart on failure, and **pre-deploy `pnpm db:migrate`**. The pre-deploy step runs inside the built image (devDependencies such as drizzle-kit are installed), on the private network, before the new version takes traffic. A failed migration stops the deploy, and the previous version keeps serving.
+- **Variables (names only):** `DATABASE_URL` = `${{Postgres.DATABASE_URL}}` (a reference to the private URL), `OPENAI_API_KEY`, `STAFF_PASSCODE`, `STAFF_SESSION_SECRET`. `NODE_ENV` is not set by hand: Next sets it, and setting it at build time would make pnpm skip the devDependencies the build needs.
+- **Deploying:** `railway up --service lumi` from a clean `main` (uploads respect `.gitignore`, so `.env*` never leaves the machine).
+- **Client IP:** Railway delivers `X-Forwarded-For: client, edge-egress`, so `config.clientIp.trustedProxyHops = 2` (measured on the first deploy; see [ARCHITECTURE § Abuse controls](docs/ARCHITECTURE.md#abuse-controls)).
 
 ## What I'd do next
 
