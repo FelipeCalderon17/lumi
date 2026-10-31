@@ -7,6 +7,7 @@ import {
   declaredDurationMs,
   formatClock,
   interpretTranscription,
+  openMicrophone,
   pickRecordingType,
   reachedCap,
   remainingSeconds,
@@ -48,6 +49,8 @@ export function VoiceInput({
   const startedAt = useRef(0);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
   const upload = useRef<AbortController | null>(null);
+  /** Bumped on unmount: a pending getUserMedia from an older start is then ignored. */
+  const startToken = useRef(0);
   const v = t.voice;
 
   useEffect(() => setSupported(voiceSupported()), []);
@@ -59,9 +62,10 @@ export function VoiceInput({
     stream.current = null;
   }, []);
 
-  // Leaving the page stops everything: the mic, the timer and any upload.
+  // Leaving the page stops everything: the mic, the timer, any upload and any pending start.
   useEffect(
     () => () => {
+      startToken.current += 1;
       upload.current?.abort();
       if (recorder.current?.state === "recording") {
         recorder.current.onstop = null;
@@ -118,9 +122,16 @@ export function VoiceInput({
       return;
     }
     setPhase({ kind: "starting" });
+    const token = ++startToken.current;
+    const isCurrent = () => token === startToken.current;
+    let opened: MediaStream | null;
     try {
-      stream.current = await navigator.mediaDevices.getUserMedia({ audio: true });
+      opened = await openMicrophone(
+        () => navigator.mediaDevices.getUserMedia({ audio: true }),
+        isCurrent,
+      );
     } catch (error) {
+      if (!isCurrent()) return;
       releaseMic();
       const name = error instanceof DOMException ? error.name : "";
       setPhase({
@@ -129,8 +140,11 @@ export function VoiceInput({
       });
       return;
     }
+    // The page was left while the permission prompt was open: the tracks are already stopped.
+    if (!opened) return;
+    stream.current = opened;
     chunks.current = [];
-    const media = new MediaRecorder(stream.current, {
+    const media = new MediaRecorder(opened, {
       mimeType: type,
       audioBitsPerSecond: VOICE_BITS_PER_SECOND,
     });

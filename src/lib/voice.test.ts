@@ -1,8 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   declaredDurationMs,
   formatClock,
   interpretTranscription,
+  openMicrophone,
   pickRecordingType,
   reachedCap,
   remainingSeconds,
@@ -75,5 +76,49 @@ describe("interpretTranscription", () => {
       kind: "failed",
     });
     expect(interpretTranscription(502, null)).toEqual({ kind: "failed" });
+  });
+});
+
+describe("openMicrophone (a start that resolves after the parent left)", () => {
+  /** getUserMedia that resolves only when the test says so, like a slow permission prompt. */
+  function delayedGetUserMedia() {
+    const tracks = [{ stop: vi.fn() }, { stop: vi.fn() }];
+    const stream = { getTracks: () => tracks } as unknown as MediaStream;
+    let resolve: (s: MediaStream) => void = () => {};
+    const request = vi.fn(() => new Promise<MediaStream>((r) => (resolve = r)));
+    return { tracks, stream, request, grant: () => resolve(stream) };
+  }
+
+  it("unmounted while the prompt is open: every track is stopped and no stream is returned", async () => {
+    const mic = delayedGetUserMedia();
+    let token = 1;
+    const mine = token;
+    const pending = openMicrophone(mic.request, () => mine === token);
+    token += 1; // the component unmounts
+    mic.grant();
+    const createRecorder = vi.fn();
+    const stream = await pending;
+    if (stream) createRecorder(stream); // what the component does with the result
+    expect(stream).toBeNull();
+    expect(createRecorder).not.toHaveBeenCalled();
+    for (const track of mic.tracks) expect(track.stop).toHaveBeenCalledTimes(1);
+  });
+
+  it("still on the page: the stream is handed over untouched", async () => {
+    const mic = delayedGetUserMedia();
+    const pending = openMicrophone(mic.request, () => true);
+    mic.grant();
+    expect(await pending).toBe(mic.stream);
+    for (const track of mic.tracks) expect(track.stop).not.toHaveBeenCalled();
+  });
+
+  it("a denied prompt rejects as before", async () => {
+    const denied = new Error("NotAllowedError");
+    await expect(
+      openMicrophone(
+        () => Promise.reject(denied),
+        () => true,
+      ),
+    ).rejects.toBe(denied);
   });
 });
