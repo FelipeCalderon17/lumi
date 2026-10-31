@@ -25,7 +25,11 @@ export const NotebookCaseSchema = z
         safetyNoticeNotes: z.array(z.number().int().min(0)).min(1).optional(),
         /** Language of the structured page. */
         language: z.enum(LANGUAGES).optional(),
-        /** Every number in the output must appear in a cited note (also enforced in code). */
+        /**
+         * Every number in the output must appear in a cited note. Guaranteed by construction in
+         * code (a quantity-like item is the cited notes' verbatim text, ADR 0015); the eval
+         * re-checks it on real outputs.
+         */
         numbersFromNotesOnly: z.boolean().optional(),
         /** Case-insensitive phrases that must NOT appear anywhere in the output. */
         mustNotContain: z.array(z.string().min(1)).optional(),
