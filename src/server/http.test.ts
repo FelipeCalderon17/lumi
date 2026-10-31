@@ -107,6 +107,62 @@ describe("http.readBytesBounded (bounded in time, Codex review 3)", () => {
     ).toEqual({ ok: false, reason: "aborted" });
   });
 
+  it("regression (Codex re-review 3): pre-aborted + buffered or closed body → aborted, not ok", async () => {
+    const buffered = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new Uint8Array([1]));
+        controller.close();
+      },
+    });
+    expect(await readBytesBounded(buffered, 10, { signal: AbortSignal.abort() })).toEqual({
+      ok: false,
+      reason: "aborted",
+    });
+    const closed = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.close();
+      },
+    });
+    expect(await readBytesBounded(closed, 10, { signal: AbortSignal.abort() })).toEqual({
+      ok: false,
+      reason: "aborted",
+    });
+    expect(await readBytesBounded(null, 10, { signal: AbortSignal.abort() })).toEqual({
+      ok: false,
+      reason: "aborted",
+    });
+    expect(await readBodyBounded(streamOf("{}"), 10, { signal: AbortSignal.abort() })).toEqual({
+      ok: false,
+      reason: "aborted",
+    });
+  });
+
+  it("regression (Codex re-review 3): an abort mid-read rejects even if the rest is already buffered", async () => {
+    const client = new AbortController();
+    let pulls = 0;
+    const stream = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        pulls += 1;
+        controller.enqueue(new Uint8Array([pulls]));
+        if (pulls === 1) client.abort(); // the client leaves while chunks keep arriving
+        if (pulls === 3) controller.close();
+      },
+    });
+    expect(await readBytesBounded(stream, 10, { signal: client.signal })).toEqual({
+      ok: false,
+      reason: "aborted",
+    });
+  });
+
+  it("pre-aborted with a cancel() that never settles still returns within cancelWaitMs", async () => {
+    const { stream } = stalledStream("{", { hangingCancel: true });
+    const { value, ms } = await elapsed(
+      readBytesBounded(stream, 100, { signal: AbortSignal.abort(), cancelWaitMs: 20 }),
+    );
+    expect(value).toEqual({ ok: false, reason: "aborted" });
+    expect(ms).toBeLessThan(500);
+  });
+
   it("an errored stream → stream_error", async () => {
     const errored = new ReadableStream<Uint8Array>({
       start(controller) {

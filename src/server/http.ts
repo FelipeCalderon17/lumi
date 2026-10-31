@@ -42,23 +42,35 @@ async function settleWithin(promise: Promise<unknown>, ms: number): Promise<void
   }
 }
 const noop = () => {};
+const cancelWaitOf = (options: BodyReadOptions) =>
+  options.cancelWaitMs ?? config.timeouts.bodyCancelMs;
 
 /**
  * Reads a request body as bytes, giving up as soon as it exceeds `maxBytes`, so an oversized
  * body is never buffered in full. Content-Length is not trusted. Bounded in time too: a read
  * deadline and the request's signal stop a stalled or abandoned upload, and the stream's
  * cancel() is awaited for at most `cancelWaitMs`, so a cancel that never settles can't hold the
- * request open. Never throws.
+ * request open. The abort state is checked before every read and before accepting each result,
+ * so an already-aborted request fails even when its body is buffered or empty (Codex re-review
+ * 3). Never throws.
  */
 export async function readBytesBounded(
   body: ReadableStream<Uint8Array> | null,
   maxBytes: number,
   options: BodyReadOptions = {},
 ): Promise<BoundedBytes> {
+  if (options.signal?.aborted) {
+    if (body)
+      await settleWithin(
+        Promise.resolve().then(() => body.cancel()),
+        cancelWaitOf(options),
+      );
+    return { ok: false, reason: "aborted" };
+  }
   if (!body) return { ok: true, bytes: new Uint8Array(0) };
   const deadline = AbortSignal.timeout(options.deadlineMs ?? config.timeouts.bodyReadMs);
   const stop = options.signal ? AbortSignal.any([options.signal, deadline]) : deadline;
-  const cancelWaitMs = options.cancelWaitMs ?? config.timeouts.bodyCancelMs;
+  const cancelWaitMs = cancelWaitOf(options);
   const stopReason = (): BodyReadError => (options.signal?.aborted ? "aborted" : "timeout");
 
   let reader: ReadableStreamDefaultReader<Uint8Array>;
@@ -86,6 +98,7 @@ export async function readBytesBounded(
   let size = 0;
   try {
     for (;;) {
+      if (stop.aborted) return await giveUp(stopReason());
       const read = reader.read();
       read.catch(noop); // if we stop waiting, a later rejection must not go unhandled
       let next: Awaited<typeof read> | "stopped";
@@ -94,7 +107,8 @@ export async function readBytesBounded(
       } catch {
         return await giveUp(stop.aborted ? stopReason() : "stream_error");
       }
-      if (next === "stopped") return await giveUp(stopReason());
+      // A buffered chunk can win the race against an abort that already happened.
+      if (next === "stopped" || stop.aborted) return await giveUp(stopReason());
       if (next.done) break;
       size += next.value.byteLength;
       if (size > maxBytes) return await giveUp("too_large");
