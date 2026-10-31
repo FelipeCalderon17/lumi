@@ -354,6 +354,7 @@ function analyse(words: readonly DoseWord[]) {
   const scheduleStart = new Array<boolean>(n).fill(false);
   const inFrequency = new Array<boolean>(n).fill(false);
   const harmless = new Array<boolean>(n).fill(false);
+  const bareSentenceParts = new Map<number, [allBare: boolean, anySignal: boolean]>();
   const spanEnd = (i: number) => {
     const end = Math.max(frequencyEnd(words, i), scheduleEnd(words, i));
     return end !== -1 && words[end]?.sentence === words[i]?.sentence ? end : -1;
@@ -374,30 +375,28 @@ function analyse(words: readonly DoseWord[]) {
     const end = spanEnd(object + 1);
     for (let k = i; k <= Math.max(object, end); k++) harmless[k] = true;
   }
-  const quantity = (i: number) => {
-    if (inFrequency[i] || !isQuantityAt(words, i)) return false;
+  const quantity = words.map((w, i) => {
+    if (harmless[i] || inFrequency[i] || !isQuantityAt(words, i)) return false;
     // EN "once" starts clauses ("Once you arrive, …"): a count only at the end of one.
-    if (words[i]?.word !== "once") return true;
+    if (w.word !== "once") return true;
     const next = words[i + 1];
-    return next === undefined || next.sentence !== words[i]?.sentence || isBareWord(next.word);
-  };
-  const signal = (i: number) =>
-    !harmless[i] && (quantity(i) || frequencyStart[i] === true || scheduleStart[i] === true);
+    return next === undefined || next.sentence !== w.sentence || isBareWord(next.word);
+  });
+  const signal = words.map(
+    (_, i) => quantity[i] || (!harmless[i] && (frequencyStart[i] || scheduleStart[i])),
+  );
+  // A sentence is bare if every word is a bare word and one of them is a signal.
   const bareSentence = new Map<number, boolean>();
   for (const [i, { word, sentence }] of words.entries()) {
-    const bare = (bareSentence.get(sentence) ?? true) && isBareWord(word);
-    bareSentence.set(sentence, bare);
-    if (i === n - 1 || words[i + 1]?.sentence !== sentence) {
-      const first = words.findIndex((w) => w.sentence === sentence);
-      let hasSignal = false;
-      for (let k = first; k <= i; k++) hasSignal ||= signal(k);
-      bareSentence.set(sentence, bare && hasSignal);
-    }
+    const [allBare, anySignal] = bareSentenceParts.get(sentence) ?? [true, false];
+    bareSentenceParts.set(sentence, [allBare && isBareWord(word), anySignal || signal[i] === true]);
   }
+  for (const [sentence, [allBare, anySignal]] of bareSentenceParts)
+    bareSentence.set(sentence, allBare && anySignal);
   return {
     frequencyStart: (i: number) => !harmless[i] && frequencyStart[i] === true,
-    quantity: (i: number) => !harmless[i] && quantity(i),
-    signal,
+    quantity: (i: number) => quantity[i] === true,
+    signal: (i: number) => signal[i] === true,
     bare: (i: number) => bareSentence.get(words[i]?.sentence ?? -1) === true,
   };
 }
@@ -513,8 +512,10 @@ function dosageMatches(text: string): string[] {
   }
 
   // c: label / list fragments, per sentence.
+  const bySentence = sentences.map(() => [] as (DoseWord & { i: number })[]);
+  for (const [i, w] of words.entries()) bySentence[w.sentence]?.push({ ...w, i });
   for (const [s, sentence] of sentences.entries()) {
-    const ws = words.map((w, i) => ({ ...w, i })).filter((w) => w.sentence === s);
+    const ws = bySentence[s] ?? [];
     // The bare tail: the longest run of bare words that ends the sentence.
     let k = ws.length;
     while (k > 0 && isBareWord(ws[k - 1]?.word ?? "")) k--;
