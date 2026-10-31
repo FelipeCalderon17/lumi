@@ -12,7 +12,7 @@ Short records: Context / Decision / Consequences / Alternatives. A guardrail is 
 | [0006](0006-railway-postgres-drizzle.md) | Railway + Postgres (Drizzle) for gaps and usage ledger only | Accepted |
 | [0007](0007-evals.md) | Golden set + deterministic checks + LLM-as-judge, run locally behind a budget guard | Accepted (revised) |
 | [0008](0008-staff-passcode.md) | Staff gaps view behind a shared passcode and a signed, expiring session | Accepted (revised) |
-| [0009](0009-model-selection.md) | Model selection for the answer step | **Proposed** |
+| [0009](0009-model-selection.md) | Model selection for the answer step | **Proposed**: Phase 4 recommends `gpt-6-luna`, pending sign-off |
 | [0010](0010-buffer-validate-reveal.md) | Buffer, validate, reveal; NDJSON transport | Accepted |
 | [0011](0011-medical-fixed-template.md) | Medical questions get a fixed, reviewed template | Accepted |
 | [0012](0012-us-scope-and-crisis-contacts.md) | US scope; fixed crisis contacts (911, 988) | Accepted |
